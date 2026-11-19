@@ -79,7 +79,7 @@ cat("balanced", all(block %% lengths(f) == 0L), "\\n")
         "default": "r6",
         "process": "FALSE",
         "observation": "TRUE",
-        "early": "0.3",
+        "early": "0.25",
         "static": "0.4",
         "weekdays": "0.3",
         "balanced": "TRUE",
@@ -262,3 +262,188 @@ def test_r7_draws_only_named_distributions():
     body = _function("draw_values_r7")
     raw = set(re.findall(r"\b(runif|rnorm|rlnorm|sample|rpois|rbinom)\(", body))
     assert raw <= {"rpois", "rbinom"}
+
+
+@needs_rscript
+def test_r7_layers_have_their_shares_in_a_block(tmp_path):
+    out = values_of(
+        values(
+            run_r7(
+                """
+cells <- lapply(0:(block - 1L), cell_for)
+share <- function(k, level) mean(vapply(cells, `[[`, "", k) == level)
+cat("early", share("window", "early"), "\\n")
+cat("endemic", share("window", "endemic"), "\\n")
+cat("bunching", share("bunching", "yes"), "\\n")
+cat("revisions", share("revisions", "yes"), "\\n")
+cat("smooth", share("delay_change", "smooth"), "\\n")
+cat("old_bunching", share("delay_change", "bunching"), "\\n")
+""",
+                tmp_path,
+            )
+        )
+    )
+    assert out == {
+        "early": "0.25",
+        "endemic": "0.35",
+        "bunching": "0.15",
+        "revisions": "0.3",
+        "smooth": "0.1",
+        "old_bunching": "0",
+    }
+
+
+@needs_rscript
+def test_a_variant_returns_immune_to_susceptible_and_raises_r(tmp_path):
+    out = values_of(
+        values(
+            run_r7(
+                """
+gt <- gt_pmf_r7(7, "gamma_0.6")
+n <- 200L
+log_r <- matrix(log(2), n, 1)
+start <- matrix(10, length(gt), 1)
+variants <- list(at = 150, escape = 0.5, mult = 1.3, days = 1)
+run <- r7_infections(start, gt, log_r, 1e5, variants = variants)
+s <- run$susceptible[, 1]
+immune <- 1e5 - s[149]
+cat("jump", round((s[150] + run$infections[length(gt) + 150, 1] - s[149]) /
+  immune, 3), "\\n")
+cat("r", round(run$r[n, 1] / 2, 3), "\\n")
+""",
+                tmp_path,
+            )
+        )
+    )
+    assert float(out["jump"]) == pytest.approx(0.5, abs=0.01)
+    assert float(out["r"]) == pytest.approx(1.3, abs=0.002)
+
+
+@needs_rscript
+def test_endemic_and_controlled_paths_follow_a_smooth_weekly_walk(tmp_path):
+    out = values_of(
+        values(
+            run_r7(
+                """
+v <- list(walk_r = c(0, 0.1, -0.1, 0.05, 0, 0, 0, 0, 0, 0, 0),
+  amplitude = 0.5, control_days = 14)
+e <- r7_shape(56L, "endemic", v)
+cat("knots", isTRUE(all.equal(e[c(1, 8, 15)], c(0, 0.1, -0.1))), "\\n")
+cat("smooth", max(abs(diff(e))) <= 0.2 / 7 + 1e-9, "\\n")
+c <- r7_shape(56L, "controlled", v)
+cat("starts", isTRUE(all.equal(c[1], 0.5)), "\\n")
+cat("decays", abs(c[56] - e[56]) < 0.5 * exp(-55 / 14) + 1e-9, "\\n")
+""",
+                tmp_path,
+            )
+        )
+    )
+    assert set(out.values()) == {"TRUE"}
+
+
+@needs_rscript
+def test_the_delay_walk_moves_smoothly_between_weeks(tmp_path):
+    out = values_of(
+        values(
+            run_r7(
+                """
+walk <- c(0, 0.3, 0.1, 0.4)
+x <- daily_walk(0:21, walk)
+cat("knots", isTRUE(all.equal(x[c(1, 8, 15, 22)], walk)), "\\n")
+cat("step", isTRUE(all.equal(max(abs(diff(x))), 0.3 / 7)), "\\n")
+""",
+                tmp_path,
+            )
+        )
+    )
+    assert set(out.values()) == {"TRUE"}
+
+
+@needs_rscript
+def test_onsets_are_ascertained_infections(tmp_path):
+    out = values_of(
+        values(
+            run_r7(
+                """
+set.seed(6)
+d <- draw_design(9L)
+d$strata <- "places"; d$n_places <- 2L; d$n_ages <- 1L
+d$seeding <- "start"; d$mixing <- "none"; d$window <- "established"
+v <- draw_cell_values(d)
+v$quiet_places <- integer(0)
+strata <- data.table(.group = 1:2, place = c("P01", "P02"), age = "A1")
+gt <- gt_pmf_r7(v$gt_mean, d$gt_shape)
+run <- r7_onsets(100L, gt, strata, d, v)
+a <- run$values$ascertainment
+cat("range", all(a > 0 & a < 1) && length(a) == 2, "\\n")
+cat("scaled", isTRUE(all.equal(
+  run$onsets, sweep(run$infections, 2, a, `*`))), "\\n")
+""",
+                tmp_path,
+            )
+        )
+    )
+    assert out == {"range": "TRUE", "scaled": "TRUE"}
+
+
+@needs_rscript
+def test_revisions_change_releases_but_not_the_final_counts(tmp_path):
+    out = values_of(
+        values(
+            run_r7(
+                """
+set.seed(7)
+days <- as.IDate("2026-01-01") + 0:59
+pp <- CJ(draw = 1L, location = c("P01", "P02"), reference_date = days,
+  delay = 0:9)
+pp[, report_date := reference_date + delay][, delay := NULL]
+pp <- pp[report_date <= max(days)]
+pp[, mean := rpois(.N, 20)]
+v <- list(revise_over = 0.05, revise_move = 0.05, revise_keep = 14)
+got <- revise_counts(pp, v)
+final <- function(x) x[, .(n = sum(mean)), keyby = .(location,
+  reference_date)]
+cat("final", isTRUE(all.equal(final(got), final(pp))), "\\n")
+setorder(got, location, reference_date, report_date)
+got[, cum := cumsum(mean), by = .(location, reference_date)]
+cat("decreases", any(got$mean < 0), "\\n")
+cat("never_negative", all(got$cum >= 0), "\\n")
+cat("not_after_report", all(got$reference_date <= got$report_date), "\\n")
+""",
+                tmp_path,
+            )
+        )
+    )
+    assert set(out.values()) == {"TRUE"}
+
+
+def test_every_r6_uniform_timing_has_an_r7_distribution():
+    text = SIMULATOR.read_text()
+    r6 = text[text.index("setting_distributions <- list(") :]
+    r6 = r6[: r6.index("\n)\n")]
+    uniform = set(re.findall(r'(\w+) = list\("uniform"', r6))
+    r7 = text[text.index("r7_distributions <- list(") :]
+    r7 = r7[: r7.index("\n)\n")]
+    named = set(re.findall(r'(\w+) = list\("', r7))
+    assert uniform - {"phase"} <= named
+
+
+@needs_rscript
+def test_r7_delay_settings_have_plausible_tails(tmp_path):
+    out = values_of(
+        values(
+            run_r7(
+                """
+set.seed(8)
+q <- function(k) quantile(draw_setting(k, 1e5), 0.999)
+cat("delay_sdlog", q("delay_sdlog") < 2.5, "\\n")
+cat("dow_sd", q("dow_sd") < 1, "\\n")
+cat("reference_dow_sd", q("reference_dow_sd") < 1, "\\n")
+cat("delay_place_sd", q("delay_place_sd") < 1.2, "\\n")
+cat("delay_mean", median(draw_setting("delay_mean", 1e5)) < 5.5, "\\n")
+""",
+                tmp_path,
+            )
+        )
+    )
+    assert set(out.values()) == {"TRUE"}
