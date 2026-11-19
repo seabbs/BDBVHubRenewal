@@ -9,7 +9,7 @@
   cluster-generic executor with `workflow/scripts/remote/`). `WORKERS`
   lists them as `name=host:ROOT:CHECKOUT` (`host` as ssh names it, or
   `local`, which may leave out ROOT and CHECKOUT for this machine's).
-  `GROUPS` maps rule groups to a worker (`train=laptop score=archie`);
+  `WORKER_GROUPS` maps rule groups to a worker (`train=laptop score=archie`);
   a group left out, or mapped to `any`, runs on the first worker with
   room. The pool is the sum of the workers' budgets, each read from the
   worker itself at launch.
@@ -42,7 +42,7 @@ from flowlib import localconfig, machine
 MODES = ("single", "ssh")
 
 GROUPS = ("simulate", "train", "publish", "score", "any")
-"""The rule groups `GROUPS` in the local config can place."""
+"""The rule groups `WORKER_GROUPS` in the local config can place."""
 
 RULE_GROUPS = {
     "simulate_batch": "simulate",
@@ -60,6 +60,11 @@ RULE_GROUPS = {
     "agg_rows": "score",
 }
 """Each placed rule's group; any other rule is in `any`."""
+
+GPU_RULES = frozenset({"train_segment", "score_bdbv", "score_germany"})
+"""The rules taking the `gpu` resource. Placed on a worker by their
+group, each also takes that worker's own `gpu_<worker>`, so the pooled
+GPUs are not shared across workers."""
 
 MACHINE_KEYS = frozenset(
     {
@@ -89,7 +94,7 @@ MACHINE_KEYS = frozenset(
         "PAPER_LOGS",
         "COMPUTE",
         "WORKERS",
-        "GROUPS",
+        "WORKER_GROUPS",
         "WORKER_SNAKEMAKE",
     }
 )
@@ -148,9 +153,9 @@ def workers(
 
 
 def groups(cfg: Mapping[str, str], names: Sequence[str]) -> dict[str, str]:
-    """Return `GROUPS`: each group's worker, or `any`."""
+    """Return `WORKER_GROUPS`: each group's worker, or `any`."""
     out = {}
-    for spec in cfg.get("GROUPS", "").split():
+    for spec in cfg.get("WORKER_GROUPS", "").split():
         group, _, worker = spec.partition("=")
         if group not in GROUPS:
             raise ValueError(f"no group {group} (groups: {GROUPS})")
@@ -294,23 +299,42 @@ def args(
             "workflow/profiles/default",
             *machine.args(cfg, path=path),
         ]
+    checkout = localconfig.ROOT
+    found = workers(cfg, checkout)
     if budgets is None:
-        checkout = localconfig.ROOT
-        found = workers(cfg, checkout)
-        budgets = {n: budget_of(w, checkout, cfg) for n, w in found.items()}
+        budgets = {}
+        for name, worker in found.items():
+            try:
+                budgets[name] = budget_of(worker, checkout, cfg)
+            except (subprocess.CalledProcessError, OSError, ValueError):
+                # Its jobs fail at submit until it answers again.
+                print(
+                    f"worker {name} ({worker.host}) did not answer:"
+                    " left out of the pool",
+                    file=sys.stderr,
+                )
         state = state_dir(checkout)
         state.mkdir(parents=True, exist_ok=True)
         (state / "budgets.json").write_text(json.dumps(budgets) + "\n")
     keys = ("cores", "mem_mb", "gpu")
     total = {k: sum(b[k] for b in budgets.values()) for k in keys}
+    sets = [
+        f"{rule}:gpu_{worker}=1"
+        for group, worker in groups(cfg, list(found)).items()
+        if worker in budgets
+        for rule, of in RULE_GROUPS.items()
+        if of == group and rule in GPU_RULES
+    ]
     return [
         "--workflow-profile",
         "workflow/profiles/ssh",
         "--jobs",
-        str(total["cores"]),
+        str(max(1, total["cores"])),
+        *(["--set-resources", *sets] if sets else []),
         "--resources",
         f"mem_mb={total['mem_mb']}",
         f"gpu={total['gpu']}",
+        *(f"gpu_{n}={b['gpu']}" for n, b in budgets.items()),
         f"sim_slots={cfg.get('SIM_SLOTS') or 2}",
         "awaiting=1",
     ]

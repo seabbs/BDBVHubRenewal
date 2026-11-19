@@ -16,7 +16,7 @@ CFG = {
     "RUN": "/srv/rounds/checkpoints/r6",
     "SCORE_CACHE": "/srv/rounds/scores",
     "WORKERS": "archie=local laptop=mac:/Users/me/rounds:/Users/me/repo",
-    "GROUPS": "train=laptop score=archie",
+    "WORKER_GROUPS": "train=laptop score=archie",
 }
 
 
@@ -45,9 +45,9 @@ def test_groups_name_a_worker_or_any():
     got = compute.groups(CFG, ["archie", "laptop"])
     assert got == {"train": "laptop", "score": "archie"}
     with pytest.raises(ValueError, match="nowhere"):
-        compute.groups({**CFG, "GROUPS": "train=nowhere"}, ["archie"])
+        compute.groups({**CFG, "WORKER_GROUPS": "train=nowhere"}, ["archie"])
     with pytest.raises(ValueError, match="group"):
-        compute.groups({**CFG, "GROUPS": "trains=laptop"}, ["laptop"])
+        compute.groups({**CFG, "WORKER_GROUPS": "trains=laptop"}, ["laptop"])
 
 
 def test_every_heavy_rule_has_a_group():
