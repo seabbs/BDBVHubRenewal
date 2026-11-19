@@ -411,8 +411,9 @@ def listed_batches():
     """The batches that can be had now, listed once per Snakemake run.
 
     Listed when the run plans, not kept in a file, so a later run sees
-    rounds finished since. From the rounds host its manifests and QC
-    exclusions are mirrored in MIRROR; else the `sims-r<N>` releases'
+    rounds finished since. From the rounds host its manifests, batch
+    records (a round's batches so far) and QC exclusions are mirrored in
+    MIRROR; else the `sims-r<N>` releases'
     assets. Written to <RUN>/available-batches.txt for the record.
     """
     rounds = sorted({FT["held_round"], *(round_of(s) for s in training_seeds())})
@@ -438,6 +439,18 @@ def listed_batches():
                         file=sys.stderr,
                     )
             seeds |= manifest.seeds(here / "manifest.csv")
+            # The manifest is written once the round is whole; until then
+            # each finished batch's record lists it.
+            subprocess.run(
+                ["rsync", "-a", hosts._at(REMOTE, f"{REMOTE_ROUNDS}/r{r}/records/"),
+                 str(here / "records")],
+                capture_output=True,
+                text=True,
+            )  # fmt: skip
+            seeds |= {
+                int(p.stem.removeprefix("record-"))
+                for p in (here / "records").glob("record-*.csv")
+            }
             continue
         # A round not released yet has no release.
         got = subprocess.run(
