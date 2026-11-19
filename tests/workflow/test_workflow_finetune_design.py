@@ -13,16 +13,18 @@ CONFIG = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
 
 DESIGN = {
     "holdout": 90,
-    "outbreaks": 8400,
-    "prefixes": [250, 500, 750, 1000, 2000, 4000, 8400],
-    "grid": "r6",
+    "outbreaks": 3200,
+    "prefixes": [100, 200, 400, 800, 1600, 3200],
+    "loss_horizon_days": 7,
+    "quiet_min_cases": 10,
+    "grid": "r7",
     "draws": 1,
     "cuts": 32,
     "learning_rate": 1e-5,
     "bias_lr": 1e-3,
     "series_bias": True,
     "univariate_share": 0.2,
-    "chunk": 250,
+    "chunk": 100,
     "subset_seed": 1,
     # Held-out evaluation, which never changes the steps trained.
     "eval_every": 200,
@@ -30,8 +32,13 @@ DESIGN = {
 }
 
 
-def test_the_run_is_ten_grid_blocks():
-    assert DESIGN["outbreaks"] == 10 * 840
+def test_every_setting_trains_on_one_fixed_count():
+    # A fixed number of simulations, not a time budget, ending a chunk.
+    assert DESIGN["outbreaks"] == DESIGN["prefixes"][-1] == 3200
+    # Checkpoints double from 100, each ending a chunk.
+    assert DESIGN["prefixes"] == [100 * 2**i for i in range(6)]
+    assert all(p % DESIGN["chunk"] == 0 for p in DESIGN["prefixes"])
+    assert "hours" not in CONFIG["finetune"]
     # The rate falls to zero over the simulations, not a step count.
     assert "lr_steps" not in CONFIG["finetune"]
 
@@ -46,17 +53,18 @@ def test_rounds_are_simulated_with_one_draw():
     assert CONFIG["simulate"]["seed_base"] == 30000
 
 
-def test_a_round_is_one_grid_block_of_840():
+def test_a_round_is_800_simulations():
     sim = CONFIG["simulate"]
-    assert sim["batches"] * sim["batch"] == 840
-    assert (sim["batches"], sim["batch"]) == (40, 21)
+    assert (sim["batches"], sim["batch"]) == (40, 20)
     assert "held_batches" not in sim
-    # Ten training rounds, after the held-out round, are the 8,400.
-    # The run's rounds are its grid's.
+    # QC failures are redrawn in their batch, so a round is always 800 and
+    # a grid's training rounds hold the run's outbreaks exactly. The
+    # run's rounds are its grid's.
     assert CONFIG["finetune"]["rounds"] is None
     assert CONFIG["finetune"]["validation_round"] is None
-    for grid in CONFIG["grid_rounds"].values():
-        assert len(grid["rounds"]) * 840 == CONFIG["finetune"]["outbreaks"]
+    for name, grid in CONFIG["grid_rounds"].items():
+        if name == CONFIG["finetune"]["grid"] and name not in ("r5", "r6"):
+            assert len(grid["rounds"]) * 800 == CONFIG["finetune"]["outbreaks"]
         assert grid["validation_round"] not in grid["rounds"]
         assert grid["test_round"] not in (
             *grid["rounds"],
@@ -65,12 +73,12 @@ def test_a_round_is_one_grid_block_of_840():
 
 
 def _trainer_args(tmp_path, finetune=None):
-    """The trainer's arguments in the dry run of segment n250."""
+    """The trainer's arguments in the dry run of segment n100."""
     pytest.importorskip("snakemake")
     snakemake = Path(sys.executable).parent / "snakemake"
     local = tmp_path / "local.env"
     local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
-    target = tmp_path / "checkpoints" / "slots" / "train" / "n250"
+    target = tmp_path / "checkpoints" / "slots" / "train" / "n100"
     # The real validation blocks are made from data a test run lacks.
     real = tmp_path / "real-validation.pkl"
     real.write_text("")
@@ -121,28 +129,31 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     import finetune_stream as fs
 
     args = fs.build_parser().parse_args(_trainer_args(tmp_path))
-    assert args.until == 250
-    # Main's default is the live r6 run: held-out round 20, seeds 32000
-    # to 32039 (grid_rounds).
-    assert args.grid == "r6"
-    assert args.held_out_seeds == [32000, 32039]
+    assert args.until == 100
+    # Main's default is the r7 run: held-out round 33, seeds 33300 to
+    # 33339 (grid_rounds).
+    assert args.grid == "r7"
+    assert args.held_out_seeds == [33300, 33339]
     assert args.holdout == 90
-    assert args.outbreaks == 8400
-    assert args.prefixes == [250, 500, 750, 1000, 2000, 4000, 8400]
-    assert args.stop_from == 8401
+    assert args.outbreaks == 3200
+    assert args.prefixes == [100, 200, 400, 800, 1600, 3200]
+    assert args.stop_from == 3201
+    assert args.loss_horizon_days == 7
+    assert args.quiet_min_cases == 10
     assert args.draws_per_simulation == 1
     assert args.blocks_per_simulation == 32
     assert args.subset_seed == 1
     assert args.learning_rate == 1e-5
     assert args.series_bias
     assert args.bias_lr == 1e-3
-    assert args.sources == CONFIG["grid_rounds"]["r6"]["sources"]
+    assert args.sources == CONFIG["grid_rounds"]["r7"]["sources"]
     assert args.univariate_share == 0.2
-    assert args.chunk == 250
+    assert args.chunk == 100
     # The held-out evaluations' cadence comes from the config.
     assert args.eval_every == CONFIG["finetune"]["eval_every"]
     assert args.by_source_every == CONFIG["finetune"]["by_source_every"]
-    assert args.eval == CONFIG["finetune"]["eval"] == "local"
+    # Evaluation runs off the trainer, on the evaluate rules' machine.
+    assert args.eval == CONFIG["finetune"]["eval"] == "offload"
 
 
 def test_the_loss_horizon_comes_from_the_config(tmp_path):
@@ -150,9 +161,9 @@ def test_the_loss_horizon_comes_from_the_config(tmp_path):
     sys.path.insert(0, str(ROOT / "scripts"))
     import finetune_stream as fs
 
-    # The full horizon until a run's config sets one.
-    assert CONFIG["finetune"]["loss_horizon_days"] is None
-    args = fs.build_parser().parse_args(_trainer_args(tmp_path))
+    args = fs.build_parser().parse_args(
+        _trainer_args(tmp_path, {"loss_horizon_days": None})
+    )
     assert args.loss_horizon_days is None
     args = fs.build_parser().parse_args(
         _trainer_args(tmp_path, {"loss_horizon_days": 7})
@@ -165,7 +176,6 @@ def test_quiet_cut_offs_come_from_the_config(tmp_path):
     sys.path.insert(0, str(ROOT / "scripts"))
     import finetune_stream as fs
 
-    assert CONFIG["finetune"]["quiet_min_cases"] is None
     args = fs.build_parser().parse_args(
         _trainer_args(tmp_path, {"quiet_min_cases": 10})
     )
@@ -189,7 +199,8 @@ def test_each_grid_s_sources_are_its_block_design():
     import finetune_chronos as ft
 
     for grid, entry in CONFIG["grid_rounds"].items():
-        assert entry["sources"] == list(ft.DESIGNS[grid]["source_shares"])
+        design = ft.DESIGNS[ft.GRID_DESIGNS[grid]]
+        assert entry["sources"] == list(design["source_shares"])
 
 
 def test_development_scores_no_bdbv_blocks(tmp_path):

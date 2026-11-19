@@ -105,6 +105,9 @@ nowcasteval = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
+# The foundation package holds only its R engine (r/) until its Python
+# side (pyproject.toml, src/) is added.
+exclude = ["packages/nowcastfoundation"]
 
 [tool.uv.build-backend]
 module-name = "bdbvhubrenewal"

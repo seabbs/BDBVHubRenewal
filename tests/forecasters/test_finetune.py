@@ -543,3 +543,61 @@ def test_releases_match_summing_each_cut_off_alone(source) -> None:
     pd.testing.assert_frame_equal(
         got.reset_index(drop=True), want, check_dtype=False
     )
+
+
+def test_non_summing_parents_draw_from_named_distributions() -> None:
+    from bdbvhubrenewal.forecasters.finetune import draw_named
+
+    rng = np.random.default_rng(0)
+    share = [
+        draw_named(
+            {"dist": "beta", "a": 3, "b": 14, "lower": 0, "upper": 1}, rng
+        )
+        for _ in range(4000)
+    ]
+    assert np.mean(share) == pytest.approx(3 / 17, abs=0.01)
+    assert min(share) > 0
+    assert max(share) < 1
+    lag = [
+        draw_named({"dist": "lognormal", "median": 7, "sdlog": 0.4}, rng)
+        for _ in range(4000)
+    ]
+    assert np.median(lag) == pytest.approx(7, rel=0.05)
+    assert (
+        draw_named({"dist": "uniform", "lower": 0.05, "upper": 0.3}, rng) < 0.3
+    )
+    # A beta on its support, lower to upper.
+    on = draw_named(
+        {"dist": "beta", "a": 2, "b": 2, "lower": 3, "upper": 5}, rng
+    )
+    assert 3 < on < 5
+    with pytest.raises(ValueError, match="gamma"):
+        draw_named({"dist": "gamma"}, rng)
+
+
+def test_a_late_parent_lags_by_its_drawn_days() -> None:
+    from bdbvhubrenewal.forecasters.finetune import country_counts
+
+    counts = _two_places()
+    draws = {
+        "unallocated_share": {
+            "dist": "beta",
+            "a": 3,
+            "b": 14,
+            "lower": 0,
+            "upper": 1,
+        },
+        "parent_lag_days": {"dist": "lognormal", "median": 7, "sdlog": 0.4},
+    }
+    lags = []
+    for seed in range(40):
+        rng = np.random.default_rng(seed)
+        _, total = country_counts(counts, "late_parent", rng, draws)
+        lag = pd.to_datetime(total["report_date"]) - pd.to_datetime(
+            counts["report_date"]
+        )
+        assert lag.nunique() == 1
+        lags.append(lag.iloc[0].days)
+    # Whole days, at least one, around the median of 7.
+    assert min(lags) >= 1
+    assert 5 <= np.median(lags) <= 9

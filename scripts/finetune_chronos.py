@@ -1,7 +1,8 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Blocks, batches and memory budget for fine-tuning Chronos-2.
 
-Cuts outbreaks from `scripts/finetune_simulate.R` into training blocks
+Cuts outbreaks from the simulator (packages/nowcastfoundation/r) into
+training blocks
 (`outbreak_blocks`), packs them into batches within a memory budget
 (`plan_batches`, `max_series`), without torch.
 `scripts/finetune_stream.py` trains on them and
@@ -100,6 +101,7 @@ DESIGNS = {
         },
     },
 }
+DESIGNS["r7"] = {**DESIGNS["r6"], "whole_system": True}
 """Block designs by training grid: each layout's share of blocks
 (`source_shares`), and the release cadences of each step width with their
 shares (`cadences`, `finetune.release_days`).
@@ -113,7 +115,10 @@ them either on period-end days only (`finetune.MIXED`) or as rolling sums
 on every day (`finetune.ROLLING`). Overall, 36% of blocks have daily
 releases, 32% weekly (12% daily blocks, 20% weekly blocks), 12% 3-day,
 6% daily with gaps, 6% weekdays only, 5% weekly with gaps and 3% 3-day
-with gaps."""
+with gaps.
+r7: r6's layouts and cadences; each block is a whole simulated system
+(`whole_system`), or its country alone.
+"""
 
 DESIGN = "r6"
 """The design in use (`use_design`)."""
@@ -124,11 +129,19 @@ SOURCE_SHARES = dict(DESIGNS[DESIGN]["source_shares"])
 CADENCES = {k: dict(v) for k, v in DESIGNS[DESIGN]["cadences"].items()}
 """Release cadences of each step width and their shares (`DESIGNS`)."""
 
+WHOLE_SYSTEM = DESIGNS[DESIGN].get("whole_system", False)
+"""Whether each block is a whole simulated system (`whole_system`), from
+the design, rather than a drawn share of its places (`choose_places`)."""
+
 SOURCES = tuple(SOURCE_SHARES)
 """Sources blocks are cut from, drawn at `SOURCE_SHARES`."""
 
 
-GRID_DESIGNS = {**{f"r{i}": "r5" for i in range(1, 6)}, "r6": "r6"}
+GRID_DESIGNS = {
+    **{f"r{i}": "r5" for i in range(1, 6)},
+    "r6": "r6",
+    "r7": "r7",
+}
 """Each training grid's block design: grids before r6 keep r5's."""
 
 
@@ -148,7 +161,7 @@ def use_design(grid: str) -> str:
         For a grid with no design, so a typo or a new grid is not
         silently given r5's blocks.
     """
-    global DESIGN, SOURCE_SHARES, CADENCES
+    global DESIGN, SOURCE_SHARES, CADENCES, WHOLE_SYSTEM, PARENTS
     if grid not in GRID_DESIGNS:
         raise ValueError(
             f"grid {grid!r} has no block design; known: {sorted(GRID_DESIGNS)}"
@@ -156,6 +169,8 @@ def use_design(grid: str) -> str:
     DESIGN = GRID_DESIGNS[grid]
     SOURCE_SHARES = dict(DESIGNS[DESIGN]["source_shares"])
     CADENCES = {k: dict(v) for k, v in DESIGNS[DESIGN]["cadences"].items()}
+    PARENTS = grid_parents(grid)
+    WHOLE_SYSTEM = DESIGNS[DESIGN].get("whole_system", False)
     return DESIGN
 
 
@@ -254,8 +269,32 @@ def max_series(budget_gb: float) -> int:
     return _most_within(budget_gb, checkpointed=True)
 
 
+ENGINE = "packages/nowcastfoundation/r"
+"""The simulator engine, whose R files and description are hashed."""
+
+SIMULATOR = (
+    "config/finetune/grids/r7.yaml",
+    "workflow/scripts/simulate.R",
+    f"{ENGINE}/DESCRIPTION",
+    *(
+        f"{ENGINE}/R/{name}.R"
+        for name in (
+            "delays",
+            "design",
+            "grid",
+            "infections",
+            "nowcastfoundation-package",
+            "observation",
+            "reporting",
+            "simulate",
+            "utils",
+        )
+    ),
+)
+"""The simulator's files: the grid, the rule's wrapper and the engine."""
+
 CODE = {
-    "scripts/finetune_simulate.R": "scripts/finetune_simulate.R",
+    **{path: path for path in SIMULATOR},
     "scripts/finetune_chronos.py": "scripts/finetune_chronos.py",
     "src/bdbvhubrenewal/forecasters/finetune.py": (
         "src/bdbvhubrenewal/forecasters/finetune.py"
@@ -426,6 +465,42 @@ their sum, more than their sum (cases with no place), or reported through
 a later stream (`finetune.country_counts`). A block of some of the
 places is also not their sum. Parent means belongs to, not sums to."""
 
+GRIDS = Path(__file__).parents[1] / "config" / "finetune" / "grids"
+"""The grid files (`config/finetune/grids/<grid>.yaml`)."""
+
+PARENTS: dict | None = None
+"""The grid's parents, from its file's `aggregation` (`grid_parents`), or
+None for a grid with no file, whose parents are `PARENT_MIX` drawn evenly
+with `finetune.PARENT_DRAWS`."""
+
+
+def grid_parents(grid: str) -> dict | None:
+    """Return a grid's parents from its file, or None if it has none.
+
+    The share of blocks with places whose country is their exact sum,
+    has unallocated cases, or is reported later (`aggregation.parents`,
+    weights), and the named distributions of the unallocated share and
+    the lag (`finetune.country_counts`).
+    """
+    import yaml
+
+    path = GRIDS / f"{grid}.yaml"
+    if not path.exists():
+        return None
+    config = yaml.safe_load(path.read_text())
+    aggregation = config.get("aggregation")
+    if aggregation is None:
+        return None
+    weights = aggregation["parents"]
+    total = sum(weights.values())
+    dists = config["distributions"]
+    return {
+        "shares": {k: w / total for k, w in weights.items()},
+        "unallocated_share": dists[aggregation["unallocated_share"]],
+        "parent_lag_days": dists[aggregation["parent_lag_days"]],
+    }
+
+
 UNIVARIATE_SHARE = 0.2
 """Share of blocks that are one series, the country or one leaf; the rest
 are multivariate, shared evenly among their mixes."""
@@ -458,6 +533,33 @@ def target_levels(places: tuple[str, ...]) -> tuple[str, ...]:
         else "intermediate"
         for p in places
     )
+
+
+def whole_system(
+    provinces: list[str], rng: np.random.Generator
+) -> tuple[tuple[str, ...], str]:
+    """Return a block of a whole simulated system and its level mix.
+
+    Every stratum with every total it is part of: the country, each
+    group's total (a place's over its ages, or a region's over its
+    places), each age group's total across places, and the leaves; flat
+    places are the country and its places. At `UNIVARIATE_SHARE`, and for
+    a system of one stratum, the country alone. Strata are never cut out
+    of the system they were simulated with.
+    """
+    if len(provinces) < 2 or rng.random() < UNIVARIATE_SHARE:
+        return (NATIONAL,), "national"
+    if not any("-" in p for p in provinces):
+        return (NATIONAL, *sorted(provinces)), "leaves_national"
+    groups = sorted({p.split("-")[0] for p in provinces})
+    ages = sorted(
+        {
+            p.split("-")[1]
+            for p in provinces
+            if re.fullmatch(r"A\d+", p.split("-")[1])
+        }
+    )
+    return (NATIONAL, *groups, *ages, *sorted(provinces)), "all_levels"
 
 
 def choose_places(
@@ -583,11 +685,20 @@ def outbreak_blocks(
             cut = least + int(share * (len(cutoffs) - least))
             places: tuple[str, ...] = (NATIONAL,)
             mix = "national"
-            if len(provinces) > 1:
+            # A place's rows: its counts, its lags and, with period totals,
+            # one more.
+            rows = lag + 1 + (source in MIXED or source in ROLLING)
+            if WHOLE_SYSTEM:
+                places, mix = whole_system(provinces, rng)
+                if len(places) * rows > MAX_SERIES:
+                    if empty is not None:
+                        empty.append(
+                            f"{source} cut {j}: {len(places)} places over "
+                            f"the series cap ({MAX_SERIES})"
+                        )
+                    continue
+            elif len(provinces) > 1:
                 size = np.exp(rng.uniform(0, np.log(MAX_SERIES)))
-                # A place's rows: its counts, its lags and, with period
-                # totals, one more.
-                rows = lag + 1 + (source in MIXED or source in ROLLING)
                 fits = MAX_SERIES // rows - 1
                 budget = min(round(size / rows) - 1, fits)
                 places, mix = choose_places(provinces, budget, rng)
@@ -595,8 +706,14 @@ def outbreak_blocks(
             # generator, so the other draws are as without it.
             parent_rng, option_rng = rng.spawn(2)
             parent = "exact"
+            parents = PARENTS
             if len(places) > 1 and places[0] == NATIONAL:
-                parent = str(parent_rng.choice(PARENT_MIX))
+                if parents is None:
+                    parent = str(parent_rng.choice(PARENT_MIX))
+                else:
+                    kinds = list(parents["shares"])
+                    shares = list(parents["shares"].values())
+                    parent = str(parent_rng.choice(kinds, p=shares))
             options = block_options(source, option_rng)
             # The releases follow the source's cadence (`CADENCES`), up to
             # the slot's cut.
@@ -610,6 +727,7 @@ def outbreak_blocks(
                 totals=any("-" in p for p in provinces),
                 parent=parent,
                 rng=parent_rng,
+                parent_draws=parents,
                 **options,
             )
             if block is None:

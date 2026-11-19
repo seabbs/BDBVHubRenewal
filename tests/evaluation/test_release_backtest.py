@@ -47,7 +47,7 @@ def test_a_model_that_cannot_forecast_is_listed_with_no_forecasts(
 ) -> None:
     o = result.origins
     # The first release has no pair, so neither walk runs. At 10-09 the
-    # only pair is 50 days apart and the delay falls back to it (#365).
+    # only pair is 50 days apart and the delay falls back to it.
     early = o.loc[o["origin"] == "2026-08-18"]
     assert set(early["status"]) == {"no forecast"}
     assert (early["n_reported"] == 0).all()

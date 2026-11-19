@@ -7,8 +7,6 @@ Build a model from the registry and forecast a task with it. See [Getting starte
     options:
       members: false
 
-::: nowcastutils.base
-
 ::: bdbvhubrenewal.forecasters.randomwalk
 
 ::: bdbvhubrenewal.forecasters.chain

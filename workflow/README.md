@@ -78,15 +78,15 @@ Each machine reruns its task as releases land, in its coordinator run (`task now
 
 ## 1. Simulate (`rules/simulate.smk`)
 
-Round r is 40 batches of 21 outbreaks, seeds from 30000 + 100 r, each with exactly one observation draw.
-A round is grid block r, 840 simulations, and is used whole for training or as the held-out block.
+Round r is `batches` batches of `batch` outbreaks, seeds from 30000 + 100 r, each with exactly one observation draw.
+Each outbreak draws its settings independently from the grid (`simulate.grid_file`, `config/finetune/grids/r7.yaml`), and a round is used whole for training or as the held-out round.
+The engine is the R package `packages/nowcastfoundation/r`, run by `workflow/scripts/simulate.R`.
 
-- `epinowcast_lib`: installs the epinowcast the simulator is pinned to (`epinowcast_sha` in `scripts/finetune_simulate.R`) from GitHub into `ROOT/rlib/epinowcast-<sha>`, once a machine, at nice 19 under `JOB_PREFIX`. Its dependencies must already be in R's libraries.
-- `simulate_batch`: one batch of `scripts/finetune_simulate.R`, under `JOB_PREFIX` at nice 19, once there is memory, disk and load to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one, and its whole command runs with that library and the system's tools ahead of PATH (R puts the system libraries on `LD_LIBRARY_PATH`, under which a bash from another prefix fails).
+- `epinowcast_lib`: installs the epinowcast the simulator is pinned to (`epinowcast_sha` in the grid config) from GitHub into `ROOT/rlib/epinowcast-<sha>`, once a machine, at nice 19 under `JOB_PREFIX`. Its dependencies must already be in R's libraries.
+- `simulate_batch`: one batch of the engine through `workflow/scripts/simulate.R`, under `JOB_PREFIX` at nice 19, once there is memory, disk and load to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one, and its whole command runs with that library and the system's tools ahead of PATH (R puts the system libraries on `LD_LIBRARY_PATH`, under which a bash from another prefix fails).
 - `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
 - `sim_qc`: the sim QC (`scripts/sim_qc.py`), a check against fixed plausibility thresholds (`simulate.qc`: cases per stratum, a week-on-week jump with no reporting shock, mean delay), whose exclusions (`qc/excluded.csv`, with reason and evidence) the trainer skips. Nothing is deleted.
-- `topup_plan` (checkpoint), `topup_qc`, `topup` (target): the top-up of the training rounds' missing cells (`flowlib.topup`). A cell the sim QC excluded, or one the simulator failed, is simulated again with a fresh seed in the grid's `topup_round` (r6: round 32), in tries: each try plans the cells still missing (`topup_plan`), simulates them with `simulate_batch` (`ENW_CELLS`), and checks the round with the sim QC (`topup_qc`), up to `simulate.topup_tries`. `topup` writes the round's manifest, seed list and READY, and says how many cells are still missing. A run trains on the top-ups by listing the top-up round's seeds after the training rounds' in its `seed_file`.
 - `round_ready`: the seed list and `READY`, last.
 - `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
 - `release_batch`, `release_qc`, `release`: opt-in, each batch and the round's QC exclusions to its round's release.
@@ -106,7 +106,7 @@ The state carries the learning-rate schedule, the step, the batch position and t
 - The batches a machine without the rounds can have are listed afresh each time a run plans (`listed_batches` in rules/common.smk, recorded in `<RUN>/available-batches.txt`): those the rounds host's manifests list (mirrored with its QC exclusions in `<RUN>/rounds/`), or those released. A segment is planned only once its batches are listed, counting the training seeds up to the first batch not yet listed, and nothing trains before the whole validation round is listed.
 - `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks after QC exclusions, one spare, and the validation round's batches. A finished checkpoint is final and is never retrained.
 - `evaluate_steps`, `evaluate_checkpoint`: with `finetune.eval: offload` the trainer only trains, saving an adapter snapshot at step 0 and each evaluation step. After each segment, `evaluate_steps` scores the snapshots (`train/evals/step-<k>.json`) and `evaluate_checkpoint` the checkpoint (`n<N>/held-out.json`, beside its settings), with the trainer's own loss functions (`workflow/scripts/evaluate_offloaded.py`). They take the GPU below the trainer, in the `evaluate` group, so `WORKER_GROUPS="evaluate=archie"` runs them off the trainer's machine. The dashboard, `checkpoint_check` and the release read the results with the trainer's (`flowlib.evaluations`).
-- `checkpoint_check`: a report of whether checkpoint `check_at` (1,000) beats zero-shot on the held-out simulations. No BDBV data is scored in development: BDBV is held out for the paper. It never stops training.
+- `checkpoint_check`: a report of whether checkpoint `check_at` (800) beats zero-shot on the held-out simulations. No BDBV data is scored in development: BDBV is held out for the paper. It never stops training.
 - `finetune`: every prefix.
 
 Outputs are in `<RUN>/train/n<N>/`.

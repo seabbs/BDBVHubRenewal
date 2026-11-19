@@ -7,7 +7,7 @@ prefix before and stops (`--until N`) once prefix N is saved. The
 learning-rate schedule, step and batch position are in that state, so
 the segments in turn are the one continuous run.
 
-A batch (`scripts/finetune_simulate.R <n> <seed>`) holds the outbreaks
+A batch (`simulate_batch`: `<n>` simulations from `<seed>`) holds the outbreaks
 `<seed>-<index>` its settings file lists, less those the sim QC
 excluded, so how many batches a prefix needs is known only once they
 are simulated.
@@ -72,15 +72,14 @@ def check_eval(mode: str) -> None:
 
 
 ROUND_SEEDS = 100
-"""Batch seeds each round has, `base` + 100 r on (the simulator's
-`grid_index`, scripts/finetune_simulate.R)."""
+"""Batch seeds each round has, `base` + 100 r on."""
 
 
 def round_seeds(round_: int, base: int, batches: int) -> list[int]:
     """Return a round's first `batches` batch seeds, `base` + 100 r on.
 
-    A round is one grid block (`grid_index` in
-    scripts/finetune_simulate.R), so must match the simulator's.
+    A round's seeds are its batches' seeds, each batch drawing its
+    simulations independently from the grid.
     """
     first = base + ROUND_SEEDS * round_
     return list(range(first, first + batches))

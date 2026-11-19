@@ -114,10 +114,14 @@ def test_the_code_names_are_the_paths_first_hashed():
     import finetune_chronos as ft
 
     assert set(ft.CODE) == {
-        "scripts/finetune_simulate.R",
+        *ft.SIMULATOR,
         "scripts/finetune_chronos.py",
         "src/bdbvhubrenewal/forecasters/finetune.py",
     }
+    # Every engine file is hashed.
+    engine = Path(__file__).parents[1] / ft.ENGINE / "R"
+    hashed = {p for p in ft.SIMULATOR if p.startswith(ft.ENGINE + "/R/")}
+    assert hashed == {f"{ft.ENGINE}/R/{p.name}" for p in engine.glob("*.R")}
     root = Path(__file__).parents[1]
     for path in (*ft.CODE.values(), ft.FOUNDATION_PATH):
         assert (root / path).exists(), path

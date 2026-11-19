@@ -11,6 +11,8 @@ The Python API of `bdbvhubrenewal`, grouped by task. See [Setup](../setup.md) to
 | Reporting | [Figures and tables](reporting.md), [Submission](submission.md) | `plot_location_grid`, `plot_forecasts`, `to_hub_table`, `write_submission` |
 | CLI | [CLI](cli.md) | `bdbvhubrenewal --help` |
 
+The task, the registry, releases and snapshots come from the [nowcastutils](nowcastutils.md) package.
+
 ## A forecast in five steps
 
 Run from the repository root after `bdbvhubrenewal data` has written the tidy tables to `data/`.
