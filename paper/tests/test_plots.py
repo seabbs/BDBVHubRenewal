@@ -220,8 +220,7 @@ def test_missing_forecasts_are_labelled(gappy) -> None:
     fig = results_panel(fc, obs, scores)
     labels = [t.get_text() for t in fig.legends[0].get_texts()]
     assert any(
-        "% made" in label and "Random walk nowcast" in label
-        for label in labels
+        "% made" in label and "Random walk nowcast" in label for label in labels
     )
     assert not any(
         "% made" in label for label in labels if label.startswith("Hub")
@@ -340,10 +339,11 @@ def test_wis_bars_stack_their_parts_to_the_relative_wis(germany) -> None:
     models = model_order(scores["model"].unique())
     ends = {}
     for bar in rel_ax.patches:
-        i = round(bar.get_y() + bar.get_height() / 2)
-        ends[i] = max(ends.get(i, 0.0), bar.get_x() + bar.get_width())
-    for i, m in enumerate(models):
-        assert ends[i] == pytest.approx(rel.loc[m, "rel_score"])
+        y = round(bar.get_y() + bar.get_height() / 2, 6)
+        ends[y] = max(ends.get(y, 0.0), bar.get_x() + bar.get_width())
+    assert len(ends) == len(models)
+    for y, m in zip(sorted(ends), models, strict=True):
+        assert ends[y] == pytest.approx(rel.loc[m, "rel_score"])
     labels = [t.get_text() for t in fig.legends[0].get_texts()]
     assert {"Dispersion", "Overprediction", "Underprediction"} <= set(labels)
     plt.close(fig)
@@ -386,20 +386,20 @@ def test_split_bars_put_only_the_period_on_the_axis(germany) -> None:
         ticks = [t.get_text() for t in ax.get_yticklabels()]
         assert ticks == list(PERIODS)
         # Within each period, one bar per model side by side, in order.
-        centres = ax.get_yticks()
-        for c in centres:
-            near = sorted(
-                (b for b in ax.patches if abs(b.get_y() - c) < 0.5),
-                key=lambda b: b.get_y(),
-            )
-            edges = [b.get_edgecolor() for b in near]
-            seen = []
-            for e in edges:
-                if not seen or not mpl.colors.same_color(seen[-1], e):
-                    seen.append(e)
-            assert len(seen) == len(models)
-            for e, colour in zip(seen, colours, strict=True):
-                assert mpl.colors.same_color(e[:3], colour)
+        step = 0.8 / len(models)
+        for c in ax.get_yticks():
+            bars = {}
+            for bar in ax.patches:
+                y = bar.get_y() + bar.get_height() / 2
+                if abs(y - c) < 0.5:
+                    # Coverage has two bars per model; both are its slot.
+                    slot = round((y - c) / step + (len(models) - 1) / 2)
+                    bars.setdefault(slot, []).extend(
+                        [bar.get_facecolor()[:3], bar.get_edgecolor()[:3]]
+                    )
+            assert len(bars) == len(models)
+            for y, colour in zip(sorted(bars), colours, strict=True):
+                assert any(mpl.colors.same_color(c, colour) for c in bars[y])
     legend = [t.get_text() for t in fig.legends[0].get_texts()]
     assert all(model_label(m) in legend for m in models)
     plt.close(fig)

@@ -6,9 +6,9 @@ never by their ids. Data keep the ids; names apply when drawing.
 
 - `MODEL_LABELS`: each model id's display name.
 - `MODEL_STYLES`: each model id's colour and dash (`solid`, `dashed` or
-  `dotted`). The three foundation models share a colour: fine-tuned
-  solid, zero-shot with delays dashed and zero-shot on complete data
-  dotted.
+  `dotted`). Bars have no dashes, so the main models each have their
+  own colour; the dashes keep fine-tuned solid, zero-shot with delays
+  dashed and zero-shot on complete data dotted in line plots.
 - `WIS_PART_SHADES`: how much of a model's colour each WIS part takes in
   a stacked bar, the rest white, in the order drawn.
 - `model_label`: the display name of any id, including checkpoints
@@ -45,6 +45,8 @@ MODEL_LABELS: Final[dict[str, str]] = {
 """Display name of each model id."""
 
 _BLUE: Final = "#2a78d6"
+_TEAL: Final = "#0f9aa8"
+_MAGENTA: Final = "#c4459b"
 _PURPLE: Final = "#6250d6"
 _GREY: Final = "#5f5e5a"
 
@@ -53,8 +55,8 @@ MODEL_STYLES: Final[dict[str, tuple[str, str]]] = {
     "BDBVHub-baseline": (_GREY, "solid"),
     "randomwalknowcast": ("#eb6834", "solid"),
     "randomwalk": ("#e34948", "solid"),
-    "fm_chronos_daily_complete": (_BLUE, "dotted"),
-    "fm_chronos_daily_ragged": (_BLUE, "dashed"),
+    "fm_chronos_daily_complete": (_MAGENTA, "dotted"),
+    "fm_chronos_daily_ragged": (_TEAL, "dashed"),
     "fm_chronos_daily_ragged_ft": (_BLUE, "solid"),
     "fm_chronos_weekly_complete": (_PURPLE, "dotted"),
     "fm_chronos_weekly_ragged": (_PURPLE, "dashed"),
