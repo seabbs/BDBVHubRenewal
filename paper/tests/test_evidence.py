@@ -220,11 +220,11 @@ def test_checkpoint_models_keep_one_colour_across_panels() -> None:
         (ax.get_title(), line.get_label()): line.get_color()
         for ax in fig.axes
         for line in ax.get_lines()
-        if line.get_label() in {"a_ft", "b_ft"}
+        if line.get_label() in {"a, fine-tuned", "b, fine-tuned"}
     }
     assert (
-        colours[("ebola, national (n = 400)", "b_ft")]
-        == colours[("germany, national (n = 400)", "b_ft")]
+        colours[("ebola, national (n = 400)", "b, fine-tuned")]
+        == colours[("germany, national (n = 400)", "b, fine-tuned")]
     )
 
 

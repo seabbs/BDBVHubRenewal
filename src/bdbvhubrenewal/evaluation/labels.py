@@ -87,8 +87,9 @@ def model_label(model: str) -> str:
     model : str
         A model id. A checkpoint `<id>@<outbreaks>` is named after its
         model with the outbreaks it was trained on, and `<id>_real` as
-        fine-tuned on real data. Ids without a name, such as hub teams,
-        are returned unchanged.
+        fine-tuned on real data where `<id>`'s name has a variant in
+        brackets. Ids without a name, such as hub teams, are returned
+        unchanged.
 
     Returns
     -------
@@ -98,9 +99,9 @@ def model_label(model: str) -> str:
     name, sep, size = model.rpartition(_CHECKPOINT)
     if sep and size.isdigit():
         return f"{model_label(name)}, {int(size):,} outbreaks"
-    if model.endswith(_REAL) and model[: -len(_REAL)] in MODEL_LABELS:
-        rest = MODEL_LABELS[model[: -len(_REAL)]].split(" ", 1)[1]
-        return f"Fine-tuned on real data {rest}"
+    base = MODEL_LABELS.get(model.removesuffix(_REAL), "")
+    if model.endswith(_REAL) and " (" in base:
+        return f"Fine-tuned on real data ({base.split(' (', 1)[1]}"
     return MODEL_LABELS.get(model, model)
 
 
