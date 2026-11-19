@@ -36,7 +36,7 @@ from typing import Final
 import numpy as np
 import pandas as pd
 from bdbvhubrenewal.data.dates import epiweek_end
-from bdbvhubrenewal.data.snapshots import parent_code
+from bdbvhubrenewal.data.hierarchy import parent as parent_of
 from bdbvhubrenewal.evaluation.backtest import run_forecasts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
@@ -296,7 +296,7 @@ def hub_codes(counts: pd.DataFrame) -> pd.DataFrame:
     """Return an outbreak with its strata in the hub's location codes.
 
     The random walks read a stratum's parent from its code
-    (`data.snapshots.parent_code`): a province `CD-XX` sits in the
+    (`data.hierarchy.parent`): a province `CD-XX` sits in the
     country `CD` and a zone `CD-XX-NN` in its province. So place `P01`
     becomes `CD-01`, age group `A1` in one place `CD-A1`, and age group
     `A1` of place `P01` `CD-01-A1`, whose parent is `CD-01`.
@@ -327,7 +327,7 @@ def _with_parents(rows: pd.DataFrame, values: list[str]) -> pd.DataFrame:
     Age groups by place have their place as parent, which the simulator
     does not report on its own, so its rows are the sum over its ages.
     """
-    parent = rows["location"].map(parent_code)
+    parent = rows["location"].map(parent_of)
     missing = ~parent.isin(set(rows["location"]) | {NATIONAL, None})
     if not missing.any():
         return rows

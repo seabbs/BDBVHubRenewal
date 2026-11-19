@@ -22,44 +22,16 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
+from bdbvhubrenewal.data.hierarchy import depth
+from bdbvhubrenewal.data.hierarchy import parent as parent_of
 from bdbvhubrenewal.data.releases import release_cutoff
 
 __all__ = [
-    "NATIONAL",
     "SnapshotArrays",
-    "parent_code",
     "snapshot_arrays",
     "week_sum",
     "weekly_sums",
 ]
-
-NATIONAL = "CD"
-"""Location code of the whole country."""
-
-_PROVINCE_LENGTH = 5
-
-
-def parent_code(code: str) -> str | None:
-    """Return the parent of a location code in the hierarchy.
-
-    Zones (`CD-XX-NN`) sit in provinces (`CD-XX`), which sit in the
-    country (`CD`).
-
-    Parameters
-    ----------
-    code : str
-        A location code.
-
-    Returns
-    -------
-    str or None
-        The parent, or None for the country.
-    """
-    if code == NATIONAL:
-        return None
-    if len(code) <= _PROVINCE_LENGTH:
-        return NATIONAL
-    return code[:_PROVINCE_LENGTH]
 
 
 @dataclass(frozen=True)
@@ -138,8 +110,9 @@ def snapshot_arrays(
     vintage : str
         The forecast vintage. Later releases are not used.
     locations : tuple of str
-        Locations to include. Each location's ancestors are added, so
-        the country is always the first node.
+        Locations to include. Each location's ancestors
+        (`bdbvhubrenewal.data.hierarchy.parent`) are added, so the root
+        is always the first node.
 
     Returns
     -------
@@ -155,16 +128,16 @@ def snapshot_arrays(
     if rows.empty:
         raise ValueError(f"No daily releases on or before {vintage}.")
     releases = tuple(sorted(str(v) for v in rows["vintage"].unique()))
-    nodes: dict[str, None] = {NATIONAL: None}
+    nodes: dict[str, None] = {}
     for loc in locations:
         chain: list[str] = []
         code: str | None = loc
         while code is not None and code not in nodes:
             chain.append(code)
-            code = parent_code(code)
+            code = parent_of(code)
         for c in reversed(chain):
             nodes[c] = None
-    nodes_t = tuple(sorted(nodes, key=lambda c: (len(c), c)))
+    nodes_t = tuple(sorted(nodes, key=lambda c: (depth(c), len(c), c)))
     first = as_date(str(rows["onset_date"].min()))
     cutoffs = [release_cutoff(rows, r) for r in releases]
     days = pd.date_range(first, _saturday(max(cutoffs)), freq="D")
@@ -194,7 +167,7 @@ def snapshot_arrays(
     pos = {c: i for i, c in enumerate(nodes_t)}
     parent = np.array(
         [
-            pos[p] if (p := parent_code(c)) is not None and p in pos else -1
+            pos[p] if (p := parent_of(c)) is not None and p in pos else -1
             for c in nodes_t
         ],
         dtype=np.int64,
