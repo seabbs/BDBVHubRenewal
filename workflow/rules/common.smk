@@ -316,6 +316,9 @@ def unit_env(wc, threads):
     return machine.shell_env(machine.torch_env(LOCAL, threads))
 
 
+GERMANY_UNIT = "germany-days"
+"""The German units' cache folder, as `evaluation.checkpoint.GERMANY_UNIT`."""
+
 EVALUATE = "uv run --group chronos python -m bdbvhubrenewal.evaluation.checkpoint"
 
 
@@ -336,7 +339,7 @@ def table_inputs(wc):
     labels = checkpoint_labels()
     every = [*SC["reference"], *labels]
     return {
-        "germany": expand(f"{CACHE}/germany-days/{{label}}.done", label=every),
+        "germany": expand(f"{CACHE}/{GERMANY_UNIT}/{{label}}.done", label=every),
         "release": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
     }
 
@@ -364,7 +367,7 @@ def slots_labels():
 
 def main_scores(wc):
     return [
-        f"{CACHE}/germany-days/{wc.label}.done",
+        f"{CACHE}/{GERMANY_UNIT}/{wc.label}.done",
     ]
 
 

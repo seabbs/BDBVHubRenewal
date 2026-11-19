@@ -12,7 +12,8 @@
 # torch on this machine's device (flowlib.machine) with SCORE_THREADS
 # threads, and takes the `gpu` resource, so units on one GPU queue.
 #
-# Targets: `score`, or one unit, <SCORE_CACHE>/germany-days/<label>.done.
+# Targets: `score`, or one unit, <SCORE_CACHE>/germany-days/<label>.done
+# (`GERMANY_UNIT`); `germany` is the unit's study name.
 # `land` (opt-in) commits the tables to evidence/ and pushes.
 
 
@@ -34,9 +35,9 @@ checkpoint release_list:
 
 rule score_germany:
     output:
-        f"{CACHE}/germany-days/{{label}}.done",
+        f"{CACHE}/{GERMANY_UNIT}/{{label}}.done",
     log:
-        f"{CACHE}/log/germany-days-{{label}}.log",
+        f"{CACHE}/log/{GERMANY_UNIT}-{{label}}.log",
     priority: unit_priority(5)
     conda:
         TOOLS_ENV
@@ -47,7 +48,7 @@ rule score_germany:
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=unit_env,
-        copy_back=unit_rows("germany-days"),
+        copy_back=unit_rows(GERMANY_UNIT),
     shell:
         unit_shell("germany")
 

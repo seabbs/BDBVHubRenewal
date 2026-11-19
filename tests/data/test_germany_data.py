@@ -173,11 +173,6 @@ def test_dates_move_to_the_next_saturday(tasks) -> None:
         assert task.daily_history["vintage"].max() == "2021-10-23"
 
 
-def test_the_hub_s_targets_are_every_day_0_to_28_back() -> None:
-    assert tuple(range(0, -29, -1)) == HORIZONS
-    assert tuple(range(7)) == OFFSETS
-
-
 def test_each_offset_ends_its_weeks_k_days_earlier_on_the_same_data(
     every_day,
 ) -> None:

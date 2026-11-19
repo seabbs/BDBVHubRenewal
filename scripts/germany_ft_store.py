@@ -4,7 +4,8 @@
 
 CACHE is the checkpoint scorer's cache (`scripts/checkpoint_scores.py
 germany CACHE LABEL` on the checkpoint-scoring branch), with one file
-per development date in CACHE/germany/LABEL/. LABEL is a settings hash
+per development date in CACHE/germany-days/LABEL/
+(`evaluation.checkpoint.GERMANY_UNIT`). LABEL is a settings hash
 (release `chronos-ft-<hash>`) or `slots-<hash>` (`chronos-slots-<hash>`).
 
 The script keeps `fm_chronos_daily_ragged_ft` and
@@ -39,6 +40,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from bdbvhubrenewal.evaluation.checkpoint import GERMANY_UNIT
 from bdbvhubrenewal.evaluation.germany import (
     load_germany_config,
     nowcast_dates,
@@ -65,12 +67,13 @@ config/germany.toml.
 
 def read_cache(cache: Path, label: str, split_date: str) -> pd.DataFrame:
     """Stack a label's per-date files, development dates only."""
-    files = sorted((cache / "germany" / label).glob("*.csv.gz"))
+    root = cache / GERMANY_UNIT / label
+    files = sorted(root.glob("*.csv.gz"))
     late = [f.name for f in files if f.name[:10] >= split_date]
     if late:
         raise SystemExit(f"Held-out files in the cache, refusing: {late[:3]}")
     if not files:
-        raise SystemExit(f"No cached forecasts in {cache / 'germany' / label}.")
+        raise SystemExit(f"No cached forecasts in {root}.")
     dtype = {"origin": str, "truth_vintage": str, "target_end_date": str}
     return pd.concat(
         [pd.read_csv(f, dtype=dtype) for f in files], ignore_index=True

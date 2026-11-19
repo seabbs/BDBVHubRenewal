@@ -10,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from bdbvhubrenewal.evaluation.checkpoint import GERMANY_UNIT
 from bdbvhubrenewal.evaluation.germany import load_germany_config
 from bdbvhubrenewal.evaluation.germany_store import (
     STORED_MODELS,
@@ -169,7 +170,7 @@ def test_the_store_script_writes_a_label_from_the_cache(
     tmp_path: Path,
 ) -> None:
     cache = tmp_path / "cache"
-    day = cache / "germany" / "abcdef123456"
+    day = cache / GERMANY_UNIT / "abcdef123456"
     day.mkdir(parents=True)
     for origin in ("2021-11-22", "2021-11-23"):
         pd.concat(
@@ -201,7 +202,7 @@ def test_the_store_script_writes_a_label_from_the_cache(
 
 
 def test_the_store_script_refuses_a_partial_label(tmp_path: Path) -> None:
-    day = tmp_path / "cache" / "germany" / "abcdef123456"
+    day = tmp_path / "cache" / GERMANY_UNIT / "abcdef123456"
     day.mkdir(parents=True)
     _cache(("2021-11-22",)).to_csv(day / "2021-11-22.csv.gz", index=False)
     run = subprocess.run(

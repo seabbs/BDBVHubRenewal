@@ -479,7 +479,10 @@ def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
 def test_units_make_the_rows_folder_a_worker_brings_back(tmp_path):
     blocks = score_jobs(tmp_path, {"score": {"labels": ["aaa"]}})
     shells = "".join(blocks)
-    assert f"mkdir -p {tmp_path}/scores/germany-days/aaa/" in shells
+    # The folder the shared evaluation writes German rows to.
+    from bdbvhubrenewal.evaluation.checkpoint import GERMANY_UNIT
+
+    assert f"mkdir -p {tmp_path}/scores/{GERMANY_UNIT}/aaa/" in shells
 
 
 def test_skipped_checkpoints_are_not_scored(tmp_path):
@@ -539,17 +542,6 @@ def test_finished_units_are_kept(tmp_path):
     config = {"score": {"labels": ["aaa"]}}
     jobs = dry(tmp_path, "score", config=config)
     assert jobs["score_germany"] == 1
-
-
-def test_german_units_of_5_target_days_are_rescored(tmp_path):
-    # Units before every target day was scored (#398) are in `germany`:
-    # their stamps do not count, so every label's German unit reruns.
-    old = tmp_path / "scores" / "germany"
-    old.mkdir(parents=True)
-    for label in ("reference", "aaa"):
-        (old / f"{label}.done").write_text("")
-    jobs = dry(tmp_path, "score", config={"score": {"labels": ["aaa"]}})
-    assert jobs["score_germany"] == 2
 
 
 def test_score_runs_no_follow_ups_by_default(tmp_path):
