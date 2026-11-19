@@ -279,9 +279,45 @@ def priorities(tmp_path, *targets, config=None):
     for block in re.split(r"\n(?=rule \w+:)", out.stdout):
         rule = re.match(r"rule (\w+):", block)
         if rule:
-            got = re.search(r"priority: (\d+)", block)
-            found[rule[1]] = int(got[1]) if got else 0
+            got = re.search(r"priority: ([\d.]+)", block)
+            found[rule[1]] = float(got[1]) if got else 0
     return found
+
+
+def batch_priorities(tmp_path, *targets, config=None):
+    """Return each simulate_batch job's priority by seed in a dry run."""
+    local = tmp_path / "local.env"
+    local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text(yaml.safe_dump(config or {}))
+    out = subprocess.run(
+        [str(SNAKEMAKE), *targets, "-s", "workflow/Snakefile", "-n",
+         "--cores", "1", "--workflow-profile", "workflow/profiles/ci",
+         "--configfile", str(overlay)],
+        cwd=ROOT,
+        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
+             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    assert out.returncode == 0, out.stderr + out.stdout
+    found = {}
+    for block in re.split(r"\n(?=rule \w+:)", out.stdout):
+        if block.startswith("rule simulate_batch:"):
+            seed = int(re.search(r"seed=(\d+)", block)[1])
+            found[seed] = float(re.search(r"priority: ([\d.]+)", block)[1])
+    return found
+
+
+def test_a_run_over_rounds_simulates_them_in_seed_order(tmp_path):
+    # Training reads batches in seed order, so the first round must not
+    # wait on batches of later rounds.
+    got = batch_priorities(tmp_path, "simulate", config={"rounds": [4, 5]})
+    assert len(got) == 80
+    seeds = sorted(got)
+    assert [got[s] for s in seeds] == sorted(got.values(), reverse=True)
+    assert all(15 <= p < 16 for p in got.values())
+    assert len(set(got.values())) == 80
 
 
 def test_the_trainer_goes_first_then_simulation_then_scoring(tmp_path):
@@ -290,7 +326,7 @@ def test_the_trainer_goes_first_then_simulation_then_scoring(tmp_path):
     # it trains on, then checkpoint scoring (score.smk, 10 and below).
     got = priorities(tmp_path, "finetune", config=FT)
     assert got["train_segment"] == 20
-    assert got["simulate_batch"] == 15
+    assert 15 <= got["simulate_batch"] < 16
 
 
 def test_publish_verifies_then_releases_each_checkpoint(tmp_path):
