@@ -10,7 +10,6 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.baselinenowcast import log_factors, pair_sums
-from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_sums
 from bdbvhubrenewal.forecasters import chain
 from bdbvhubrenewal.forecasters.chain import (
     Settings,
@@ -25,6 +24,7 @@ from bdbvhubrenewal.forecasters.chain import (
 )
 from bdbvhubrenewal.forecasters.obs import MAX_SIZE, PRIOR_SIZE
 from bdbvhubrenewal.forecasters.pooling import pool_matrix, source_index
+from nowcastutils.snapshots import snapshot_arrays, weekly_sums
 
 PLACES = ("CD-HU", "CD-IT", "CD-NK", "CD-TO")
 

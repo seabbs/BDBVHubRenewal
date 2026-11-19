@@ -37,7 +37,7 @@ from pyrenew.metaclass import RandomVariable
 from pyrenew.model import MultiSignalModel, PyrenewBuilder
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 
-from bdbvhubrenewal.data.releases import release_cutoff
+from nowcastutils.releases import release_cutoff
 
 from .censored import CensoredPMF
 from .composition_noise import MultinomialNoise

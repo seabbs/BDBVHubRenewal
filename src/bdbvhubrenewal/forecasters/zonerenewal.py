@@ -23,13 +23,6 @@ from typing import Any, Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.files import write_csv
-from bdbvhubrenewal.forecasters.base import (
-    SAMPLE_COLUMNS,
-    ForecastTask,
-    ModelUnavailableError,
-    register_model,
-)
 from bdbvhubrenewal.forecasters.renewal import (
     VARIANTS,
     RenewalFit,
@@ -50,6 +43,13 @@ from bdbvhubrenewal.forecasters.renewal import (
     task_imputation_delay,
     task_places,
 )
+from nowcastutils.base import (
+    SAMPLE_COLUMNS,
+    ForecastTask,
+    ModelUnavailableError,
+    register_model,
+)
+from nowcastutils.files import write_csv
 
 __all__ = [
     "ZONES_FILE",
@@ -95,8 +95,8 @@ def task_zones(task: ForecastTask) -> tuple[str, ...]:
     tuple of str
         Zone codes, sorted.
     """
-    from bdbvhubrenewal.data.hierarchy import province_of
     from bdbvhubrenewal.data.zones import hub_zones
+    from nowcastutils.hierarchy import province_of
 
     tasks_json = _data_dir() / "hub-config" / "tasks.json"
     if tasks_json.exists():
@@ -142,8 +142,8 @@ def zone_target(task: ForecastTask) -> pd.DataFrame:
 
 def _zone_walk_task(task: ForecastTask) -> ForecastTask:
     """Return the random walks' zone task, which finds the silent zones."""
-    from bdbvhubrenewal.data.snapshots import weekly_counts
     from bdbvhubrenewal.forecasters.zones import zone_task
+    from nowcastutils.snapshots import weekly_counts
 
     daily = _daily_zones()
     counts = weekly_counts(daily, task.vintage)
@@ -168,7 +168,7 @@ def sum_zones(samples: pd.DataFrame) -> pd.DataFrame:
     pandas.DataFrame
         Province samples with the same columns.
     """
-    from bdbvhubrenewal.data.hierarchy import province_of
+    from nowcastutils.hierarchy import province_of
 
     keys = [c for c in samples.columns if c not in ("location", "value")]
     out = (
@@ -296,8 +296,8 @@ def zone_vintage_inputs(
     bdbvhubrenewal.model.zones.ZoneVintage
         The model inputs.
     """
-    from bdbvhubrenewal.data.releases import release_pairs
     from bdbvhubrenewal.model.zones import zone_vintage_from_tables
+    from nowcastutils.releases import release_pairs
 
     pairs = None
     if task.delay_history is not None:
@@ -324,7 +324,7 @@ def _zone_places(task: ForecastTask) -> pd.DataFrame:
     mean population of the province's zones that have places, or the
     median zone's where none do.
     """
-    from bdbvhubrenewal.data.hierarchy import is_zone, province_of
+    from nowcastutils.hierarchy import is_zone, province_of
 
     places = task_places(task).set_index("location")
     zones = places.loc[places.index.map(is_zone)]
@@ -490,7 +490,7 @@ class ZoneRenewalModel(RenewalModel):
         """
         import hashlib
 
-        from bdbvhubrenewal.data.hierarchy import province_of
+        from nowcastutils.hierarchy import province_of
 
         daily = _daily_zones()
         mine = daily.loc[

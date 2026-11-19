@@ -34,10 +34,8 @@ from bdbvhubrenewal.data import (
     release_updates,
 )
 from bdbvhubrenewal.data.bvd import BVD_REPO, bvd_for_vintage
-from bdbvhubrenewal.data.dates import reference_date_for_vintage
 from bdbvhubrenewal.data.delays import delay_summary
 from bdbvhubrenewal.data.simulate import simulate_outbreak
-from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.data.tidy import COHERENCE_STREAMS
 from bdbvhubrenewal.data.zone_map import (
     BOUNDARIES_PATH,
@@ -79,12 +77,6 @@ from bdbvhubrenewal.evaluation.store import (
     ZONE_FITS_FILE,
     samplers,
     stored_models,
-)
-from bdbvhubrenewal.forecasters.base import (
-    NATIONAL,
-    ForecastTask,
-    get_model,
-    list_models,
 )
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 from bdbvhubrenewal.reporting.explorer import (
@@ -150,6 +142,9 @@ from bdbvhubrenewal.reporting.zone_nowcast import (
     zone_counts,
     zone_nowcast,
 )
+from nowcastutils.base import NATIONAL, ForecastTask, get_model, list_models
+from nowcastutils.dates import reference_date_for_vintage
+from nowcastutils.snapshots import weekly_counts
 
 __all__ = ["make_report"]
 

@@ -28,11 +28,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.files import write_csv
-from bdbvhubrenewal.data.releases import release_cutoff
 from bdbvhubrenewal.data.simulate import SimulatedOutbreak
-from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     energy_tasks,
@@ -46,16 +42,16 @@ from bdbvhubrenewal.evaluation.scoring import (
     relative_skill,
     score_forecasts,
 )
-from bdbvhubrenewal.forecasters.base import (
-    ForecastTask,
-    ModelUnavailableError,
-    get_model,
-)
 from bdbvhubrenewal.forecasters.zones import (
     ZoneAllocator,
     zone_draws,
     zone_task,
 )
+from nowcastutils.base import ForecastTask, ModelUnavailableError, get_model
+from nowcastutils.dates import as_date
+from nowcastutils.files import write_csv
+from nowcastutils.releases import release_cutoff
+from nowcastutils.snapshots import weekly_counts
 
 log = logging.getLogger(__name__)
 

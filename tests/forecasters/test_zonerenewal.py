@@ -8,11 +8,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.hierarchy import is_zone, province_of
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters import renewal as rn
 from bdbvhubrenewal.forecasters import zonerenewal as zr
+from nowcastutils.hierarchy import is_zone, province_of
 
 pytest.importorskip("pyrenew")
 

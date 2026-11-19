@@ -40,8 +40,8 @@ from bdbvhubrenewal.data import (
     revision_table,
 )
 from bdbvhubrenewal.data.delays import delay_summary
-from bdbvhubrenewal.forecasters.base import NATIONAL
 from bdbvhubrenewal.reporting.site import site_baseline
+from nowcastutils.base import NATIONAL
 
 __all__ = [
     "DASHES",
@@ -948,8 +948,8 @@ def baseline_share(
     pandas.DataFrame
         Columns `location`, `age` (days since onset) and `share`.
     """
-    from bdbvhubrenewal.data.snapshots import snapshot_arrays
     from bdbvhubrenewal.forecasters.chain import Settings, build_origin
+    from nowcastutils.snapshots import snapshot_arrays
 
     snap = snapshot_arrays(daily, vintage, tuple(locations))
     origin = build_origin(snap, Settings(), errors=False)
@@ -1369,8 +1369,8 @@ def plot_delay_check(
         A place's label says at how many ages it uses its own delay
         factor and not its parent's.
     """
-    from bdbvhubrenewal.data.snapshots import snapshot_arrays
     from bdbvhubrenewal.forecasters.chain import Settings, build_origin
+    from nowcastutils.snapshots import snapshot_arrays
 
     snap = snapshot_arrays(daily, vintage, tuple(locations))
     origin = build_origin(snap, Settings(), errors=True)
@@ -1607,7 +1607,7 @@ def plot_nowcast(
         make_tasks,
         run_forecasts,
     )
-    from bdbvhubrenewal.forecasters.base import get_model
+    from nowcastutils.base import get_model
 
     target = load_target(data_dir) if target is None else target
     real = target.loc[target["kind"] == "real"]
@@ -1714,7 +1714,7 @@ def comparison_colours(
         model's colour dashed, and the hub teams solid in the greys of
         `hub_styles`.
     """
-    from bdbvhubrenewal.forecasters.base import list_models
+    from nowcastutils.base import list_models
 
     registry = [s.name for s in list_models()]
     out = {lab: model_style(m, registry) for lab, m in ours.items()}
@@ -1963,7 +1963,7 @@ def plot_submission(
         A grid with one panel per location.
     """
     from bdbvhubrenewal.data import load_target
-    from bdbvhubrenewal.data.hierarchy import province_of
+    from nowcastutils.hierarchy import province_of
 
     target = load_target(data_dir) if target is None else target
     fc = read_submission(submission, vintage)

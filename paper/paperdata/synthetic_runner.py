@@ -35,17 +35,12 @@ from typing import Final
 
 import numpy as np
 import pandas as pd
-from bdbvhubrenewal.data.dates import epiweek_end
-from bdbvhubrenewal.data.hierarchy import parent as parent_of
 from bdbvhubrenewal.evaluation.backtest import run_forecasts
-from bdbvhubrenewal.forecasters.base import (
-    NATIONAL,
-    ForecastModel,
-    ForecastTask,
-    get_model,
-)
 from bdbvhubrenewal.forecasters.finetune import releases, weekly_cutoffs
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from nowcastutils.base import NATIONAL, ForecastModel, ForecastTask, get_model
+from nowcastutils.dates import epiweek_end
+from nowcastutils.hierarchy import parent as parent_of
 
 __all__ = [
     "COLUMNS",

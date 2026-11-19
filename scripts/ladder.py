@@ -51,10 +51,6 @@ from bdbvhubrenewal.data.zones import hub_places  # noqa: E402
 from bdbvhubrenewal.evaluation.ppc import summarise_draws  # noqa: E402
 from bdbvhubrenewal.evaluation.scoring import crps_sample  # noqa: E402
 from bdbvhubrenewal.forecasters import renewal as adapter  # noqa: E402
-from bdbvhubrenewal.forecasters.base import (  # noqa: E402
-    ForecastTask,
-    ModelUnavailableError,
-)
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk  # noqa: E402
 from bdbvhubrenewal.forecasters.renewal import (  # noqa: E402
     bvd_rows,
@@ -68,6 +64,7 @@ from bdbvhubrenewal.model.model import (  # noqa: E402
     incubation_period,
     seed_lead,
 )
+from nowcastutils.base import ForecastTask, ModelUnavailableError  # noqa: E402
 
 OUT = Path(__file__).parents[1] / "results"
 

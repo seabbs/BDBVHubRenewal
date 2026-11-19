@@ -35,7 +35,7 @@ daily["cutoff"] = daily["vintage"]
 It adds each place's ancestors from its code, so the country `A` comes first.
 
 ```python
-from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_sums
+from nowcastutils.snapshots import snapshot_arrays, weekly_sums
 
 snap = snapshot_arrays(daily, "2026-03-14", ("A-1", "A-2"))
 assert snap.locations == ("A", "A-1", "A-2")
@@ -51,7 +51,7 @@ assert weekly.shape == (3, snap.n_weeks)
 A release's cut-off is its latest onset day.
 
 ```python
-from bdbvhubrenewal.data.releases import latest_onset_days
+from nowcastutils.releases import latest_onset_days
 
 cutoffs = latest_onset_days(daily)
 assert cutoffs.to_dict() == {"2026-03-07": "2026-03-07", "2026-03-14": "2026-03-14"}
@@ -63,7 +63,7 @@ Codes are parts joined by `-`, so a code's parent is the code without its last p
 There is no separate hierarchy table.
 
 ```python
-from bdbvhubrenewal.data.hierarchy import depth, parent
+from nowcastutils.hierarchy import depth, parent
 
 assert parent("A-1") == "A"
 assert parent("A") is None

@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.dates import reference_date_for_vintage
 from bdbvhubrenewal.data.zones import hub_zones, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.evaluation.hubcompare import (
@@ -28,6 +27,7 @@ from bdbvhubrenewal.evaluation.hubcompare import (
     summarise_comparison,
 )
 from bdbvhubrenewal.reporting.plots import comparison_colours, plot_hub_round
+from nowcastutils.dates import reference_date_for_vintage
 
 ROOT = Path(__file__).resolve().parents[2]
 

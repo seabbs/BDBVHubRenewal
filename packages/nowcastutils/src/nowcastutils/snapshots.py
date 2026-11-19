@@ -4,7 +4,7 @@ r"""Daily release snapshots as arrays on the onset clock.
 The hub's `data/daily.csv` holds one table of daily onsets for each
 release.
 A release $r$ has an as-of date $A_r$ and a cut-off $c_r$, its last
-report day (`bdbvhubrenewal.data.releases.release_cutoff`).
+report day (`nowcastutils.releases.release_cutoff`).
 Its cell for onset day $t$ is observed when $t \le c_r$.
 An observed day with no row counts 0.
 The age of day $t$ at release $r$ is $c_r - t$, the onset clock.
@@ -21,10 +21,10 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.hierarchy import depth
-from bdbvhubrenewal.data.hierarchy import parent as parent_of
-from bdbvhubrenewal.data.releases import release_cutoff
+from nowcastutils.dates import as_date
+from nowcastutils.hierarchy import depth
+from nowcastutils.hierarchy import parent as parent_of
+from nowcastutils.releases import release_cutoff
 
 __all__ = [
     "SnapshotArrays",
@@ -112,7 +112,7 @@ def snapshot_arrays(
         The forecast vintage. Later releases are not used.
     locations : tuple of str
         Locations to include. Each location's ancestors
-        (`bdbvhubrenewal.data.hierarchy.parent`) are added, so the root
+        (`nowcastutils.hierarchy.parent`) are added, so the root
         is always the first node.
 
     Returns

@@ -6,13 +6,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.dates import epiweek_end
-from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.data.simulate import (
     SimulationSettings,
     release_dates,
     simulate_outbreak,
 )
+from nowcastutils.dates import epiweek_end
+from nowcastutils.releases import cutoff_lags
 
 
 def test_cutoff_lags_follow_real_releases() -> None:

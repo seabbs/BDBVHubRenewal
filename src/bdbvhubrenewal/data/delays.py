@@ -31,7 +31,7 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbvhubrenewal.data.dates import as_date
+from nowcastutils.dates import as_date
 
 __all__ = [
     "DEFAULT_MAX_DELAY",
