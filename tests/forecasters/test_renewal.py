@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -73,6 +74,22 @@ def test_only_renewalsp_centres_its_rt_walk() -> None:
         name: rn.model_config(v).centred_rt for name, v in rn.VARIANTS.items()
     }
     assert centred == {"renewal": False, "renewalsp": True, "renewalbvd": False}
+
+
+def test_renewalsp_centres_only_where_the_data_pin_the_walk() -> None:
+    # Centred, a province with few cases funnels (#330).
+    def data(cases: float) -> SimpleNamespace:
+        known = np.array([[cases - 1.0], [np.nan]])
+        return SimpleNamespace(known=known, imputed=np.array([[1.0], [0.0]]))
+
+    sp = rn.VARIANTS["renewalsp"]
+    rich = rn.fit_config(sp, data(rn.CENTRED_RT_MIN_CASES))
+    poor = rn.fit_config(sp, data(rn.CENTRED_RT_MIN_CASES - 1))
+    assert rich.centred_rt
+    assert not poor.centred_rt
+    assert poor == replace(rich, centred_rt=False)
+    pooled = rn.fit_config(rn.VARIANTS["renewal"], data(1e6))
+    assert not pooled.centred_rt
 
 
 @pytest.mark.parametrize("name", ["renewal", "renewalbvd"])
