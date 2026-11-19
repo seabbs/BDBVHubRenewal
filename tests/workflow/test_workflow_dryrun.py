@@ -416,6 +416,18 @@ def test_verify_alone_never_releases(tmp_path):
     assert jobs == {"verify_checkpoint": 1}
 
 
+def test_score_computes_nothing_on_bdbv_held_out_for_the_paper(tmp_path):
+    # BDBV is held out entirely (Sam, 2026-11-19 11:20): no BDBV unit,
+    # zone unit or data refresh is a scoring job, and `zones` is gone.
+    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
+    jobs = dry(tmp_path, "score", config=config)
+    assert not {"score_bdbv", "score_zones", "bdbv_data"} & set(jobs)
+    rules = (ROOT / "workflow" / "rules" / "score.smk").read_text()
+    assert not re.search(
+        r"^rule (zones|score_bdbv|score_zones|bdbv_data):", rules, re.M
+    )
+
+
 def test_score_runs_each_unit_for_a_checkpoint_and_the_reference(tmp_path):
     config = {"score": {"labels": ["slots-aaa", "bbb"]}}
     jobs = dry(tmp_path, "score", config=config)
