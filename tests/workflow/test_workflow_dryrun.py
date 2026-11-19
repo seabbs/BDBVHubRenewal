@@ -328,6 +328,38 @@ def test_a_checkpoint_is_scored_only_after_step_0(tmp_path):
     assert jobs["evaluate_checkpoint"] == 1
 
 
+def _dag(tmp_path, target, config):
+    """Return a dry run's jobs (id to label) and edges (from, to)."""
+    out = dry_run(tmp_path, target, config=config, extra=["--dag"])
+    assert out.returncode == 0, out.stderr
+    jobs = dict(re.findall(r'^\s*(\d+)\[label = "([^"]+)"', out.stdout, re.M))
+    edges = re.findall(r"^\s*(\d+) -> (\d+)$", out.stdout, re.M)
+    return jobs, edges
+
+
+def test_a_checkpoint_s_evaluation_depends_on_step_0_and_earlier_settings(
+    tmp_path,
+):
+    for n in (250, 500):
+        _checkpoint(tmp_path, n)
+    sidecar = tmp_path / "checkpoints/slots/train/n500/held-out.json"
+    jobs, edges = _dag(tmp_path, str(sidecar), OFFLOAD)
+    steps = [j for j, label in jobs.items() if label == "evaluate_steps"]
+    (check,) = [
+        j for j, label in jobs.items() if label == "evaluate_checkpoint"
+    ]
+    (first,) = [
+        j for j, label in jobs.items() if label == "train_segment\\nn: 250"
+    ]
+    # One segment's step evaluation feeds the next's, which feeds the
+    # checkpoint's: step 0 is scored before the checkpoint.
+    chain = [(a, b) for a, b in edges if a in steps and b in steps]
+    assert len(chain) == 1
+    assert (chain[0][1], check) in edges
+    # The first checkpoint's settings are an input of n500's evaluation.
+    assert (first, check) in edges
+
+
 def test_finetune_never_publishes(tmp_path):
     jobs = dry(tmp_path, "finetune", config=FT)
     assert not any(k.startswith("publish") for k in jobs)
