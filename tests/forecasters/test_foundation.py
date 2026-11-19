@@ -14,13 +14,9 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.zones import (
-    ZoneData,
-    hub_zones,
-    is_zone,
-    province_of,
-    weekly_zone_counts,
-)
+from bdbvhubrenewal.data.hierarchy import is_zone, province_of
+from bdbvhubrenewal.data.snapshots import weekly_counts
+from bdbvhubrenewal.data.zones import ZoneData, hub_zones
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
@@ -847,7 +843,7 @@ def test_zone_samples_come_straight_from_the_block(
     tasks_json,
 ) -> None:
     zones = hub_zones(tasks_json)
-    counts = weekly_zone_counts(daily_zones, task.vintage)
+    counts = weekly_counts(daily_zones, task.vintage)
     own = zoned.loc[zoned["location"].map(is_zone)]
     provinces = _provinces(zoned)
     # The block's own zone series: nothing sums them to the provinces
@@ -883,7 +879,7 @@ def test_daily_zones_keep_their_counts_with_no_weekly_zone_releases(
     assert set(own["location"]) == set(_zones(task))
     # Reconciling keeps each zone's published count, so the zones are
     # floored with no weekly zone release to floor them before.
-    counts = weekly_zone_counts(daily_zones, task.vintage)
+    counts = weekly_counts(daily_zones, task.vintage)
     keys = ["location", "target_end_date"]
     floor = own.merge(counts, on=keys, how="left")["total"].fillna(0)
     assert (own["value"].to_numpy() >= floor.to_numpy()).all()

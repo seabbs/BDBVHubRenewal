@@ -9,13 +9,9 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data import load_daily_zones
-from bdbvhubrenewal.data.zones import (
-    hub_zones,
-    is_zone,
-    load_zone_data,
-    province_of,
-    weekly_zone_counts,
-)
+from bdbvhubrenewal.data.hierarchy import is_zone, province_of
+from bdbvhubrenewal.data.snapshots import weekly_counts
+from bdbvhubrenewal.data.zones import hub_zones, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters import renewal as rn
@@ -51,7 +47,7 @@ def zone_task(
 
 def _submitted_split(samples: pd.DataFrame, task: ForecastTask) -> pd.DataFrame:
     """The split as the submission made it: the full zone file, hub codes."""
-    counts = weekly_zone_counts(load_daily_zones(DATA), task.vintage)
+    counts = weekly_counts(load_daily_zones(DATA), task.vintage)
     codes = hub_zones(DATA / "hub-config" / "tasks.json")
     return ZoneAllocator().allocate(samples, task, counts, codes)
 

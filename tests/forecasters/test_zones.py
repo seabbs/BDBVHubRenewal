@@ -8,11 +8,9 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data import load_health_zones
-from bdbvhubrenewal.data.zones import (
-    hub_zones,
-    province_of,
-    weekly_zone_counts,
-)
+from bdbvhubrenewal.data.hierarchy import province_of
+from bdbvhubrenewal.data.snapshots import weekly_counts
+from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
@@ -66,7 +64,7 @@ def task(
 
 @pytest.fixture(scope="module")
 def counts(daily_zones: pd.DataFrame) -> pd.DataFrame:
-    return weekly_zone_counts(daily_zones, "2026-10-17")
+    return weekly_counts(daily_zones, "2026-10-17")
 
 
 @pytest.fixture(scope="module")
@@ -78,7 +76,7 @@ def open_task(
 
 @pytest.fixture(scope="module")
 def open_counts(daily_zones: pd.DataFrame) -> pd.DataFrame:
-    return weekly_zone_counts(daily_zones, OPEN_VINTAGE)
+    return weekly_counts(daily_zones, OPEN_VINTAGE)
 
 
 def _hub_failures(path: Path) -> list[str]:
@@ -121,7 +119,7 @@ def test_weekly_zone_counts_match_the_hub_time_series(
 ) -> None:
     hz = load_health_zones(DATA)
     for vintage in hz["vintage"].unique():
-        got = weekly_zone_counts(daily_zones, str(vintage))
+        got = weekly_counts(daily_zones, str(vintage))
         want = hz.loc[hz["vintage"] == vintage]
         both = got.merge(
             want, on=["location", "target_end_date"], how="outer"

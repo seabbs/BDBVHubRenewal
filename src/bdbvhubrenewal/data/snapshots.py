@@ -30,6 +30,7 @@ __all__ = [
     "SnapshotArrays",
     "snapshot_arrays",
     "week_sum",
+    "weekly_counts",
     "weekly_sums",
 ]
 
@@ -223,5 +224,33 @@ def weekly_sums(
 
 
 def weekly_counts(daily: pd.DataFrame, vintage: str) -> pd.DataFrame:
-    """Stub."""
-    raise NotImplementedError
+    """Sum one release's daily onsets to weeks ending on Saturday.
+
+    Parameters
+    ----------
+    daily : pandas.DataFrame
+        Daily onsets by release, with columns `vintage`, `location`,
+        `onset_date`, `observed` and `imputed`.
+    vintage : str
+        The release, ISO format.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `location`, `target_end_date` (the Saturday ending the
+        onset week) and `total`, known plus imputed, for weeks with at
+        least one onset.
+    """
+    rows = daily.loc[daily["vintage"].astype(str) == vintage]
+    onset = pd.to_datetime(rows["onset_date"])
+    end = onset + pd.to_timedelta((5 - onset.dt.weekday) % 7, unit="D")
+    out = (
+        rows.assign(
+            target_end_date=end.dt.date.astype(str),
+            total=rows["observed"] + rows["imputed"],
+        )
+        .groupby(["location", "target_end_date"], as_index=False)["total"]
+        .sum()
+    )
+    kept: pd.DataFrame = out.loc[out["total"] > 0]
+    return kept.reset_index(drop=True)

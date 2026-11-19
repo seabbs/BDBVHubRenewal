@@ -1963,7 +1963,7 @@ def plot_submission(
         A grid with one panel per location.
     """
     from bdbvhubrenewal.data import load_target
-    from bdbvhubrenewal.data.zones import province_of
+    from bdbvhubrenewal.data.hierarchy import province_of
 
     target = load_target(data_dir) if target is None else target
     fc = read_submission(submission, vintage)

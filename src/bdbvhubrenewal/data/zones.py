@@ -1,10 +1,12 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Health zones: the hub's zone codes and weekly zone counts.
+"""Health zones: the hub's zone codes and zone tables.
 
-Zone codes are `CD-XX-NN`, with `CD-XX` the province.
+Zone codes are `CD-XX-NN`, with `CD-XX` the province
+(`bdbvhubrenewal.data.hierarchy`).
 The hub lists all 519 as optional locations in `hub-config/tasks.json`.
-Weekly counts come from the hub's daily zone onsets
-(`daily_zones.csv.gz`), summed by epi week, known plus imputed.
+Weekly zone counts come from the hub's daily zone onsets
+(`daily_zones.csv.gz`) through `bdbvhubrenewal.data.snapshots.weekly_counts`,
+known plus imputed.
 They equal the zone rows of the hub's `time-series.csv`.
 """
 
@@ -16,15 +18,13 @@ from pathlib import Path
 
 import pandas as pd
 
+from bdbvhubrenewal.data.hierarchy import is_zone
 from bdbvhubrenewal.data.tidy import load_daily_zones, load_health_zones
 
 __all__ = [
     "ZoneData",
     "hub_zones",
-    "is_zone",
     "load_zone_data",
-    "province_of",
-    "weekly_zone_counts",
 ]
 
 
@@ -66,38 +66,6 @@ def load_zone_data(data_dir: Path | str) -> ZoneData:
     )
 
 
-def is_zone(location: str) -> bool:
-    """Return whether a location code is a zone, `CD-XX-NN`.
-
-    Parameters
-    ----------
-    location : str
-        A location code.
-
-    Returns
-    -------
-    bool
-        True for a zone, False for the country or a province.
-    """
-    return len(location.split("-")) == 3
-
-
-def province_of(zone: str) -> str:
-    """Return the province code of a zone code.
-
-    Parameters
-    ----------
-    zone : str
-        A zone code, `CD-XX-NN`.
-
-    Returns
-    -------
-    str
-        `CD-XX`.
-    """
-    return zone[:5]
-
-
 def hub_zones(tasks_json: Path | str) -> tuple[str, ...]:
     """Return the zone codes the hub accepts as locations.
 
@@ -119,35 +87,3 @@ def hub_zones(tasks_json: Path | str) -> tuple[str, ...]:
             for key in ("required", "optional"):
                 codes.update(loc.get(key) or [])
     return tuple(sorted(c for c in codes if is_zone(c)))
-
-
-def weekly_zone_counts(daily_zones: pd.DataFrame, vintage: str) -> pd.DataFrame:
-    """Sum one vintage's daily zone onsets by epi week.
-
-    Parameters
-    ----------
-    daily_zones : pandas.DataFrame
-        The tidy daily zone table (`load_daily_zones`), with columns
-        `vintage`, `location`, `onset_date`, `observed` and `imputed`.
-    vintage : str
-        The vintage, ISO format.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Columns `location`, `target_end_date` (the Saturday ending the
-        onset week) and `total`, for weeks with at least one onset.
-    """
-    rows = daily_zones.loc[daily_zones["vintage"].astype(str) == vintage]
-    onset = pd.to_datetime(rows["onset_date"])
-    end = onset + pd.to_timedelta((5 - onset.dt.weekday) % 7, unit="D")
-    out = (
-        rows.assign(
-            target_end_date=end.dt.date.astype(str),
-            total=rows["observed"] + rows["imputed"],
-        )
-        .groupby(["location", "target_end_date"], as_index=False)["total"]
-        .sum()
-    )
-    kept: pd.DataFrame = out.loc[out["total"] > 0]
-    return kept.reset_index(drop=True)

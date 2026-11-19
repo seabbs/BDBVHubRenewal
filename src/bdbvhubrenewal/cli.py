@@ -63,15 +63,11 @@ from bdbvhubrenewal.data import (
 )
 from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.files import write_csv
+from bdbvhubrenewal.data.hierarchy import is_zone
 from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.data.simulate import SCENARIO_RT_SCALE
-from bdbvhubrenewal.data.zones import (
-    ZoneData,
-    hub_zones,
-    is_zone,
-    load_zone_data,
-    weekly_zone_counts,
-)
+from bdbvhubrenewal.data.snapshots import weekly_counts
+from bdbvhubrenewal.data.zones import ZoneData, hub_zones, load_zone_data
 from bdbvhubrenewal.devices import host_devices
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation import store, store_archive
@@ -1413,7 +1409,7 @@ def _zones(
         daily = load_daily_zones(data)
     except OSError:
         return None, "no zone data, so the file has no health zones"
-    counts = weekly_zone_counts(daily, task.vintage)
+    counts = weekly_counts(daily, task.vintage)
     if counts.empty:
         return None, f"no zone data for {task.vintage}, so no health zones"
     zones = zones_for_model(

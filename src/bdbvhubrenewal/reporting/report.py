@@ -37,17 +37,14 @@ from bdbvhubrenewal.data.bvd import BVD_REPO, bvd_for_vintage
 from bdbvhubrenewal.data.dates import reference_date_for_vintage
 from bdbvhubrenewal.data.delays import delay_summary
 from bdbvhubrenewal.data.simulate import simulate_outbreak
+from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.data.tidy import COHERENCE_STREAMS
 from bdbvhubrenewal.data.zone_map import (
     BOUNDARIES_PATH,
     zone_boundaries,
     zone_names,
 )
-from bdbvhubrenewal.data.zones import (
-    hub_zones,
-    load_zone_data,
-    weekly_zone_counts,
-)
+from bdbvhubrenewal.data.zones import hub_zones, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     check_distinct,
@@ -2031,10 +2028,7 @@ def _checks_section(
     counts = pd.concat(
         [
             real[["vintage", "location", "target_end_date", "total"]],
-            *(
-                weekly_zone_counts(daily_zones, v).assign(vintage=v)
-                for v in origins
-            ),
+            *(weekly_counts(daily_zones, v).assign(vintage=v) for v in origins),
         ],
         ignore_index=True,
     ).astype({"vintage": str})
