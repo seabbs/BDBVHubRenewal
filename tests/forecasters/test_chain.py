@@ -11,6 +11,7 @@ import pytest
 
 from bdbvhubrenewal.baselinenowcast import log_factors, pair_sums
 from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_sums
+from bdbvhubrenewal.forecasters import chain
 from bdbvhubrenewal.forecasters.chain import (
     Settings,
     _delay_counts,
@@ -443,13 +444,14 @@ def test_the_longer_pair_recovers_a_known_delay() -> None:
     for cut in cuts:
         for day in days[days <= cut]:
             age = (cut - day).days
-            n = 10_000 / to_final[age] if age < d else 10_000
+            n = 1e6 / to_final[age] if age < d else 1e6
             rows.append((cut.date().isoformat(), "CD-IT", day, round(n)))
     daily = pd.DataFrame(
         rows, columns=["vintage", "location", "onset_date", "observed"]
     ).assign(imputed=0, cutoff=lambda x: x["vintage"])
     daily["onset_date"] = daily["onset_date"].dt.date.astype(str)
     snap = snapshot_arrays(daily, "2026-10-07", ("CD-IT",))
-    origin = build_origin(snap, Settings(), errors=False)
+    # The counts are flat, so there is no walk spread: fit the delay only.
+    _, fit = chain._latest_fit(snap, Settings(), fit_delay)
     loc = snap.locations.index("CD-IT")
-    np.testing.assert_allclose(origin.fit.g[loc], g, atol=2e-3)
+    np.testing.assert_allclose(fit.g[loc], g, atol=2e-3)
