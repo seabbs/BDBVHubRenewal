@@ -31,6 +31,7 @@ import pandas as pd
 from bdbvhubrenewal.evaluation.nowcast import reporting_delay, rolling_truth
 from bdbvhubrenewal.evaluation.scoring import crps_sample, wis_quantile
 
+from .paperstyle import WIS_PARTS
 from .rows import num, sources
 from .runs import Classifier, Reference, Run, shade, split_label
 
@@ -52,6 +53,23 @@ TARGET = "7day"
 def wis(q: Sequence[float], y: float) -> float:
     """Return the WIS of the seven cached quantiles at truth `y`."""
     return float(wis_quantile([y], [list(q)], list(LEVELS))["wis"][0])
+
+
+def wis_parts(scored: Sequence[tuple[Sequence[float], float]]) -> list[float]:
+    """Return mean WIS parts, natural scale then log scale (`log1p`).
+
+    `WIS_PARTS` of the forecasts' seven quantiles, then the log-scale WIS
+    and its `WIS_PARTS`, as the shared scorer takes log WIS: of log(x + 1)
+    of the truth and the quantiles.
+    """
+    q = np.array([qs for qs, _ in scored], dtype=float)
+    y = np.array([y for _, y in scored], dtype=float)
+    nat = wis_quantile(y, q, list(LEVELS))
+    log = wis_quantile(np.log1p(y), np.log1p(np.clip(q, 0, None)), list(LEVELS))
+    out = [nat[p].mean() for p in WIS_PARTS] + [log["wis"].mean()]
+    return [
+        round(float(v), 4) for v in [*out, *(log[p].mean() for p in WIS_PARTS)]
+    ]
 
 
 def cdf_at(q: Sequence[float], y: float) -> float:
@@ -172,6 +190,9 @@ def digest(
                     / len(scored),
                     2,
                 )
+                # A file's own score may not be WIS, so it has no parts.
+                if all(s is None for _, _, s in scored):
+                    entry["parts"] = wis_parts([(q, y) for q, y, _ in scored])
         out.append((loc, sid, src, tgt, entry, seen, last))
     return out
 
@@ -208,6 +229,7 @@ def build(
     picks = [SEVEN.index(f"{lv:g}") for lv in levels]
     series: dict = {}
     score: dict = {}
+    parts: dict = {}
     stat: dict = {}
     truth: dict = {}
     latest: dict = {}
@@ -244,6 +266,8 @@ def build(
                 if "stats" in entry:
                     _put(stat, keys, entry["stats"])
                     _put(score, keys, entry["score"])
+                    if "parts" in entry:
+                        _put(parts, keys, entry["parts"])
 
     def rank(loc: str) -> tuple[int, str]:
         hit = (i for i, (_, rx) in enumerate(order) if re.match(rx, loc))
@@ -261,6 +285,7 @@ def build(
     return {
         "series": series,
         "score": score,
+        "parts": parts,
         "stats": stat,
         "truth": truth,
         "latest": latest,
@@ -327,6 +352,7 @@ def location(built: Mapping[str, Any] | None, loc: str) -> dict[str, Any]:
     return {
         "series": built["series"][loc],
         "score": built["score"].get(loc, {}),
+        "parts": built.get("parts", {}).get(loc, {}),
         "stats": built["stats"].get(loc, {}),
         "truth": line(built["truth"].get(loc, {}), lambda v: v[1]),
         "latest": line(built["latest"].get(loc, {})),

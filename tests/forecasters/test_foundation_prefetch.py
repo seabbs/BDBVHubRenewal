@@ -127,6 +127,17 @@ def test_native_quantiles_carry_the_series_bias(
     np.testing.assert_array_equal(seen[0], want)
 
 
+def test_a_group_s_key_holds_its_rows_places() -> None:
+    # With the series bias, the same numbers at other places forecast
+    # differently, so they must not share prefetched quantiles.
+    a = _group(1.0)
+    b = {**a, "places": ["Q0", "Q1"]}
+    b["past_covariates"] = {f"Q{i}_lag_1": np.zeros(5) for i in range(2)}
+    c = {**a, "target_places": [1, 0]}
+    keys = {foundation.group_key(g, 3) for g in (a, b, c)}
+    assert len(keys) == 3
+
+
 @pytest.fixture(scope="module")
 def tasks(
     target: pd.DataFrame,

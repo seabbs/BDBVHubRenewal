@@ -78,3 +78,56 @@ def test_loss_runs_take_held_out_by_source_from_history(tmp_path):
     assert got["full0"] == 0.5
     assert got["src0"] == {"weekly": 0.3}
     assert got["train"] == [[200, 0.45]]
+
+
+def test_loss_runs_carry_the_nowcast_and_forecast_parts(tmp_path):
+    folder = tmp_path / "run"
+    (folder / "train").mkdir(parents=True)
+    (folder / "train" / "history.json").write_text(
+        json.dumps(
+            [
+                {
+                    "step": 0,
+                    "held_out_loss": 0.5,
+                    "held_out_loss_nowcast": 0.2,
+                    "held_out_loss_forecast": 0.3,
+                },
+            ]
+        )
+    )
+    run = runs.make_run("r", str(folder), live=True)
+    rows = [
+        {
+            "step": 100,
+            "loss": 0.5,
+            "held": 0.4,
+            "parts": {"nowcast": 0.1, "forecast": 0.3},
+        },
+        {"step": 200, "loss": 0.5, "held": 0.39, "parts": {}},
+    ]
+    cks = [
+        (
+            "n250",
+            {
+                "steps": 1000,
+                "held_out_loss": 0.35,
+                "held_out_loss_nowcast": 0.1,
+                "held_out_loss_forecast": 0.25,
+            },
+            None,
+        ),
+        ("n500", {"steps": 2000, "held_out_loss": 0.3}, None),
+    ]
+    got = training.loss_run(
+        run, rows=rows, checkpoints=cks, spo=4.0, base=None, colour="#111"
+    )
+    assert got["parts0"] == {"nowcast": 0.2, "forecast": 0.3}
+    assert got["bparts0"] == {"nowcast": 0.2, "forecast": 0.3}
+    assert got["held_parts"] == {
+        "nowcast": [[100, 0.1]],
+        "forecast": [[100, 0.3]],
+    }
+    assert got["ck_parts"] == {
+        "nowcast": [[1000, 0.1]],
+        "forecast": [[1000, 0.25]],
+    }

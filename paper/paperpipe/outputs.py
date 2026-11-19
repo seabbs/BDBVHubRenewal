@@ -656,20 +656,19 @@ def score_tables(
     return list(tables)
 
 
-_MODEL_COLUMNS: Final = ("model", "Model")
-"""Table columns holding model ids, shown by their display names."""
-
-
 def to_markdown(table: pd.DataFrame, digits: int = 3) -> str:
     """Return a table as a Markdown pipe table, numbers to `digits`.
 
     Models are shown by their display names (`evaluation.labels`).
     """
+    # Model ids are shown by their display names; missing ones stay blank.
     table = table.assign(
         **{
-            c: table[c].map(lambda m: model_label(str(m)))
+            c: table[c].map(
+                lambda m: model_label(m) if isinstance(m, str) else m
+            )
             for c in table.columns
-            if c in _MODEL_COLUMNS
+            if c in ("model", "Model")
         }
     )
 

@@ -2,9 +2,10 @@
 # apart from the rules themselves (rules/*.smk). Machine settings come
 # from config/local.env (flowlib.localconfig).
 
+import functools
 import json
 
-from flowlib import hosts, localconfig, manifest, notify, releases, segments
+from flowlib import grids, hosts, localconfig, manifest, notify, releases, segments
 
 LOCAL = localconfig.read()
 HOST = LOCAL["HOST_NAME"]
@@ -54,6 +55,34 @@ def here(seed):
     return hosts.simulates(int(seed), MINE)
 
 
+# The epinowcast the simulator is pinned to (finetune_simulate.R's
+# `epinowcast_sha`), installed once a machine under ROOT.
+ENW_SHA = re.search(
+    r'epinowcast_sha <- "([0-9a-f]+)"',
+    Path("scripts/finetune_simulate.R").read_text(),
+)[1]
+ENW_LIB = f"{LOCAL['ROOT']}/rlib/epinowcast-{ENW_SHA}"
+
+
+def batch_lib(wc):
+    """The pinned epinowcast, for a batch not yet simulated only.
+
+    Installing it, as a job of the same run, would otherwise make every
+    batch already simulated out of date.
+    """
+    sims = Path(f"{ROUNDS_DIR}/r{wc.round}/sims")
+    done = all(
+        (sims / f"{kind}-{wc.seed}.{ext}").exists()
+        for kind, ext in (("counts", "csv.gz"), ("settings", "csv"))
+    )
+    return [] if done else ancient(f"{ENW_LIB}/.installed")
+
+
+def batch_priority(wc):
+    """A batch's priority: 15, earlier seeds a fraction higher."""
+    return segments.batch_priority(int(wc.seed), 15, SIM["seed_base"])
+
+
 def batch_files(wc):
     """A batch's files: simulated here, or pushed by its host."""
     if here(wc.seed):
@@ -73,7 +102,7 @@ def grid_name():
 
 # From finetune.smk.
 
-FT = config["finetune"]
+FT = grids.resolve(config["finetune"], config["grid_rounds"])
 # Where batches come from is this machine's choice when set.
 if LOCAL["SIMS_FROM"]:
     FT["sims_from"] = LOCAL["SIMS_FROM"]
@@ -119,8 +148,7 @@ def available_seeds():
     order = training_seeds()
     if not ELSEWHERE:
         return order
-    path = checkpoints.available_batches.get().output[0]
-    listed = {int(s) for s in Path(path).read_text().split()}
+    listed = listed_batches()
     if not set(held_seeds()) <= listed:
         return []
     for i, seed in enumerate(order):
@@ -129,13 +157,18 @@ def available_seeds():
     return order
 
 
-def known_exclusions():
-    """The sim-QC exclusions known now."""
+def exclusion_files():
+    """The sim-QC exclusion lists here now."""
     paths = [Path(f"{RUN}/excluded.csv")]
     paths += Path(ROUNDS_DIR).glob("r*/qc/excluded.csv")
     paths += Path(MIRROR).glob("r*/qc/excluded.csv")
     paths += Path(f"{RUN}/excluded-releases").glob("*.csv")
-    return set().union(*(segments.excluded(p) for p in paths))
+    return sorted(str(p) for p in paths if p.is_file())
+
+
+def known_exclusions():
+    """The sim-QC exclusions known now."""
+    return set().union(*(segments.excluded(p) for p in exclusion_files()))
 
 
 def kept_or_full(seed, skip):
@@ -167,6 +200,9 @@ def segment_inputs(wc):
     out = {
         "sims": expand(f"{RUN}/sims/settings-{{seed}}.csv", seed=segment_seeds(n)),
         "seeds": f"{RUN}/seeds.txt",
+        # Read for the seeds above and by the trainer: inputs, so a
+        # worker elsewhere has them (flowlib.compute).
+        "qc": exclusion_files(),
     }
     if PREV[n] is not None:
         out["prev"] = f"{TRAIN}/n{PREV[n]}/settings.json"
@@ -300,6 +336,12 @@ def table_inputs(wc):
     }
 
 
+def unit_stamps(wc=None):
+    """Every unit the tables read, as one list (`rule score` asks for them
+    itself, so a new label's units run under tables already built)."""
+    return [f for files in table_inputs(wc).values() for f in files]
+
+
 def zone_units(wc=None):
     """Every label's zone unit."""
     labels = [*SC["reference"], *checkpoint_labels()]
@@ -406,12 +448,19 @@ def push_record(input, output, params, wildcards):
     hosts.push(params.sims, s, params.there, row, REMOTE)
 
 
-def list_available(input, output, params, wildcards):
-    """List the batches that can be had now, mirroring the rounds host's lists."""
-    import json
+@functools.cache
+def listed_batches():
+    """The batches that can be had now, listed once per Snakemake run.
 
+    Listed when the run plans, not kept in a file, so a later run sees
+    rounds finished since. From the rounds host its manifests, batch
+    records (a round's batches so far) and QC exclusions are mirrored in
+    MIRROR; else the `sims-r<N>` releases'
+    assets. Written to <RUN>/available-batches.txt for the record.
+    """
+    rounds = sorted({FT["held_round"], *(round_of(s) for s in training_seeds())})
     seeds = set()
-    for r in params.rounds:
+    for r in rounds:
         if FT["sims_from"] == "remote":
             # The manifest and QC exclusions of a round there so far.
             here = Path(f"{MIRROR}/r{r}")
@@ -432,10 +481,22 @@ def list_available(input, output, params, wildcards):
                         file=sys.stderr,
                     )
             seeds |= manifest.seeds(here / "manifest.csv")
+            # The manifest is written once the round is whole; until then
+            # each finished batch's record lists it.
+            subprocess.run(
+                ["rsync", "-a", hosts._at(REMOTE, f"{REMOTE_ROUNDS}/r{r}/records/"),
+                 str(here / "records")],
+                capture_output=True,
+                text=True,
+            )  # fmt: skip
+            seeds |= {
+                int(p.stem.removeprefix("record-"))
+                for p in (here / "records").glob("record-*.csv")
+            }
             continue
         # A round not released yet has no release.
         got = subprocess.run(
-            ["gh", "release", "view", f"sims-r{r}", "-R", params.repo,
+            ["gh", "release", "view", f"sims-r{r}", "-R", SIM["repo"],
              "--json", "assets"],
             capture_output=True,
             text=True,
@@ -443,13 +504,14 @@ def list_available(input, output, params, wildcards):
         if got.returncode == 0:
             names = [a["name"] for a in json.loads(got.stdout)["assets"]]
             seeds |= releases.released_seeds(names)
-    Path(output[0]).write_text("".join(f"{s}\n" for s in sorted(seeds)))
+    record = Path(f"{RUN}/available-batches.txt")
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text("".join(f"{s}\n" for s in sorted(seeds)))
+    return seeds
 
 
 def check_report(input, output, params, wildcards):
     """Report whether checkpoint `check_at` beats zero-shot, and say so."""
-    import json
-
     s = json.loads(Path(input[0]).read_text())
     real = s.get("real_validation_loss", float("inf"))
     held = s["held_out_loss"] < s["held_out_loss_start"]

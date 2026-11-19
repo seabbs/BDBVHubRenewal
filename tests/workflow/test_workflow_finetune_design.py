@@ -12,26 +12,15 @@ ROOT = Path(__file__).parents[2]
 CONFIG = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
 
 DESIGN = {
-    "rounds": list(range(10, 20)),
-    "held_round": 9,
     "holdout": 90,
     "outbreaks": 8400,
     "prefixes": [250, 500, 750, 1000, 2000, 4000, 8400],
-    "grid": "r6",
+    "grid": "r5",
     "draws": 1,
     "cuts": 32,
     "learning_rate": 1e-5,
     "bias_lr": 1e-3,
     "series_bias": True,
-    "sources": [
-        "daily",
-        "weekly",
-        "3day",
-        "daily+weekly",
-        "daily+rolling7",
-        "daily+3day",
-        "daily+rolling3",
-    ],
     "univariate_share": 0.2,
     "chunk": 250,
     "subset_seed": 1,
@@ -63,12 +52,15 @@ def test_a_round_is_one_grid_block_of_840():
     assert (sim["batches"], sim["batch"]) == (40, 21)
     assert "held_batches" not in sim
     # Ten training rounds, after the held-out round, are the 8,400.
-    rounds = CONFIG["finetune"]["rounds"]
-    assert len(rounds) * 840 == CONFIG["finetune"]["outbreaks"]
-    assert CONFIG["finetune"]["held_round"] not in rounds
+    # The run's rounds are its grid's.
+    assert CONFIG["finetune"]["rounds"] is None
+    assert CONFIG["finetune"]["held_round"] is None
+    for grid in CONFIG["grid_rounds"].values():
+        assert len(grid["rounds"]) * 840 == CONFIG["finetune"]["outbreaks"]
+        assert grid["held_round"] not in grid["rounds"]
 
 
-def _trainer_args(tmp_path):
+def _trainer_args(tmp_path, finetune=None):
     """The trainer's arguments in the dry run of segment n250."""
     pytest.importorskip("snakemake")
     snakemake = Path(sys.executable).parent / "snakemake"
@@ -80,7 +72,9 @@ def _trainer_args(tmp_path):
     real.write_text("")
     overlay = tmp_path / "overlay.yaml"
     overlay.write_text(
-        yaml.safe_dump({"finetune": {"real_validation": str(real)}})
+        yaml.safe_dump(
+            {"finetune": {"real_validation": str(real), **(finetune or {})}}
+        )
     )
     out = subprocess.run(
         [
@@ -124,7 +118,7 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
 
     args = fs.build_parser().parse_args(_trainer_args(tmp_path))
     assert args.until == 250
-    assert args.grid == "r6"
+    assert args.grid == "r5"
     # The held-out round 9, every batch: seeds 30900 to 30939.
     assert args.held_out_seeds == [30900, 30939]
     assert args.holdout == 90
@@ -137,10 +131,30 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     assert args.learning_rate == 1e-5
     assert args.series_bias
     assert args.bias_lr == 1e-3
-    assert args.sources == DESIGN["sources"]
+    assert args.sources == CONFIG["grid_rounds"]["r5"]["sources"]
     assert args.univariate_share == 0.2
     assert args.chunk == 250
     # The held-out evaluations' cadence comes from the config.
     assert args.eval_every == CONFIG["finetune"]["eval_every"]
     assert args.by_source_every == CONFIG["finetune"]["by_source_every"]
     assert args.eval == CONFIG["finetune"]["eval"] == "local"
+
+
+def test_an_r6_run_holds_out_round_20_and_trains_on_21_to_30(tmp_path):
+    pytest.importorskip("pandas")
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import finetune_stream as fs
+
+    args = fs.build_parser().parse_args(_trainer_args(tmp_path, {"grid": "r6"}))
+    assert args.grid == "r6"
+    assert "daily+rolling7" in args.sources
+    # Round 20, every batch: seeds 32000 to 32039.
+    assert args.held_out_seeds == [32000, 32039]
+
+
+def test_each_grid_s_sources_are_its_block_design():
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import finetune_chronos as ft
+
+    for grid, entry in CONFIG["grid_rounds"].items():
+        assert entry["sources"] == list(ft.DESIGNS[grid]["source_shares"])

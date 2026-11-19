@@ -113,3 +113,33 @@ def test_a_bar_scored_on_other_forecasts_is_flagged():
     assert "live n500 *" in out
     assert "live n250 *" not in out
     assert "other forecasts" in out
+
+
+def test_a_log_scale_card_sits_beside_each_card_once_rows_carry_it():
+    rs, refs = _which()
+    view = {"studies": {"germany": "Germany"}}
+    assert "log scale" not in wis.section(
+        scores.wis_bars(ROWS[:3], rs, refs, RULE, source="daily"), view
+    )
+    logged = [
+        r
+        | {
+            "log_wis": "0.6",
+            "log_dispersion": "0.3",
+            "log_overprediction": "0.2",
+            "log_underprediction": "0.1",
+        }
+        for r in ROWS[:3]
+    ]
+    bars = scores.wis_bars(logged, rs, refs, RULE, source="daily")
+    assert bars[("germany", "national")][0]["log"] == {
+        "wis": 0.6,
+        "parts": {
+            "dispersion": 0.3,
+            "overprediction": 0.2,
+            "underprediction": 0.1,
+        },
+    }
+    out = wis.section(bars, view)
+    assert "Germany, national, log scale" in out
+    assert out.count("class=card") == 2

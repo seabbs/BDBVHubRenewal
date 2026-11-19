@@ -18,6 +18,7 @@ from . import paperstyle, svg
 
 PARTS = paperstyle.WIS_PARTS
 """The components, in the order they stack."""
+part_share = paperstyle.part_share
 
 NOTE = (
     "Mean WIS on the forecasts the models were scored on together; the "
@@ -116,8 +117,16 @@ def section(
         li = levels.index(lv) if lv in levels else len(levels)
         return si, s, li, lv
 
+    def log_card(title: str, these: Sequence[Mapping[str, Any]]) -> str:
+        """Return the card on the log scale, when every bar has it."""
+        if not these or not all("log" in b for b in these):
+            return ""
+        logged = [{**b, **b["log"]} for b in these]
+        return card(f"{title}, log scale", logged, tip("logwis"))
+
     cards = "".join(
         card(f"{studies.get(s, s)}, {lv}", bars[(s, lv)], tip("wisbars"))
+        + log_card(f"{studies.get(s, s)}, {lv}", bars[(s, lv)])
         for s, lv in sorted(bars, key=rank)
     )
     return f"<div class=plots2>{cards}</div><p class=mut>{NOTE}</p>"

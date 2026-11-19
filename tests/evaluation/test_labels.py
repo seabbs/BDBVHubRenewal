@@ -18,13 +18,19 @@ MAIN = {
 
 
 @pytest.mark.parametrize(("model", "label"), MAIN.items())
-def test_main_models_have_sams_names(model, label) -> None:
+def test_main_models_display_names(model, label) -> None:
     assert model_label(model) == label
 
 
 def test_every_named_model_has_a_style_and_names_are_unique() -> None:
     assert set(MODEL_LABELS) == set(MODEL_STYLES)
     assert len(set(MODEL_LABELS.values())) == len(MODEL_LABELS)
+
+
+def test_main_models_have_distinct_colours() -> None:
+    # Bars have no dashes, so colour alone tells the main models apart.
+    colours = [MODEL_STYLES[m][0] for m in MAIN]
+    assert len(set(colours)) == len(colours)
 
 
 def test_checkpoints_real_data_and_hub_teams() -> None:
@@ -37,6 +43,14 @@ def test_checkpoints_real_data_and_hub_teams() -> None:
         == "Fine-tuned on real data (delays)"
     )
     assert model_label("OHTJHU-someteam") == "OHTJHU-someteam"
+
+
+@pytest.mark.parametrize(
+    "model", ["epinowcast_real", "randomwalk_real", "hub_ensemble_real"]
+)
+def test_real_data_names_only_models_with_a_variant(model) -> None:
+    # Only labels with a "(...)" variant name a real-data fine-tune.
+    assert model_label(model) == model
 
 
 def test_wis_parts_are_shades_darkest_first() -> None:

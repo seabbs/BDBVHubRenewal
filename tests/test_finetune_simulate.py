@@ -826,7 +826,7 @@ cat("grid", grid_name, "\\n")
     # Log-uniform on 30 to 30,000: about a sixth above 10,000.
     assert float(rows["upper_share"][0]) > 0.08
     assert rows["fits"] == ["TRUE"]
-    assert rows["grid"] == ["r5"]
+    assert rows["grid"] == ["r6"]
 
 
 @needs_r

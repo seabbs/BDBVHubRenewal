@@ -137,3 +137,21 @@ def test_a_train_log_linked_to_a_segment_log_is_read_once(tmp_path):
     seg.write_text(LINE.format(step=20, loss=0.45, held=0.39) + "\n")
     (tmp_path / "train.log").symlink_to(seg)
     assert [r["step"] for r in logs.RunLog(tmp_path).rows()] == [20]
+
+
+def test_steps_are_parsed_with_their_nowcast_and_forecast_parts(tmp_path):
+    path = tmp_path / "train.log"
+    path.write_text(
+        LINE.format(step=10, loss=0.5, held=0.4)
+        + " (nowcast 0.15, forecast 0.25)"
+        + SOURCES
+        + "\n"
+        + LINE.format(step=20, loss=0.45, held=0.39)
+        + "\n"
+    )
+    rows = logs.Log(path).rows()
+    assert rows[0]["held"] == 0.4
+    assert rows[0]["parts"] == {"nowcast": 0.15, "forecast": 0.25}
+    assert rows[0]["src"] == {"3day": 0.31, "daily": 0.29, "weekly": 0.12}
+    # A line from before the split has no parts.
+    assert rows[1]["parts"] == {}
