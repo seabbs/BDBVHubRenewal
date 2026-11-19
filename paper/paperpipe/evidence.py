@@ -26,7 +26,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yaml
-from bdbvhubrenewal.evaluation.labels import MODEL_STYLES, model_label
+from bdbvhubrenewal.evaluation.labels import (
+    MODEL_LABELS,
+    MODEL_STYLES,
+    model_label,
+)
 from bdbvhubrenewal.reporting.live_checkpoint import (
     LIVE_RUN,
     checkpoint_table,
@@ -488,7 +492,9 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
                     marker="o",
                     ms=3,
                     color=colour,
-                    label=model_label(f"{model}_ft"),
+                    label=MODEL_LABELS.get(
+                        f"{model}_ft", f"{model_label(model)}, fine-tuned"
+                    ),
                 )
             complete = "_complete" in model
             for value in g.loc[g["outbreaks"] == 0, "rel_wis"]:

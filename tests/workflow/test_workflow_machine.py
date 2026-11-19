@@ -127,6 +127,20 @@ def test_a_device_can_be_asked_for_and_the_chronos_batch_set():
     assert env["CHRONOS_BATCH"] == "128"
 
 
+def test_the_dates_a_scoring_unit_forecasts_together_come_from_local_config():
+    env = machine.torch_env({"SCORE_DATES": "40"}, threads=1, device="cpu")
+    assert env["SCORE_DATES"] == "40"
+    assert "SCORE_DATES" not in machine.torch_env({}, threads=1, device="cpu")
+
+
+def test_the_inference_precision_comes_from_local_config_auto_by_default():
+    env = machine.torch_env({"PRECISION": "fp32"}, threads=1, device="cuda")
+    assert env["PRECISION"] == "fp32"
+    assert machine.torch_env({}, threads=1, device="cuda")["PRECISION"] == (
+        "auto"
+    )
+
+
 def test_torch_env_as_shell_assignments():
     got = machine.shell_env({"DEVICE": "cpu", "TORCH_THREADS": "2"})
     assert got == "DEVICE=cpu TORCH_THREADS=2"

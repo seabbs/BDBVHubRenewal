@@ -42,6 +42,21 @@ def check_chunks(
         )
 
 
+BATCH_SPAN = 10_000
+"""Seeds after `seed_base` that `batch_priority` orders: rounds 0 to 99."""
+
+
+def batch_priority(seed: int, base: float, seed_base: int) -> float:
+    """Return a batch's job priority, earlier seeds higher, within `base`.
+
+    Training reads batches in seed order, so a run over several rounds
+    simulates them in that order. The fraction below one keeps batches
+    between the trainer and scoring; seeds past `BATCH_SPAN` take `base`.
+    """
+    rank = min(max(seed - seed_base, 0), BATCH_SPAN)
+    return base + 1 - (rank + 1) / (BATCH_SPAN + 1)
+
+
 def round_seeds(round_: int, base: int, batches: int) -> list[int]:
     """Return a round's batch seeds, `base` + 100 r on.
 

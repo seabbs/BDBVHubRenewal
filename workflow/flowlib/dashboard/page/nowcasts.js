@@ -126,6 +126,16 @@ function wisChart(d,eff){
  var com=Object.keys(W_(sel[0])).filter(function(o){return sel.every(function(id){return W_(id)[o]!==undefined&&X_(id)[o]!==undefined})});
  if(!com.length){$("gwis").innerHTML='<p class=mut>No nowcast dates common to the selected checkpoints.</p>';return}
  var mean=function(f){return sel.map(function(id){var a=com.map(function(o){return f(id,o)});return a.reduce(function(x,y){return x+y},0)/a.length})};
+ // WIS parts by row, natural then log scale (log(x+1)), where every common date has them.
+ var P_=function(id){return (((d.parts||{})[id]||{})[TGT()]||{})[S.src]};
+ var parts=sel.map(function(id){var p=P_(id);if(!p||!com.every(function(o){return p[o]}))return null;
+  return [0,1,2,3,4,5,6].map(function(k){return com.reduce(function(a,o){return a+p[o][k]},0)/com.length})});
+ var PN=(D.parts||[]).map(function(p){return p[0]}),PS=(D.parts||[]).map(function(p){return p[1]});
+ // A part's segment: white beneath, its row's colour at the part's share on top, so it shades alike in both themes.
+ function seg(x,y,w,h,c,k,v,tot){if(w<=0)return "";var g=w>2?w-1:w;
+  return '<rect x="'+x+'" y="'+y+'" width="'+g+'" height="'+h+'" fill="#fff" /><rect x="'+x+'" y="'+y+'" width="'+g+'" height="'+h+'" fill="'+c+'" fill-opacity="'+PS[k]+'" stroke="'+c+'" stroke-width=".6"><title>'+PN[k]+' '+fmt(v)+' of '+fmt(tot)+'</title></rect>'}
+ function stack(id,y,vals,tot,mx,sc){var x=0,o='';vals.forEach(function(v,k){var w=v/mx*sc;o+=seg(x,y,w,12,colour(id),k,v,tot);x+=w});return o}
+ function key(){return PN.map(function(n,k){return '<span class=lg><i style="display:inline-block;width:10px;height:10px;background:var(--fg);opacity:'+PS[k]+'"></i>'+n+'</span>'}).join("")}
  var wis=mean(function(id,o){return W_(id)[o]}),c50=mean(function(id,o){return X_(id)[o][0]}),c95=mean(function(id,o){return X_(id)[o][1]}),bias=mean(function(id,o){return X_(id)[o][2]});
  function shortLab(id){var m=C.meta.find(function(x){return x.id==id});if(!m)return id;var r=RUNS.find(function(r){return r.key==m.run});return r?r.label+" n"+m.n:m.label}
  // Each row's swatch is its plot line (colour and dash); the text stays in text colour.
@@ -136,7 +146,11 @@ function wisChart(d,eff){
  // mean WIS
  var mx=Math.max.apply(null,wis)*1.05,h1='';
  sel.forEach(function(id,i){var y=2+i*RH,w=wis[i]/mx*(W-48);
-  h1+=lab(id,y)+'<rect x="0" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+colour(id)+'" /><text x="'+(w+4)+'" y="'+(y+22)+'" class=ax>'+fmt(wis[i])+'</text>'});
+  h1+=lab(id,y)+(parts[i]?stack(id,y+12,parts[i].slice(0,3),wis[i],mx,W-48):'<rect x="0" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+colour(id)+'" />')+'<text x="'+(w+4)+'" y="'+(y+22)+'" class=ax>'+fmt(wis[i])+'</text>'});
+ // mean WIS on the log scale, where the rows have it
+ var lg=sel.map(function(id,i){return parts[i]?parts[i][3]:null}),lmx=Math.max.apply(null,lg.filter(function(v){return v!==null}).concat([0]))*1.05,h4='';
+ sel.forEach(function(id,i){if(lg[i]===null)return;var y=2+i*RH,w=lg[i]/lmx*(W-48);
+  h4+=lab(id,y)+stack(id,y+12,parts[i].slice(4,7),lg[i],lmx,W-48)+'<text x="'+(w+4)+'" y="'+(y+22)+'" class=ax>'+fmt(lg[i])+'</text>'});
  // coverage of the 50% and 95% intervals, nominal lines at 0.5 and 0.95
  var cw=W-36,h2='';
  sel.forEach(function(id,i){var y=2+i*RH;
@@ -150,7 +164,8 @@ function wisChart(d,eff){
  sel.forEach(function(id,i){var y=2+i*RH,x0=bw/2,w=Math.abs(bias[i])*(bw/2-34);
   h3+=lab(id,y)+'<rect x="'+(bias[i]>=0?x0:x0-w)+'" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+colour(id)+'"><title>bias '+bias[i].toFixed(3)+' (positive: forecast above truth)</title></rect><text x="'+(bias[i]>=0?x0+w+3:x0-w-3)+'" y="'+(y+22)+'" text-anchor="'+(bias[i]>=0?"start":"end")+'" class=ax>'+bias[i].toFixed(2)+'</text>'});
  h3+='<line x1="'+bw/2+'" x2="'+bw/2+'" y1="0" y2="'+H2+'" stroke="var(--fg)" stroke-width="1" />';
- $("gwis").innerHTML=rows("mean "+C.metric,h1,H2,"wis")+rows("coverage 50% and 95% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
+ var any=parts.some(function(p){return p});
+ $("gwis").innerHTML=(any?'<div style="font-size:11px">'+key()+'</div>':'')+rows("mean "+C.metric,h1,H2,"wis")+(any?rows("mean "+C.metric+" on the log scale, log(x + 1)",h4,H2,"logwis"):'')+rows("coverage 50% and 95% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
   +'<div class=mut style="font-size:11px">'+com.length+' common nowcast dates</div>';
 }
 function chips(){var h='';

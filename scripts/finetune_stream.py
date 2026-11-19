@@ -504,9 +504,11 @@ def init_worker(
     univariate: float = ft.UNIVARIATE_SHARE,
     draws: int | None = None,
     subset_seed: int = 0,
+    grid: str = ft.DESIGN,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     global DRAWS_PER_PASS, SUBSET_SEED
+    ft.use_design(grid)
     ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
     ft.UNIVARIATE_SHARE = univariate
     DRAWS_PER_PASS, SUBSET_SEED = draws, subset_seed
@@ -1009,20 +1011,26 @@ def accumulate(indices: list[int], backward, zero, skip) -> float:
     """Return a batch's loss, accumulating its gradients by `backward`.
 
     The gradients are clear when it starts (`finite_step`). If memory runs
-    out, they are cleared (`zero`) and the batch is run again in halves,
-    and so on; a single block that still does not fit is left out
-    (`skip`). Every other block is used once.
+    out, they are cleared and the memory freed (`zero`) and the batch is
+    run again in halves, and so on. A single block that runs out is run
+    once more, in case the memory was held for a moment by another
+    process, and if it still does not fit it is left out (`skip`). Every
+    other block is used once, and the blocks used share the gradient as
+    a batch of them alone would. A batch with every block left out
+    returns nan.
     """
     parts = [indices]
+    retried: set = set()
     retry = False
     while True:
         if retry:
             zero()
         retry = True
         values, sizes = [], []
+        total = sum(len(p) for p in parts)
         try:
             for part in parts:
-                values.append(backward(part, len(part) / len(indices)))
+                values.append(backward(part, len(part) / total))
                 sizes.append(len(part))
             return (
                 float(np.average(values, weights=sizes)) if values else np.nan
@@ -1030,7 +1038,9 @@ def accumulate(indices: list[int], backward, zero, skip) -> float:
         except RuntimeError as error:
             if "out of memory" not in str(error):
                 raise
-            if len(part) == 1:
+            if len(part) == 1 and part[0] not in retried:
+                retried.add(part[0])
+            elif len(part) == 1:
                 skip(part[0])
                 parts = [p for p in parts if p is not part]
             else:
@@ -1293,7 +1303,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     # Sources to train on: weekly, daily, and 3-day blocks summed from the
     # daily triangle; one of them trains an adapter for it alone.
-    parser.add_argument("--sources", nargs="+", default=list(ft.SOURCES))
+    # Every layout of the grid's design (`ft.DESIGNS`) by default.
+    parser.add_argument("--sources", nargs="+")
     # Draws of each simulation this pass trains on, all 16 snapshots
     # each, picked by --subset-seed; all draws if not given.
     parser.add_argument("--draws-per-simulation", type=int)
@@ -1400,7 +1411,9 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
     CHUNK = args.chunk
-    ft.SOURCES = tuple(args.sources)
+    # The grid picks the block design; grids before r6 keep r5's blocks.
+    ft.use_design(args.grid)
+    ft.SOURCES = tuple(args.sources or ft.SOURCE_SHARES)
     ft.check_sources(ft.SOURCES)
     ft.check_package(Path(__file__).parents[1])
     ft.UNIVARIATE_SHARE = args.univariate_share
@@ -1474,6 +1487,7 @@ def main() -> None:
             ft.UNIVARIATE_SHARE,
             DRAWS_PER_PASS,
             SUBSET_SEED,
+            args.grid,
         ),
     )
     held_pairs, empty = cut_in_workers(
@@ -1527,7 +1541,7 @@ def main() -> None:
         "univariate_share": ft.UNIVARIATE_SHARE,
         "parent_mix": list(ft.PARENT_MIX),
         "source_shares": ft.SOURCE_SHARES,
-        "release_cadences": ft.CADENCES,
+        **({"release_cadences": ft.CADENCES} if ft.DESIGN != "r5" else {}),
         "aggregate_end": ft.AGGREGATE_END,
         **(
             {
@@ -1797,7 +1811,15 @@ def main() -> None:
             optimiser.zero_grad()
             value = accumulate(list(indices), backward, zero, skip)
             if not finite_step(params, optimiser, value):
-                log(f"step {step + 1}: no update (loss {value})")
+                left_out = sum(s["step"] == step + 1 for s in skipped)
+                why = (
+                    "every block too large for memory"
+                    if left_out == len(indices)
+                    else f"loss {value}"
+                )
+                # The step still counts, so the schedule, the evaluation
+                # steps and consumed.txt keep their step numbers.
+                log(f"step {step + 1}: no update ({why})")
             # Batches differ in shape, so cached buffers pile up unless they
             # are freed every step.
             free_memory()
@@ -1890,8 +1912,7 @@ def main() -> None:
             kind = block.get("parent", "exact")
             parents[kind] = parents.get(kind, 0) + 1
             cadences = seen.setdefault("cadences", {})
-            source = block.get("source", "weekly")
-            cell = f"{source}:{block.get('cadence', 'weekly')}"
+            cell = f"{block['source']}:{block['cadence']}"
             cadences[cell] = cadences.get(cell, 0) + 1
         # Blocks of strata with no cases by their cut are not laid out.
         mix["empty"] = mix.get("empty", 0) + len(empty)
@@ -1914,7 +1935,11 @@ def main() -> None:
                 "blocks": seen["blocks"],
                 "series": seen["series"],
                 "level_mix": seen.get("mix", {}),
-                "cadence_mix": seen.get("cadences", {}),
+                **(
+                    {"cadence_mix": seen.get("cadences", {})}
+                    if ft.DESIGN != "r5"
+                    else {}
+                ),
                 "tokens": seen.get("tokens", 0),
                 "skipped_blocks": skipped,
                 "memory_gb": args.memory_gb,

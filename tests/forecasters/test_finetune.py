@@ -407,7 +407,7 @@ def test_a_rolling_block_adds_each_places_rolling_sums_every_day(
 
 
 def test_rolling_totals_sum_each_window_ending_on_each_day() -> None:
-    from bdbvhubrenewal.forecasters.finetune import rolling_totals
+    from bdbvhubrenewal.forecasters.foundation import rolling_totals
 
     days = np.arange(10, dtype=float)[None, :]
     out = rolling_totals(days, 3)
@@ -472,8 +472,17 @@ def test_weekday_releases_skip_weekends_but_keep_the_cut() -> None:
 def test_an_unknown_cadence_is_refused() -> None:
     from bdbvhubrenewal.forecasters.finetune import release_days
 
+    rng = np.random.default_rng(0)
     with pytest.raises(ValueError, match="cadence"):
-        release_days("2026-09-01", "2026-09-30", "hourly", None)
+        release_days("2026-09-01", "2026-09-30", "hourly", rng)
+
+
+def test_a_cut_before_the_first_day_is_refused() -> None:
+    from bdbvhubrenewal.forecasters.finetune import release_days
+
+    rng = np.random.default_rng(0)
+    with pytest.raises(ValueError, match="before"):
+        release_days("2026-09-30", "2026-09-01", "daily_gaps", rng)
 
 
 def test_daily_releases_fill_every_lag_cell_weekly_ones_one_in_seven() -> None:

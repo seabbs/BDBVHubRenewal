@@ -344,19 +344,19 @@ def plot_nowcasts(
 
 
 Row = tuple[str, str | None]
-"""A bar row: a model, and its period when scores are split."""
+"""A bar: a model, and its period when scores are split."""
 
 
 def _bar_rows(df: pd.DataFrame, models: Sequence[str]) -> list[Row]:
-    """One row per model, or per model and period when `df` is split."""
+    """One bar per model, by period when `df` is split, period first."""
     if "period" not in df.columns:
         return [(m, None) for m in models]
     present = set(df["period"])
-    return [(m, p) for m in models for p in PERIODS if p in present]
+    return [(m, p) for p in PERIODS if p in present for m in models]
 
 
 def _at(df: pd.DataFrame, rows: Sequence[Row], col: str) -> np.ndarray:
-    """Return `col` at each row, NaN where a row has none."""
+    """Return `col` at each bar, NaN where a bar has none."""
     if rows and rows[0][1] is not None:
         values = df.set_index(["model", "period"])[col]
         return values.reindex(pd.MultiIndex.from_tuples(rows)).to_numpy(float)
@@ -364,40 +364,35 @@ def _at(df: pd.DataFrame, rows: Sequence[Row], col: str) -> np.ndarray:
     return values.reindex([m for m, _ in rows]).to_numpy(float)
 
 
-_PERIOD_NAMES: Final = {"development": "development", "held out": "held out"}
-"""Each period's name on the axis."""
+_GROUP: Final = 0.8
+"""Height of each period's group of bars."""
 
 
-def _model_rows(
-    ax: Axes,
-    rows: Sequence[Row],
-    models: Sequence[str],
-    labels: Mapping[str, str] | None,
-) -> None:
-    """Name each row by its model, in the model's colour, and its period.
+def _bar_ys(rows: Sequence[Row], models: Sequence[str]) -> np.ndarray:
+    """Centre of each bar: models side by side within their period."""
+    n = max(len(models), 1)
+    k = np.arange(len(rows))
+    return k // n + ((k % n) - (n - 1) / 2) * _GROUP / n
 
-    Without `labels` the rows are left unnamed (the panels beside the
-    first share its rows).
+
+def _bar_height(models: Sequence[str]) -> float:
+    return 0.85 * _GROUP / max(len(models), 1)
+
+
+def _period_axis(ax: Axes, rows: Sequence[Row]) -> None:
+    """Name each group of bars by its period, or nothing when unsplit.
+
+    Models are told apart by colour, in the figure's legend.
     """
-    ax.set_yticks(range(len(rows)))
-    if labels is None:
-        ax.set_yticklabels([])
-    else:
-        ax.set_yticklabels(
-            [
-                labels[m] if p is None else f"{labels[m]}, {_PERIOD_NAMES[p]}"
-                for m, p in rows
-            ]
-        )
-        for tick, (m, _) in zip(ax.get_yticklabels(), rows, strict=True):
-            tick.set_color(model_style(m, models)[0])
-    ax.set_ylim(len(rows) - 0.5, -0.5)
+    periods = list(dict.fromkeys(p for _, p in rows))
+    ax.set_yticks(range(len(periods)))
+    ax.set_yticklabels(["" if p is None else p for p in periods])
+    if periods == [None]:
+        ax.tick_params(axis="y", length=0)
+    ax.set_ylim(len(periods) - 0.5, -0.5)
     ax.grid(axis="y", visible=False)
-    # A thin rule between models when each has a row per period.
-    per = sum(1 for m, _ in rows if m == rows[0][0]) if rows else 1
-    if per > 1:
-        for k in range(per, len(rows), per):
-            ax.axhline(k - 0.5, color=INK["grid"], lw=0.8, zorder=0)
+    for k in range(1, len(periods)):
+        ax.axhline(k - 0.5, color=INK["grid"], lw=0.8, zorder=0)
 
 
 def _periods(df: pd.DataFrame) -> list[tuple[str | None, float]]:
@@ -412,10 +407,6 @@ def _pick(df: pd.DataFrame, period: str | None) -> pd.DataFrame:
     return df if period is None else df.loc[df["period"] == period]
 
 
-_BAR: Final = 0.7
-"""Height of a row's bar."""
-
-
 def _bars_relative(
     ax: Axes,
     rel: pd.DataFrame,
@@ -424,8 +415,9 @@ def _bars_relative(
     models: Sequence[str],
 ) -> None:
     values = _at(rel, rows, col)
-    for i, ((m, _), v) in enumerate(zip(rows, values, strict=True)):
-        ax.barh(i, v - 1, left=1, height=_BAR, **bar_style(m, models))
+    ys, h = _bar_ys(rows, models), _bar_height(models)
+    for y, (m, _), v in zip(ys, rows, values, strict=True):
+        ax.barh(y, v - 1, left=1, height=h, **bar_style(m, models))
     _log_ratio_axis(ax, "x")
     _pad_log_limits(ax, rel[col].to_numpy(dtype=float), "x")
 
@@ -463,15 +455,16 @@ def _bars_parts(
     if not cols:
         return False
     widths = np.column_stack([_at(rel, rows, c) for c in cols])
+    ys, h = _bar_ys(rows, models), _bar_height(models)
     for i, (m, _) in enumerate(rows):
         colour, _ = model_style(m, models)
         left = 0.0
         for width, part in zip(widths[i], WIS_PARTS, strict=True):
             ax.barh(
-                i,
+                ys[i],
                 width,
                 left=left,
-                height=_BAR,
+                height=h,
                 color=_tint(colour, PART_SHADES[part]),
                 edgecolor=colour,
                 linewidth=0.6,
@@ -502,8 +495,9 @@ def _bars_bias(
     models: Sequence[str],
 ) -> None:
     values = _at(summary, rows, "bias")
-    for i, ((m, _), v) in enumerate(zip(rows, values, strict=True)):
-        ax.barh(i, v, height=_BAR, **bar_style(m, models))
+    ys, h = _bar_ys(rows, models), _bar_height(models)
+    for y, (m, _), v in zip(ys, rows, values, strict=True):
+        ax.barh(y, v, height=h, **bar_style(m, models))
     ax.axvline(0, color=INK["muted"], ls="--", lw=1, zorder=0)
     lim = max(0.25, float(np.nanmax(np.abs(summary["bias"]))) * 1.15)
     ax.set_xlim(-lim, lim)
@@ -524,11 +518,12 @@ def _bars_coverage(
     narrow, wide = cols[0], cols[-1]
     levels = [int(c.split("_")[1]) / 100 for c in (narrow, wide)]
     w, n = _at(summary, rows, wide), _at(summary, rows, narrow)
+    ys, h = _bar_ys(rows, models), _bar_height(models)
     for i, (m, _) in enumerate(rows):
         colour, _ = model_style(m, models)
         light = _tint(colour, 0.45)
-        ax.barh(i - 0.18, w[i], height=0.34, color=light)
-        ax.barh(i + 0.18, n[i], height=0.34, color=colour)
+        ax.barh(ys[i] - h / 4, w[i], height=h / 2, color=light, ec=colour)
+        ax.barh(ys[i] + h / 4, n[i], height=h / 2, color=colour)
     for level in levels:
         ax.axvline(level, color=INK["muted"], ls="--", lw=1, zorder=0)
     ax.set_xlim(0, 1)
@@ -630,6 +625,7 @@ def _legend(
     split: pd.Timestamp | None = None,
     missing: bool = False,
     parts: bool = False,
+    labels: Mapping[str, str] | None = None,
 ) -> None:
     handles = [
         Line2D(
@@ -637,7 +633,7 @@ def _legend(
             [],
             ms=5,
             lw=1.6,
-            label=model_label(m),
+            label=(labels or {}).get(m, model_label(m)),
             **line_style(m, models),
             **{k: v for k, v in point_style(m, models).items() if k != "color"},
         )
@@ -858,17 +854,16 @@ def results_panel(
         bottom = [where] * 5 + ["stratum"] * 3 + ["horizon"] * 4
     else:
         bottom = [where] * 7 + ["horizon"] * 5
-    # Split scores have a bar row per model and period.
+    # Split scores have a group of bars per period, a bar per model.
     rows = _bar_rows(sc, models)
     bar_keys = ("rel", "rel_log", "bias", "coverage")
     scores_row = [k for k in bar_keys for _ in range(3)]
     top = [["nowcast"] * 12] if nowcast else []
     top.append(scores_row)
-    tall = 1 if len(rows) <= len(models) else 1.5
     fig, axd = plt.subplot_mosaic(
         [*top, bottom],
-        figsize=(12, (11 if nowcast else 7.5) + 2.5 * (tall - 1) * 2),
-        height_ratios=[1.25, tall, 1] if nowcast else [tall, 1],
+        figsize=(12, 11 if nowcast else 7.5),
+        height_ratios=[1.25, 1, 1] if nowcast else [1, 1],
         layout="constrained",
     )
     missing = False
@@ -906,7 +901,7 @@ def results_panel(
     _bars_bias(axd["bias"], summary, rows, models)
     _bars_coverage(axd["coverage"], summary, rows, models)
     for key in bar_keys:
-        _model_rows(axd[key], rows, models, labels if key == "rel" else None)
+        _period_axis(axd[key], rows)
     # Locations are compared on their main stratum (all ages).
     if factors is None:
         _points_by(
@@ -950,7 +945,7 @@ def results_panel(
         _label(axd[key], letter, _TITLES[key].format(m=name))
     for key in bottom:
         axd[key].set_ylabel(f"Relative {name}")
-    _legend(fig, models, split, missing, parts)
+    _legend(fig, models, split, missing, parts, labels)
     return fig
 
 

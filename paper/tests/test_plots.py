@@ -42,10 +42,11 @@ def test_baselines_have_their_own_colours() -> None:
     assert len(colours) == 3
 
 
-def test_fine_tuned_and_zero_shot_share_a_colour_not_a_dash() -> None:
+def test_fine_tuned_and_zero_shot_differ_in_colour_and_dash() -> None:
+    # Bars show no dashes, so the main models differ in colour (Sam 00:15).
     ft = model_style("fm_chronos_daily_ragged_ft", [])
     zs = model_style("fm_chronos_daily_ragged", [])
-    assert ft[0] == zs[0]
+    assert ft[0] != zs[0]
     assert ft[1] != zs[1]
 
 
@@ -123,19 +124,21 @@ def test_synthetic_panel_shows_factors_and_weekly_horizons() -> None:
 
 
 @pytest.mark.parametrize("family", ["daily", "weekly"])
-def test_chronos_variants_share_a_colour_with_distinct_styles(family) -> None:
+def test_chronos_variants_have_distinct_styles(family) -> None:
     names = [
         f"fm_chronos_{family}_complete",
         f"fm_chronos_{family}_ragged",
         f"fm_chronos_{family}_ragged_ft",
     ]
     styles = [model_style(n, []) for n in names]
-    assert len({c for c, _ in styles}) == 1
+    # The daily models are the main figures' and differ in colour; the
+    # weekly ones (SI only) share one.
+    assert len({c for c, _ in styles}) == (3 if family == "daily" else 1)
     assert [d for _, d in styles] == ["dotted", "dashed", "solid"]
     # Bars are filled with the model's colour, never hatched (Sam, #367).
     bars = [bar_style(n, []) for n in names]
     assert all("hatch" not in b for b in bars)
-    assert len({b["color"] for b in bars}) == 1
+    assert [b["color"] for b in bars] == [c for c, _ in styles]
     points = [tuple(sorted(point_style(n, []).items())) for n in names]
     assert len(set(points)) == 3
     assert model_order(list(reversed(names))) == names
@@ -218,18 +221,12 @@ def gappy():
 def test_missing_forecasts_are_labelled(gappy) -> None:
     fc, obs, scores, _ = gappy
     fig = results_panel(fc, obs, scores)
-    labels = [
-        t.get_text()
-        for ax in fig.axes
-        for t in ax.get_yticklabels()
-        if "Random walk nowcast" in t.get_text()
-    ]
-    assert any("% made" in label for label in labels)
+    labels = [t.get_text() for t in fig.legends[0].get_texts()]
+    assert any(
+        "% made" in label and "Random walk nowcast" in label for label in labels
+    )
     assert not any(
-        "% made" in t.get_text()
-        for ax in fig.axes
-        for t in ax.get_yticklabels()
-        if t.get_text().startswith("Hub baseline")
+        "% made" in label for label in labels if label.startswith("Hub")
     )
     plt.close(fig)
 
@@ -345,10 +342,11 @@ def test_wis_bars_stack_their_parts_to_the_relative_wis(germany) -> None:
     models = model_order(scores["model"].unique())
     ends = {}
     for bar in rel_ax.patches:
-        i = round(bar.get_y() + bar.get_height() / 2)
-        ends[i] = max(ends.get(i, 0.0), bar.get_x() + bar.get_width())
-    for i, m in enumerate(models):
-        assert ends[i] == pytest.approx(rel.loc[m, "rel_score"])
+        y = round(bar.get_y() + bar.get_height() / 2, 6)
+        ends[y] = max(ends.get(y, 0.0), bar.get_x() + bar.get_width())
+    assert len(ends) == len(models)
+    for y, m in zip(sorted(ends), models, strict=True):
+        assert ends[y] == pytest.approx(rel.loc[m, "rel_score"])
     labels = [t.get_text() for t in fig.legends[0].get_texts()]
     assert {"Dispersion", "Overprediction", "Underprediction"} <= set(labels)
     plt.close(fig)
@@ -376,19 +374,45 @@ def test_results_panel_shows_only_the_given_models(germany) -> None:
     plt.close(fig)
 
 
-def test_split_bars_put_the_period_on_the_axis(germany) -> None:
+def _bar_axes(fig):
+    titles = {"Relative WIS", "Relative WIS, log scale", "Bias", "Coverage"}
+    return [ax for ax in fig.axes if ax.get_title() in titles]
+
+
+def test_split_bars_put_only_the_period_on_the_axis(germany) -> None:
     fc, obs, scores, split = germany
     fig = results_panel(fc, obs, scores, split=split)
-    rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
     models = model_order(scores["model"].unique())
-    ticks = rel_ax.get_yticklabels()
-    # One row per model and period, each named and in its model's colour.
-    assert len(ticks) == 2 * len(models)
-    for k, m in enumerate(models):
-        for t, period in zip(ticks[2 * k : 2 * k + 2], PERIODS, strict=True):
-            assert t.get_text().startswith(model_label(m))
-            assert t.get_text().endswith(period)
-            assert mpl.colors.same_color(t.get_color(), model_style(m, [])[0])
+    colours = [model_style(m, [])[0] for m in models]
+    for ax in _bar_axes(fig):
+        # The axis names the periods only; models are told by colour.
+        ticks = [t.get_text() for t in ax.get_yticklabels()]
+        assert ticks == list(PERIODS)
+        # Within each period, one bar per model side by side, in order.
+        step = 0.8 / len(models)
+        for c in ax.get_yticks():
+            bars = {}
+            for bar in ax.patches:
+                y = bar.get_y() + bar.get_height() / 2
+                if abs(y - c) < 0.5:
+                    # Coverage has two bars per model; both are its slot.
+                    slot = round((y - c) / step + (len(models) - 1) / 2)
+                    bars.setdefault(slot, []).extend(
+                        [bar.get_facecolor()[:3], bar.get_edgecolor()[:3]]
+                    )
+            assert len(bars) == len(models)
+            for y, colour in zip(sorted(bars), colours, strict=True):
+                assert any(mpl.colors.same_color(c, colour) for c in bars[y])
+    legend = [t.get_text() for t in fig.legends[0].get_texts()]
+    assert all(model_label(m) in legend for m in models)
+    plt.close(fig)
+
+
+def test_unsplit_bars_have_no_axis_names(gappy) -> None:
+    fc, obs, scores, _ = gappy
+    fig = results_panel(fc, obs, scores)
+    for ax in _bar_axes(fig):
+        assert all(not t.get_text() for t in ax.get_yticklabels())
     plt.close(fig)
 
 
