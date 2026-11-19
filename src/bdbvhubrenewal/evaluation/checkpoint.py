@@ -75,9 +75,11 @@ GERMANY_UNIT: Final = "germany-days"
 """The cache folder of the German units, which score every one of the
 hub's 29 target days (#398). The 5-day units before them, in `germany`,
 are left as they are and not read."""
-GERMANY_CHUNK: Final = 20
+GERMANY_CHUNK: Final = 5
 """German dates forecast together (`germany_unit`) unless `SCORE_DATES`
-in the environment (local config) says otherwise."""
+in the environment (local config) says otherwise. Each date has 7 offsets'
+tasks, so 5 dates hold about what 35 did with one (4.7 GB peak, under
+`score.mem_mb`)."""
 FINAL_OUTBREAKS: Final = 8400
 """The reported model is the live run's final checkpoint."""
 FINAL_GRID: Final = "r5"
