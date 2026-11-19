@@ -723,3 +723,20 @@ def test_sample_counts_come_from_the_config(
     assert {t.n_samples for t in drawn} == {1000}
     # The same seed, so each model draws from the same stream.
     assert [t.seed for t in drawn] == [t.seed for t in tasks.values()]
+
+
+def test_tasks_carry_the_imputation_delay_and_places(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    from bdbvhubrenewal.data.delays import hub_delay_pmf
+
+    task = make_tasks(
+        target.loc[target["vintage"] == "2026-10-09"], delays, config
+    )[0]
+    assert task.imputation_delay is not None
+    np.testing.assert_allclose(
+        task.imputation_delay, hub_delay_pmf("2026-10-09")
+    )
+    assert task.places is not None
+    assert {"population", "latitude", "longitude"} <= set(task.places)
+    assert set(task.locations) <= set(task.places["location"])

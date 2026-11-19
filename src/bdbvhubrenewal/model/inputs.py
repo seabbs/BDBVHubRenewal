@@ -39,6 +39,11 @@ CENTRES = Path(__file__).parent.parent / "data" / "province_centres.csv"
 """Population-weighted centres of all 26 provinces (see the file header)."""
 
 
+def imputation_pmf(pmf: np.ndarray, dmax: int) -> np.ndarray:
+    """Stub."""
+    raise NotImplementedError
+
+
 def province_centres() -> pd.DataFrame:
     """Read the province centres shipped with the package.
 

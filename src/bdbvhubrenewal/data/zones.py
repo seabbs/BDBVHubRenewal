@@ -87,3 +87,8 @@ def hub_zones(tasks_json: Path | str) -> tuple[str, ...]:
             for key in ("required", "optional"):
                 codes.update(loc.get(key) or [])
     return tuple(sorted(c for c in codes if is_zone(c)))
+
+
+def zone_places(zones: tuple[str, ...]) -> pd.DataFrame:
+    """Stub."""
+    raise NotImplementedError

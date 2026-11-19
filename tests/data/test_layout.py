@@ -107,3 +107,17 @@ def test_model_code_imports_no_hub_zone_module() -> None:
         "evaluation/nowcast.py",
     ):
         assert "bdbvhubrenewal.data.zones" not in _imported(rel), rel
+
+
+def test_renewal_code_reads_no_hub_delay_or_places() -> None:
+    for rel in (
+        "model/inputs.py",
+        "model/zones.py",
+        "forecasters/renewal.py",
+        "forecasters/zonerenewal.py",
+    ):
+        own = _imported(rel)
+        assert "bdbvhubrenewal.data.delays" not in own, rel
+        assert "load_locations" not in _imports_from(rel, "bdbvhubrenewal.data")
+        assert "_centres.csv" not in (PKG / rel).read_text(), rel
+    assert "zone_places" in _defs("data/zones.py")
