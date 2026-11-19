@@ -62,6 +62,7 @@ if TYPE_CHECKING:
     from bdbvhubrenewal.data.bvd import BvdRelease
 
 __all__ = [
+    "CENTRED_RT_MIN_CASES",
     "DEFAULT_SAMPLER",
     "DELAY_SUMMARY_FILE",
     "FIT_VARIANTS",
@@ -80,6 +81,7 @@ __all__ = [
     "delay_summary",
     "ebfmi",
     "engine",
+    "fit_config",
     "fit_delays",
     "fit_renewal",
     "fit_summary",
@@ -247,6 +249,14 @@ VARIANTS: Final[dict[str, Variant]] = {
 }
 """Model variants, by name."""
 
+CENTRED_RT_MIN_CASES: Final = 250
+"""Cases, known and imputed, a single-patch fit needs by the cut-off for
+its log Rt walk to be centred (`ModelConfig.centred_rt`). At the
+2026-11-15 release, centred walks diverged in provinces of 2 to 13 cases
+(40 to 148 of 1500 draws) and did no better at 120 cases, while at 527
+cases and above they had a step size about 5 times the non-centred one
+(#330)."""
+
 FIT_VARIANTS: Final[dict[str, str]] = {
     "main": "renewal",
     "renewalsp": "renewalsp",
@@ -272,6 +282,32 @@ def model_config(variant: Variant) -> Any:
     return dataclasses.replace(
         getattr(engine(), variant.base), **dict(variant.overrides)
     )
+
+
+def fit_config(variant: Variant, data: Any) -> Any:
+    """Build the `ModelConfig` a variant fits to one vintage with.
+
+    A centred log Rt walk funnels where few cases inform it, so a
+    variant's `centred_rt` holds only with at least
+    `CENTRED_RT_MIN_CASES` cases by the cut-off.
+
+    Parameters
+    ----------
+    variant : Variant
+        The variant.
+    data : Vintage
+        The vintage, with `known` and `imputed` counts.
+
+    Returns
+    -------
+    bdbvhubrenewal.model.ModelConfig
+        `model_config(variant)`, centred only where the data allow.
+    """
+    config = model_config(variant)
+    cases = np.nansum(data.known) + np.nansum(data.imputed)
+    if config.centred_rt and cases < CENTRED_RT_MIN_CASES:
+        config = dataclasses.replace(config, centred_rt=False)
+    return config
 
 
 def sampler_settings(
@@ -1177,8 +1213,8 @@ class RenewalModel:
         from bdbvhubrenewal.model.zones import build_model
 
         pr = engine()
-        config = model_config(self.variant)
-        data = vintage_inputs(task, config)
+        data = vintage_inputs(task, model_config(self.variant))
+        config = fit_config(self.variant, data)
         model = build_model(data, config)
         s = self.sampler
         self._log(f"variant={self.name} sampling start")
