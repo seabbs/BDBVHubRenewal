@@ -41,8 +41,10 @@ def test_the_loss_horizon_defaults_to_the_full_horizon():
 
 def test_dropping_quiet_cut_offs_is_off_until_set():
     argv = ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r6"]
-    assert fs.build_parser().parse_args(argv).quiet_days is None
-    args = fs.build_parser().parse_args([*argv, "--quiet-days", "28"])
-    assert args.quiet_days == 28
+    assert fs.build_parser().parse_args(argv).quiet_min_cases is None
+    args = fs.build_parser().parse_args([*argv, "--quiet-min-cases", "10"])
+    assert args.quiet_min_cases == 10
     assert fs.quiet_settings(None) == {}
-    assert "28 days" in fs.quiet_settings(28)["drop_quiet"]
+    rule = fs.quiet_settings(10)["drop_quiet"]
+    assert "fewer than 10 cases" in rule
+    assert f"{fs.ft.QUIET_WINDOW_DAYS} days" in rule
