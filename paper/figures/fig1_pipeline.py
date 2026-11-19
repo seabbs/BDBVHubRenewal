@@ -10,7 +10,7 @@ and, with `--png`, a 200 dpi `fig1-pipeline.png` with `rsvg-convert`
 The panels are:
 
 - A, the assumptions in the epinowcast simulations
-  (`scripts/finetune_simulate.R`), one box per stage;
+  (packages/nowcastfoundation/r), one box per stage;
 - B, the reporting triangle laid out as ragged series for Chronos-2
   (`forecasters.foundation.layout_block`), each place's count and lag
   series joined by a learned attention bias for rows of the same place,

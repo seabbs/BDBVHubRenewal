@@ -3,7 +3,7 @@
 
 The training outbreaks are taken in order of seed and index, in chunks of
 `CHUNK` outbreaks. A chunk is trained on as soon as every simulation
-batch it needs has finished (`scripts/finetune_simulate.R`), and the
+batch it needs has finished (the workflow's `simulate_batch`), and the
 trainer waits for it otherwise. Within a chunk the blocks
 (`finetune_chronos.outbreak_blocks`, seeded per outbreak) are shuffled
 and packed by size (`finetune_chronos.plan_batches`). The learning rate
