@@ -71,7 +71,7 @@ draw_design <- function(grid, weeks = NULL) {
     )
   }
   # The strata, drawn again until the whole system fits the simulator's
-  # memory and the trainer's block (a guard on compute, as Sam allows).
+  # memory and the trainer's block.
   for (try in 1:1000) {
     n <- draw_strata(grid, cell)
     fits <- n[1] * n[2] <= max_strata(grid, weeks) &&
@@ -140,7 +140,12 @@ draw_values <- function(grid, design) {
   early <- design$window == "early"
   endemic <- design$window == "endemic"
   weeks <- design$weeks
-  v <- list(weeks = weeks, offset = sample(0:6, 1))
+  v <- list(
+    weeks = weeks,
+    # The calendar weekday the series starts on; strata of one outbreak
+    # share it (`design$offset`).
+    offset = if (is.null(design$offset)) sample(0:6, 1) else design$offset
+  )
 
   # Layer 1: infections.
   active <- min(n_p, draw_count(grid, "active_places"))

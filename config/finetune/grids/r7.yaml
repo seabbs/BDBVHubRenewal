@@ -23,6 +23,10 @@ epinowcast_sha: e084b080
 # simulation of their own, so at most `max_independent` of them.
 max_strata: 60
 max_independent: 8
+# Tries of a design's values before a new design, and designs before a
+# simulation fails.
+tries: 5
+designs: 20
 # The trainer's block budget: a block is a whole simulated system (the
 # country, group totals and every leaf), so a system has at most this many
 # locations. A location takes its counts, up to 49 lags and a period total

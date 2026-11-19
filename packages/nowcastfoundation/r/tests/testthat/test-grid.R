@@ -130,3 +130,12 @@ test_that("a draw failing the sim QC is redrawn, with the grid's thresholds", {
   big <- counts(0:27, 2L, 30000L)
   expect_match(qc_reason(big, grid), "per stratum")
 })
+
+test_that("strata of one outbreak can share its length and calendar offset", {
+  grid <- r7()
+  set.seed(12)
+  d <- draw_design(grid, weeks = 11L)
+  expect_equal(d$weeks, 11L)
+  d$offset <- 4L
+  expect_equal(draw_values(grid, d)$offset, 4L)
+})

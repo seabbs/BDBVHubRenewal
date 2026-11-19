@@ -127,11 +127,11 @@ simulate_outbreak <- function(grid, design, v, ctx) {
     beta[cols %in% c("trend", "step", "periodic")] <- change_beta
     # A backlog multiplies the mean delay: log of it on the location, or
     # its negative on the logit hazard.
-    sign <- if (prefix == "refp_mean") 1 else -1
-    beta[cols == "backlog"] <- sign
-    beta[cols == "slowdown"] <- log(v$slow_mult) * sign
-    beta[cols == "walk_daily"] <- sign
-    beta[cols == "smooth"] <- v$smooth_amp * sign
+    direction <- if (prefix == "refp_mean") 1 else -1
+    beta[cols == "backlog"] <- direction
+    beta[cols == "slowdown"] <- log(v$slow_mult) * direction
+    beta[cols == "walk_daily"] <- direction
+    beta[cols == "smooth"] <- v$smooth_amp * direction
     parameters[[paste0(prefix, "_beta")]] <<- array(beta)
   }
   if (parametric) {
@@ -289,7 +289,7 @@ simulate_cell <- function(grid, design, ctx, id = NA_character_) {
     return(simulate_independent(grid, design, ctx, id))
   }
   failures <- list()
-  for (try in 1:5) {
+  for (try in seq_len(grid$tries)) {
     v <- draw_values(grid, design)
     res <- tryCatch(simulate_outbreak(grid, design, v, ctx), error = function(e) e)
     reason <- if (inherits(res, "error")) {
@@ -309,13 +309,12 @@ simulate_cell <- function(grid, design, ctx, id = NA_character_) {
   list(out = NULL, failures = failures)
 }
 
-# Independent strata: each stratum is a single-stratum simulation with a
-# design of its own (drawn from the grid), run through
-# `simulate_cell`, and the strata are combined into one outbreak. A
-# stratum that gives no outbreak in five tries is drawn again from a new
-# cell, up to five cells; then the outbreak fails. The outbreak's values
-# are the first stratum's, with each stratum's cell index, trajectory,
-# delay family, observation family and size as ";" text.
+# Independent strata: each stratum with cases is a single-stratum
+# simulation (`simulate_cell`) with its own design, sharing the outbreak's
+# series length, calendar offset and observation family, and the strata
+# are combined into one outbreak. Returns the outbreak (or NULL if a
+# stratum gives none in `grid$tries` designs), with the first stratum's
+# values and each stratum's trajectory, families and size as ";" text.
 simulate_independent <- function(grid, design, ctx, id = NA_character_) {
   place_ids <- sprintf("P%02d", seq_len(design$n_places))
   age_ids <- sprintf("A%d", seq_len(design$n_ages))
@@ -328,7 +327,9 @@ simulate_independent <- function(grid, design, ctx, id = NA_character_) {
   }
   # Quiet places (a concentrated outbreak's many) have no cases, so only
   # the strata of places with cases are simulated.
-  quiet <- draw_values(grid, design)$quiet_places
+  # The strata share the outbreak's series length and calendar offset.
+  shared <- draw_values(grid, design)
+  quiet <- shared$quiet_places
   place_of <- match(sub("-.*", "", labels), place_ids)
   active <- which(!(place_of %in% quiet))
   failures <- list()
@@ -338,8 +339,9 @@ simulate_independent <- function(grid, design, ctx, id = NA_character_) {
   strata_values <- list()
   for (s in active) {
     run <- NULL
-    for (attempt in 1:5) {
-      one <- draw_design(grid)
+    for (attempt in seq_len(grid$tries)) {
+      one <- draw_design(grid, weeks = design$weeks)
+      one$offset <- shared$offset
       one$strata <- "single"
       one$n_places <- 1L
       one$n_ages <- 1L
@@ -432,7 +434,9 @@ simulate_batch <- function(grid, seed, n, model, draws = 1L, weeks = NULL,
     designs <- 0L
     while (is.null(out)) {
       designs <- designs + 1L
-      if (designs > 20L) stop("simulation ", id, ": no design in 20 gave one")
+      if (designs > grid$designs) {
+        stop("simulation ", id, ": no design in ", grid$designs, " gave one")
+      }
       design <- draw_design(grid, weeks = weeks)
       run <- simulate_cell(grid, design, ctx, id)
       failures <- c(failures, run$failures)

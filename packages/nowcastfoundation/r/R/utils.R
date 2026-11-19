@@ -205,14 +205,16 @@ enw_simulate_data <- function(data, growth_rate, parameters, reference,
 # `enw_simulate_data` written to `stan$file`, as `enw_simulate` samples
 # it. The data and output files are removed once read.
 enw_simulate_draw <- function(stan, model, seed, ...) {
+  on.exit(unlink(stan$file))
   fit <- model$sample(
     data = stan$file, fixed_param = TRUE, chains = 1, iter_sampling = 1L,
     iter_warmup = 0, seed = seed, threads_per_chain = 1,
     init = function() stan$init, ...
   )
-  on.exit(unlink(c(stan$file, fit$output_files())))
-  # A failed run raises cmdstanr's own error.
-  if (any(fit$return_codes() != 0)) fit$draws("pp_obs")
+  on.exit(unlink(fit$output_files()), add = TRUE)
+  if (any(fit$return_codes() != 0)) {
+    stop("the simulation's Stan run failed: ", paste(fit$output_files(), collapse = ", "))
+  }
   read_pp_obs(fit$output_files())
 }
 

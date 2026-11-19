@@ -32,6 +32,7 @@ onsets, r, reff).
 Each simulation draws its categorical settings (\code{draw_design}), its
 values by layer (\code{draw_values}), its latent path by renewal
 (\code{latent_onsets}), and its release triangle by epinowcast, observed
-with the grid's noise, then revised. A draw that errors or gives no case
-is drawn again, up to five times.
+with the grid's noise, then revised. A draw that errors, reports fewer
+than \code{min_cases} or fails the sim QC is drawn again, up to five times,
+then from a new design, so the batch always holds \code{n} simulations.
 }
