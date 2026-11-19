@@ -64,7 +64,8 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.zones import is_zone, province_of, weekly_zone_counts
+from bdbvhubrenewal.data.hierarchy import is_zone, province_of
+from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -142,7 +143,7 @@ class ZoneAllocator:
         Parameters
         ----------
         counts : pandas.DataFrame
-            Weekly zone counts (`weekly_zone_counts`).
+            Weekly zone counts (`weekly_counts`).
         zones : tuple of str
             The province's zones.
         vintage : str
@@ -174,7 +175,7 @@ class ZoneAllocator:
         Parameters
         ----------
         counts : pandas.DataFrame
-            Weekly zone counts (`weekly_zone_counts`).
+            Weekly zone counts (`weekly_counts`).
         zones : tuple of str
             The province's zones.
         vintage : str
@@ -206,7 +207,7 @@ class ZoneAllocator:
             The task the samples answer.
         counts : pandas.DataFrame
             Weekly zone counts at the task's vintage
-            (`weekly_zone_counts`).
+            (`weekly_counts`).
         zones : tuple of str
             Zone codes to cover. Each province in `samples` gets all of
             its zones here.
@@ -334,7 +335,7 @@ def reconcile_zones(
         The province task.
     counts : pandas.DataFrame
         Weekly zone counts at the task's vintage
-        (`weekly_zone_counts`), which set the split where all the zone
+        (`weekly_counts`), which set the split where all the zone
         samples of a week are 0.
     zones : tuple of str
         Zone codes to cover. Each province in `province_samples` gets all
@@ -429,7 +430,7 @@ def with_zones(samples: pd.DataFrame, task: ForecastTask) -> pd.DataFrame:
         return samples
     if samples["location"].map(is_zone).any():
         return samples
-    counts = weekly_zone_counts(daily, task.vintage)
+    counts = weekly_counts(daily, task.vintage)
     zones = ZoneAllocator().allocate(samples, task, counts, task.zone_codes)
     if zones.empty:
         return samples
@@ -628,7 +629,7 @@ def zones_for_model(
         The model's samples for `task`: provinces, and zones if it
         forecasts them.
     counts : pandas.DataFrame
-        Weekly zone counts at the task's vintage (`weekly_zone_counts`).
+        Weekly zone counts at the task's vintage (`weekly_counts`).
     zones : tuple of str
         The hub's zone codes.
     daily_zones : pandas.DataFrame

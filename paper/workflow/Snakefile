@@ -398,9 +398,7 @@ def outputs(mode):
         if study in JOINT_STUDIES
     ]
     real = (
-        [f"{R}/{mode}/tables/si/real-finetune.md"]
-        if "germany" in studies(mode)
-        else []
+        [f"{R}/{mode}/tables/si/real-finetune.md"] if "germany" in studies(mode) else []
     )
     return (
         evidence
