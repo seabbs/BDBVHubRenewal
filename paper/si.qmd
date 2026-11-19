@@ -226,6 +226,13 @@ The layouts of the training blocks and their shares.
 - Non-summing parents apply only where a block holds both the country and its places.
 - @tbl-block-combinations gives the realised share of each combination.
 
+Each training block is built as follows.
+
+- A training block cuts one draw's releases at one cut-off and lays them out as the ragged layout does, with the target past the last complete step the outbreak's final counts.
+- The longest lag $D$ is drawn from 2 to 7 weeks, or 14 to 49 days, so the model is not tied to one $D$.
+- Four or more flat places are grouped into regions, with region totals.
+- The blocks with more than one series have as targets all levels, leaves and the national total, or leaves only, in equal shares.
+
 ::: {#tbl-block-combinations}
 {{< include build/tables/si/block-combinations.md >}}
 
@@ -333,6 +340,8 @@ Simulated summaries (centiles over 1,000 drawn settings) against the range over 
 :::
 
 ![Six contrasting simulations of the grid, from pilot simulations: the final daily counts (black) and the counts known at releases 40%, 65% and 90% of the way through each outbreak (dashed), summed over strata.](build/figures/si/sim-examples.png){#fig-sim-examples}
+
+Outbreaks run 16 to 52 weeks.
 
 The grid has two limitations.
 Simulated strata are less sparse than BDBV's provinces: the share of stratum-weeks with no cases reaches {{< meta evidence.realism.zero_share.sim_q95 >}} at the 95% point of the simulations, against {{< meta evidence.realism.zero_share.BDBV >}} for BDBV.

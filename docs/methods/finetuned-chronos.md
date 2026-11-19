@@ -5,7 +5,7 @@ How to nowcast your own reporting triangle with the Chronos-2 checkpoints we fin
 
 Each fine-tuned checkpoint is a GitHub release of this repository, `chronos-ft-<hash>`, where the hash is that of the fine-tuning settings.
 A release holds a LoRA adapter for Chronos-2, the settings that made it (`settings.json`) and the SHA-256 of each file (`sha256sums.txt`).
-How the checkpoints are made is on the [Foundation models page](foundation.md#fine-tuning).
+How the checkpoints are made is in the paper's [supporting information](../paper/si.html#foundation-model-setup-and-fine-tuning).
 Fine-tuning runs locally, not on CI.
 
 ## Install

@@ -84,51 +84,9 @@ The other fitted models split their provinces across the zones instead ([Health 
 
 ## Fine-tuning
 
-The `_ft` models load one LoRA checkpoint of Chronos-2, fine-tuned on outbreaks simulated with epinowcast's generative model (`scripts/finetune_simulate.R`).
-The simulator, `enw_simulate`, is on epinowcast's `feature/829-simulate-forecast` branch, pinned at commit `e084b080`, and is not yet in a release.
-The simulations form the grid `r6` (`r5` for the current run), a crossed design over 21 factors (`factors` in the script).
-These include the process (exponential growth, or renewal with a mean generation time of 3, 7 or 15 days), the generation time's shape, the trajectory of $R_t$ (eight shapes, from steady growth to several waves), the delay's family, its form (parametric, non-parametric or both) and how it changes over time (static, drift, step, periodic or random walk), reporting on every day or on one to three weekdays, a reference day-of-week effect, the observation model and the strata.
-Each block of 840 simulations holds every level of each factor in equal shares, shuffled per factor, except where a level is repeated.
-A round of 40 batches of 21 simulations is one block.
-The observation model is NB1 in four simulations of five and Poisson in the fifth.
-In `r6`, half the simulations have no reporting shock and a quarter each have backlogs or outages; in `r5` each had a third.
-NB1 dispersion is scaled by the expected count and the delay's $\sum_d p_d^2$ (epinowcast#937).
-The strata are one place, 2 to 26 places, 2 to 8 ages, or places by ages, at most 60 strata.
-Outbreaks run 16 to 52 weeks.
-Continuous settings are drawn from named sampling distributions (`setting_distributions` in the script), checked against real data (`scripts/sim_settings_check.R`).
-In `r6`, cases per stratum are log-normal with a median of 3,000 and a log sd of 2.1, on 10 to 500,000, and NB1's `sqrt_phi` is half-normal with scale 0.25.
-In `r5`, outbreak sizes had a median of about 3,700 cases, with 90% between 70 and 84,000.
-Each simulation gives one observation draw, a daily reporting triangle, and its weekly releases are summed from it.
-
-A training block cuts one draw's releases at one cut-off and lays them out as the ragged layout does, with the target past $t^*$ the outbreak's final counts (`forecasters.finetune.training_block`).
-$D$ is drawn from 2 to 7 weeks, or 14 to 49 days, so the model is not tied to one $D$.
-A block holds the totals over places and over ages as well as the strata, so every aggregate is the exact sum of the series below it.
-Four or more flat places are grouped into regions, with region totals.
-One block in five is a single series, the national total or one leaf.
-The other blocks' targets are all levels, leaves and the national total, or leaves only, in equal shares.
-Each simulation is cut at 32 cut-offs, one block each, with up to 364 steps of context.
-The block design follows the training grid (`DESIGNS` in `scripts/finetune_chronos.py`, set from the trainer's `--grid`).
-Under `r5`, the current run's, a block is daily (25%), weekly (25%), 3-day (15%), daily with a weekly row per place (25%), or daily with a 3-day row per place (10%), and every block has weekly releases.
-Under `r6`, on the same simulations, the daily rows with weekly and 3-day totals each split in two (12.5% and 5% each).
-One half has the totals on each period's last day only, the other has rolling sums on every day, as the German target's 7-day sums do.
-Each `r6` block's releases run up to its cut-off at a cadence that follows its steps (`finetune.release_days`).
-Daily blocks have daily releases (60%), weekly releases as the BDBV hub's (20%), daily releases with one in five missed (10%), or weekday releases only (10%).
-3-day and weekly blocks have releases every 3 or 7 days (80%), or the same with one in five missed (20%).
-Overall, 36% of `r6` blocks have daily releases, 32% weekly, 12% every 3 days, 6% daily with gaps, 6% weekdays only, 5% weekly with gaps and 3% every 3 days with gaps.
-A run switches to `r6` by setting `finetune.grid: r6` in `workflow/config.yaml`, with the seven sources in `finetune.sources`.
-
-Round 9, the first round of grid `r5`, is the held-out block.
-Training runs in one pass over the next ten rounds, ten whole blocks of 8,400 simulations, in seed order while they are simulated (`scripts/finetune_stream.py`, `workflow/rules/finetune.smk`).
-The trainer monitors its loss on the first 90 simulations of the held-out block, a random sample of its cells.
-LoRA trains beside learned attention biases for related series (`forecasters.series_bias`).
-The adapter's learning rate starts at $10^{-5}$ and the biases' at $10^{-3}$, both falling linearly to zero over the 8,400 simulations.
-The rate follows the simulations trained, interpolated within a chunk by its steps, so it reaches zero with the last simulation's last batch however the blocks are packed.
-There is no warmup and no weight decay, and training is in full (fp32) precision.
-The r3 checkpoints were trained by `scripts/finetune_driver.sh` with `config/finetune/r3.env`, both removed after commit eae369693.
-Blocks are packed into batches by size within a memory budget, which also sets the largest block.
-A checkpoint is saved at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400 simulations.
-Each is scored on held-out blocks from separate simulations, by level, and published.
-Training stops at 8,400 simulations.
+The `_ft` models load one LoRA checkpoint of Chronos-2, fine-tuned on outbreaks simulated with epinowcast's generative model.
+The simulations, the training and the checkpoints' scores are in the paper's [supporting information](../paper/si.html#foundation-model-setup-and-fine-tuning), and how to load a checkpoint is on [Using the fine-tuned Chronos-2](finetuned-chronos.md).
+The simulator is `scripts/finetune_simulate.R`, the training blocks are cut by `forecasters.finetune.training_block`, and the block designs and release cadences of each grid are `DESIGNS` in `scripts/finetune_chronos.py` and `finetune.release_days`; the [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) says how a run picks its grid.
 
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
 The first release, `chronos-ft-2c2b22a03107`, was trained from earlier code, so its hash cannot be reproduced from this repository.
