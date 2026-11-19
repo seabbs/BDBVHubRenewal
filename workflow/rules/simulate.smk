@@ -4,7 +4,8 @@
 # scripts/finetune_simulate.R with exactly `draws` observation draws, and
 # is grid block r: 40 batches of 21 are its 840 simulations. Into
 # <ROOT>/rounds/r<r>/sims/. Each batch gets a manifest row, the round's
-# manifest joins them, the sim QC (scripts/sim_qc.py) reviews the round,
+# manifest joins them, the sim QC (scripts/sim_qc.py) checks the round
+# against fixed thresholds (simulate.qc),
 # and `round_ready` writes the seed lists and READY last. Every
 # simulation is kept: QC exclusions are a list (qc/excluded.csv).
 #
@@ -192,8 +193,14 @@ rule sim_qc:
         TOOLS_ENV
     params:
         round_dir=lambda wc, input: Path(input[0]).parent,
+        # Fixed plausibility thresholds (scripts/sim_qc.py); a round
+        # already checked keeps its exclusions.
+        limits=" ".join(
+            f"--{k.replace('_', '-')} {v}" for k, v in SIM["qc"].items()
+        ),
     shell:
-        "uv run python scripts/sim_qc.py {params.round_dir} > {log} 2>&1"
+        "uv run python scripts/sim_qc.py {params.round_dir} {params.limits} "
+        "> {log} 2>&1"
 
 
 rule round_ready:

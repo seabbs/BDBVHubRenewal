@@ -16,7 +16,7 @@
 #   seeds.txt      the round's seeds, one a line
 #   manifest.csv   one row per batch: seed, kind, grid and its commit,
 #                  draws, sha256 of each file, memory and time
-#   qc/            the sim-QC review (scripts/sim_qc.py)
+#   qc/            the sim-QC check (scripts/sim_qc.py)
 #   READY          written when the round is simulated, recorded and
 #                  reviewed, so the trainer can pull it
 #

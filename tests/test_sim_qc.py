@@ -12,9 +12,8 @@ import pandas as pd
 ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(ROOT / "scripts"))
-from test_finetune_chronos import _sim_dir  # noqa: E402
-
 import sim_qc  # noqa: E402
+from test_finetune_chronos import _sim_dir  # noqa: E402
 
 LIMITS = {
     "max_cases_per_stratum": 5e5,
