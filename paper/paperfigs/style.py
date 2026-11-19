@@ -18,7 +18,8 @@ from contextlib import contextmanager
 from typing import Any, Final
 
 import matplotlib as mpl
-from bdbvhubrenewal.evaluation.labels import MODEL_STYLES
+from bdbvhubrenewal.evaluation.labels import MODEL_STYLES, model_label
+from matplotlib.artist import Artist
 
 __all__ = [
     "INK",
@@ -28,6 +29,7 @@ __all__ = [
     "model_order",
     "model_style",
     "point_style",
+    "shared_legend",
     "theme",
 ]
 
@@ -73,6 +75,69 @@ _STYLE: Final[dict[str, tuple[str, str]]] = {
 
 MODEL_ORDER: Final = tuple(_STYLE)
 """Order models are listed in: baselines, foundation models, others."""
+
+
+def _model_rank(label: str) -> int | None:
+    """Rank of the model a legend label names, or None if it names none.
+
+    A label names a model when it starts with the model's display name,
+    so checkpoints ("..., 2,000 outbreaks") and notes ("... (90% made)")
+    keep their model's place.
+    """
+    names = sorted(
+        ((model_label(m), i) for i, m in enumerate(MODEL_ORDER)),
+        key=lambda x: -len(x[0]),
+    )
+    return next((i for name, i in names if label.startswith(name)), None)
+
+
+def shared_legend(
+    fig: Any,
+    axes: Any,
+    extra: Sequence[Artist] = (),
+    ncol: int | None = None,
+    **kwargs: Any,
+) -> None:
+    """Draw a figure's one legend, above its panels.
+
+    Entries are gathered from every panel in `axes`, then `extra`, once
+    per label. Labels naming a model come first, in `MODEL_ORDER`; the
+    rest follow in the order drawn.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        The figure, laid out with `layout="constrained"`.
+    axes : Axes or iterable of Axes
+        The panels whose labelled artists form the legend.
+    extra : sequence of Artist
+        Further handles with labels, such as WIS parts.
+    ncol : int, optional
+        Columns, by default up to six.
+    **kwargs
+        Passed to `Figure.legend`.
+    """
+    panels = [axes] if hasattr(axes, "get_legend_handles_labels") else axes
+    entries: dict[str, Artist] = {}
+    for ax in getattr(panels, "flat", panels):
+        for handle, label in zip(*ax.get_legend_handles_labels(), strict=True):
+            entries.setdefault(label, handle)
+    for handle in extra:
+        entries.setdefault(handle.get_label(), handle)
+    drawn = list(entries)
+    ranked = sorted(
+        (label for label in drawn if _model_rank(label) is not None),
+        key=lambda label: (_model_rank(label), drawn.index(label)),
+    )
+    labels = ranked + [label for label in drawn if label not in ranked]
+    fig.legend(
+        [entries[label] for label in labels],
+        labels,
+        loc="outside upper center",
+        ncol=ncol or min(len(labels), 6) or 1,
+        frameon=False,
+        **kwargs,
+    )
 
 
 def model_order(models: Sequence[str]) -> list[str]:

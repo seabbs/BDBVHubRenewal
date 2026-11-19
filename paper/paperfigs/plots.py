@@ -62,6 +62,7 @@ from paperfigs.style import (
     model_order,
     model_style,
     point_style,
+    shared_legend,
 )
 
 __all__ = [
@@ -668,9 +669,10 @@ def _legend(
     handles += _period_handles(split)
     if parts:
         handles += _part_handles()
-    fig.legend(
-        handles=handles,
-        loc="outside lower center",
+    shared_legend(
+        fig,
+        [],
+        extra=handles,
         ncol=min(int(np.ceil(len(handles) / 2)), 6),
         handlelength=2.6,
     )
@@ -1034,11 +1036,8 @@ def _legend_models(
         for m in models
     ]
     handles += _period_handles(split)
-    fig.legend(
-        handles=handles,
-        loc="outside lower center",
-        ncol=min(len(handles), 4),
-        handlelength=2.6,
+    shared_legend(
+        fig, [], extra=handles, ncol=min(len(handles), 4), handlelength=2.6
     )
 
 
@@ -1419,5 +1418,5 @@ def si_place_dots(
     ax.set_yticks(range(len(places)), places, fontsize=7)
     ax.invert_yaxis()
     ax.set_xlabel(f"{name} relative to {model_label(baseline)}")
-    ax.legend(fontsize=7, frameon=False, loc="lower right")
+    shared_legend(fig, ax, fontsize=7)
     return fig

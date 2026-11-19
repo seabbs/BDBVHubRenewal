@@ -21,6 +21,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.figure import Figure
 
+from paperfigs.style import shared_legend
+
 __all__ = ["RELEASES", "as_of", "examples_figure"]
 
 RELEASES: Final = (0.4, 0.65, 0.9)
@@ -103,8 +105,7 @@ def examples_figure(
         ax.tick_params(axis="x", rotation=30)
     for ax in axes.ravel()[len(picks) :]:
         ax.set_visible(False)
-    handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside lower center", ncol=4, fontsize=7)
+    shared_legend(fig, axes, ncol=4, fontsize=7)
     return fig
 
 

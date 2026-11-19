@@ -43,6 +43,7 @@ from bdbvhubrenewal.reporting.live_checkpoint import (
 )
 from matplotlib.figure import Figure
 
+from paperfigs.style import shared_legend
 from paperpipe.outputs import to_markdown
 
 __all__ = [
@@ -165,8 +166,7 @@ def aggregation_figure(
             )
             ax.set_title(f"{study}, {levels[j]}", fontsize=9)
             ax.set_ylabel("Relative WIS")
-    handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside lower center", ncol=2, fontsize=7)
+    shared_legend(fig, axes, ncol=2, fontsize=7)
     return fig
 
 
@@ -527,13 +527,7 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
         ax.set_visible(False)
     # The legend from the panels drawn in colour, one entry per line.
     shown = [ax for ax in axes if ax.get_visible() and ax.texts == []]
-    entries = {}
-    for ax in shown or axes[:1]:
-        for h, label in zip(*ax.get_legend_handles_labels(), strict=True):
-            entries.setdefault(label, h)
-    labels = sorted(entries)
-    handles = [entries[label] for label in labels]
-    fig.legend(handles, labels, loc="outside lower center", ncol=2, fontsize=7)
+    shared_legend(fig, shown or axes[:1], ncol=2, fontsize=7)
     return fig
 
 
@@ -587,7 +581,7 @@ def heldout_figure(curve: pd.DataFrame) -> Figure:
         )
     ax.set_xlabel("Simulated outbreaks seen")
     ax.set_ylabel("Held-out loss")
-    ax.legend(frameon=False, fontsize=8)
+    shared_legend(fig, ax, ncol=2, fontsize=8)
     return fig
 
 
@@ -636,7 +630,7 @@ def realism_figure(
     for ax in axes[len(names) :]:
         ax.set_visible(False)
     handles = [plt.Line2D([], [], color=colours[d], label=d) for d in data]
-    fig.legend(handles=handles, loc="outside lower center", ncol=len(data))
+    shared_legend(fig, [], extra=handles, ncol=len(data))
     return fig
 
 
@@ -838,8 +832,7 @@ def copula_figure(rows: pd.DataFrame) -> Figure:
                 fontsize=9,
             )
             ax.set_ylabel("Rolling / no pairing")
-    handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside lower center", ncol=len(models))
+    shared_legend(fig, axes, ncol=len(models))
     return fig
 
 
@@ -883,8 +876,7 @@ def comparison_figure(rows: pd.DataFrame) -> Figure:
         ax.set_ylabel("Score")
     for ax in axes[len(sets) :]:
         ax.set_visible(False)
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside lower center", ncol=len(runs))
+    shared_legend(fig, axes, ncol=len(runs))
     return fig
 
 
