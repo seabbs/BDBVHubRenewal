@@ -135,3 +135,4 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     # The held-out evaluations' cadence comes from the config.
     assert args.eval_every == CONFIG["finetune"]["eval_every"]
     assert args.by_source_every == CONFIG["finetune"]["by_source_every"]
+    assert args.eval == CONFIG["finetune"]["eval"] == "local"
