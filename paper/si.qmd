@@ -109,7 +109,7 @@ Chronos-2's group attention has no notion of which series is which, so on its ow
 
 - We add three learned biases to Chronos-2's group-attention scores (@tbl-attention-biases).
 - They start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
-- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero over the 3,360 simulations.
+- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero over the 3,200 simulations.
 - We identify places by name within each block, with no limit on the number of places.
 - A place's parent is the nearest prefix of its name in the block, else the country.
 - Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.
@@ -200,7 +200,7 @@ where $m_{n,t}$ is 1 for a target step to forecast and 0 for a missing target or
 
 - The learning rate falls linearly from $\eta_0$ to zero over the simulations [@Devlin2019]:
 $$
-\eta_t = \eta_0 \left(1 - \frac{s_t}{3{,}360}\right),
+\eta_t = \eta_0 \left(1 - \frac{s_t}{3{,}200}\right),
 $$
 where $s_t$ is the number of simulations trained by step $t$, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.
 - $\eta_0 = 10^{-5}$ for the LoRA adapter, the rate Chronos-2's fine-tuning recommends for LoRA and AutoGluon's default [@chronos_forecasting; @autogluon], and $\eta_0 = 10^{-3}$ for the attention biases.
@@ -220,7 +220,7 @@ In those blocks each release but the last is missed with chance 0.2.
 Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives up to 32 blocks.
 Each block has up to 364 steps of context, and its prediction length is its nowcast steps and one week ahead, rounded up to whole steps.
 A block with no case reported across its places in the 28 days up to its cut-off is dropped, from what is known at the cut-off.
-We train on 3,360 simulations drawn from the grid, with checkpoints at 210, 420, 840, 1,680, 2,520 and 3,360.
+We train on 3,200 simulations drawn from the grid, with checkpoints at 100, 200, 400, 800, 1,600 and 3,200.
 
 ::: {#tbl-block-layouts}
 | Layout | Share of blocks |
@@ -508,13 +508,13 @@ On the German development half, level by level is competitive for the daily zero
 
 ### Checkpoint curve
 
-- We compare the final run's checkpoints, fine-tuned on 210, 420, 840, 1,680, 2,520 and 3,360 simulations.
+- We compare the final run's checkpoints, fine-tuned on 100, 200, 400, 800, 1,600 and 3,200 simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
 - @fig-finetune-heldout gives the trainer's held-out loss by level, for transparency, not to select a checkpoint.
 - @fig-checkpoint-curve gives German first-half relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
 - @tbl-checkpoints gives the headline scores of each checkpoint.
 - A later checkpoint has also trained for more steps.
-- The learning rate falls linearly to zero over the 3,360 simulations, so the earlier checkpoints are taken at 94% (210) to 25% (2,520) of the starting rate, and only the 3,360 checkpoint is annealed.
+- The learning rate falls linearly to zero over the 3,200 simulations, so the earlier checkpoints are taken at 97% (100) to 50% (1,600) of the starting rate, and only the 3,200 checkpoint is annealed.
 
 ![The trainer's held-out loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
