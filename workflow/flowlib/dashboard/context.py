@@ -16,7 +16,7 @@ from typing import Any
 
 import yaml
 
-from . import paperstyle
+from . import logs, paperstyle
 from . import runs as spec
 from .mirror import Source
 from .page import Context
@@ -123,25 +123,45 @@ def build(
     )
 
 
-def named_runs(run_list: Sequence[spec.Run]) -> list[spec.Run]:
-    """Name runs with no label of their own as the fine-tuned model.
+RUN_SHADES = ("#174a85", "#7fb0ec", "#0b2a4f", "#a9c9f2")
+"""Colours of earlier runs: shades of the fine-tuned model's blue, so every
+run reads as that model and the live run stands out in its own colour."""
 
-    One such run also takes the model's colour in the paper; with more,
-    each name ends with the run's key.
+
+def _identifier(run: spec.Run) -> str:
+    """Return an earlier run's suffix: its grid (`r5 grid`), else its key."""
+    if run.folder is not None:
+        for _, s, _ in reversed(logs.checkpoints(run.folder)):
+            if s.get("grid"):
+                return f"{s['grid']} grid"
+    return run.key
+
+
+def named_runs(run_list: Sequence[spec.Run]) -> list[spec.Run]:
+    """Name and colour every run as the fine-tuned model.
+
+    The live run is the model's display name in its colour; earlier runs
+    are `<name> - <identifier>` (their grid, else their key, Sam 19 Nov)
+    in shades of it (`RUN_SHADES`). A configured label or colour is not
+    shown, so the toggles and every panel name runs alike.
     """
-    unnamed = [r for r in run_list if r.label == r.key]
     name = paperstyle.model_label(RUN_MODEL)
+    colour = paperstyle.model_colour(RUN_MODEL)
+    # The live run, as `runs.load_runs` marks it, else the first.
+    live = next((r.key for r in run_list if r.live), None)
+    live = live or (run_list[0].key if run_list else None)
+    ids = {r.key: _identifier(r) for r in run_list if r.key != live}
+    # Two earlier runs of one grid are told apart by their keys.
+    dup = {i for i in ids.values() if list(ids.values()).count(i) > 1}
     out = []
+    shade = iter(RUN_SHADES * (1 + len(run_list) // len(RUN_SHADES)))
     for r in run_list:
-        if r in unnamed:
-            one = len(unnamed) == 1
+        if r.key == live:
+            r = dataclasses.replace(r, label=name, colour=colour)
+        else:
+            suffix = r.key if ids[r.key] in dup else ids[r.key]
             r = dataclasses.replace(
-                r,
-                label=name if one else f"{name}, {r.key}",
-                # The palette's default colour, not one set for the run.
-                colour=paperstyle.model_colour(RUN_MODEL)
-                if one and r.colour in ("", *spec.PALETTE)
-                else r.colour,
+                r, label=f"{name} - {suffix}", colour=next(shade)
             )
         out.append(r)
     return out

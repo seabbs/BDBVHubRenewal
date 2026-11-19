@@ -973,7 +973,7 @@ def build(ctx: Context) -> str:
         for key, title, content, opened in parts
     )
     body = f"""<header class=topbar>
-<div class=navrow><b>{html.escape(live.label)} run</b><nav class=nav>{nav}</nav>
+<div class=navrow><b>{html.escape(live.label)}</b><nav class=nav>{nav}</nav>
 <span id=livebar>{bar}</span></div>
 <div id=selbar class=selbar></div>
 <script type="application/json" id=seldata>{seldata}</script>

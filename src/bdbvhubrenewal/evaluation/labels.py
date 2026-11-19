@@ -45,8 +45,9 @@ MODEL_LABELS: Final[dict[str, str]] = {
 """Display name of each model id."""
 
 _BLUE: Final = "#2a78d6"
+_GREEN: Final = "#15803d"
+_VIOLET: Final = "#8e44ad"
 _TEAL: Final = "#0f9aa8"
-_MAGENTA: Final = "#c4459b"
 _PURPLE: Final = "#6250d6"
 _GREY: Final = "#5f5e5a"
 
@@ -55,17 +56,24 @@ MODEL_STYLES: Final[dict[str, tuple[str, str]]] = {
     "BDBVHub-baseline": (_GREY, "solid"),
     "randomwalknowcast": ("#eb6834", "solid"),
     "randomwalk": ("#e34948", "solid"),
-    "fm_chronos_daily_complete": (_MAGENTA, "dotted"),
-    "fm_chronos_daily_ragged": (_TEAL, "dashed"),
+    "fm_chronos_daily_complete": (_VIOLET, "dotted"),
+    "fm_chronos_daily_ragged": (_GREEN, "dashed"),
     "fm_chronos_daily_ragged_ft": (_BLUE, "solid"),
     "fm_chronos_weekly_complete": (_PURPLE, "dotted"),
     "fm_chronos_weekly_ragged": (_PURPLE, "dashed"),
     "fm_chronos_weekly_ragged_ft": (_PURPLE, "solid"),
-    "epinowcast": ("#1baf7a", "solid"),
+    "epinowcast": (_TEAL, "solid"),
     "hub_ensemble": ("#eda100", "solid"),
 }
 """Colour (hex, light theme) and dash of each model id, in display order:
-baselines, foundation models, others."""
+baselines, foundation models, others.
+
+Zero-shot with delays is green, as on the first dashboard, and zero-shot
+on complete data only purple (Sam, 19 Nov). Every pair of distinct
+colours differs by a CIEDE2000 of 5 or more under normal vision and
+simulated deuteranopia, protanopia and tritanopia, and the main models'
+colours have a contrast of 3 or more on light and dark backgrounds
+(tests/evaluation/test_labels.py)."""
 
 WIS_PART_SHADES: Final[dict[str, float]] = {
     "dispersion": 1.0,
