@@ -152,3 +152,25 @@ def test_an_unreachable_worker_fails_at_submit(setup):
     assert got.returncode != 0
     assert not (croot / "b.txt").exists()
     assert "nohost.invalid" in got.stderr + got.stdout
+
+
+def test_a_job_still_running_on_the_worker_is_not_started_twice(setup):
+    # A dropped ssh can leave the job running on the worker; its retry
+    # must not start a second copy beside it.
+    sys.path.insert(0, str(REPO / "workflow"))
+    from flowlib import compute
+
+    coord, worker, (croot, wroot), state = setup
+    w = compute.Worker("w", "local", str(wroot), str(worker))
+    pid_file = Path(compute.remote_pid_file(w, {"rule": "b", "wildcards": {}}))
+    pid_file.parent.mkdir(parents=True)
+    alive = subprocess.Popen(["sleep", "60"])
+    try:
+        pid_file.write_text(f"{alive.pid}\n")
+        got = _run(coord, f"w=local:{wroot}:{worker}", croot, state)
+    finally:
+        alive.kill()
+    assert got.returncode != 0
+    assert not (wroot / "b.txt").exists()
+    logs = "".join(p.read_text() for p in state.glob("*.log"))
+    assert "still running" in logs
