@@ -236,6 +236,21 @@ def test_from_the_rounds_host_only_listed_batches_are_trained_on(tmp_path):
     assert "simulate_batch" not in jobs
 
 
+def test_from_the_rounds_host_batches_stream_before_the_round_ends(tmp_path):
+    # The workflow writes a round's manifest once the round is whole, so
+    # mid-round only its batch records list what is done.
+    _rounds_host(tmp_path, {1: range(30100, 30140)})
+    records = tmp_path / "host" / "rounds" / "r2" / "records"
+    records.mkdir(parents=True)
+    for s in range(30200, 30213):
+        (records / f"record-{s}.csv").write_text(
+            f"2,{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n"
+        )
+    jobs = dry(tmp_path, "finetune", config=REMOTE)
+    assert jobs["train_segment"] == 1
+    assert jobs["fetch_batch"] == 12 + 1 + 40
+
+
 def test_finetune_never_publishes(tmp_path):
     jobs = dry(tmp_path, "finetune", config=FT)
     assert not any(k.startswith("publish") for k in jobs)
