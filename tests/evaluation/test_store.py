@@ -1265,8 +1265,8 @@ def test_the_archive_s_store_task_keys_zone_models_as_the_store(
 def test_the_dependency_export_names_no_workspace_package(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # `# via <package>` lines would change every key when the package
-    # moves into the workspace packages (WP2b).
+    # `# via <package>` lines would change every key when modules move
+    # between packages.
     seen: list[list[str]] = []
 
     def run(args, **_):
@@ -1277,3 +1277,29 @@ def test_the_dependency_export_names_no_workspace_package(
     store._export.cache_clear()
     store._export(".", "lock-for-this-test")
     assert "--no-annotate" in seen[0]
+
+
+def test_places_key_only_the_models_that_read_them(
+    tasks: dict[str, ForecastTask],
+) -> None:
+    from dataclasses import replace
+
+    latest = max(tasks)
+    moved = {
+        v: replace(
+            t,
+            imputation_delay=np.array([1.0]),
+            places=t.places.assign(population=1.0),
+        )
+        for v, t in tasks.items()
+    }
+    sampler = store.samplers()
+    walk = ["randomwalk"]
+    assert store.current_keys(moved, walk, sampler, "c") == (
+        store.current_keys(tasks, walk, sampler, "c")
+    )
+    assert tasks[latest].places is not None
+    renewal = ["renewal"]
+    assert store.current_keys(moved, renewal, sampler, "c") != (
+        store.current_keys(tasks, renewal, sampler, "c")
+    )

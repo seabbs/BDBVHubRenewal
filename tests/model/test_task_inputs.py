@@ -44,8 +44,6 @@ def test_zone_places_are_the_mapped_zones() -> None:
 
 
 def test_unmapped_zones_take_their_province_place() -> None:
-    from dataclasses import replace
-
     from bdbvhubrenewal.forecasters.base import ForecastTask
     from bdbvhubrenewal.forecasters.zonerenewal import _zone_places
 
@@ -68,7 +66,7 @@ def test_unmapped_zones_take_their_province_place() -> None:
         target_end_dates=(),
         places=places,
     )
-    out = _zone_places(replace(task)).set_index("location")
+    out = _zone_places(task).set_index("location")
     assert out.loc["DE-BY-02", "population"] == 30.0
     assert out.loc["DE-BY-09", "population"] == 20.0
     assert out.loc["DE-BY-09", "latitude"] == 48.0

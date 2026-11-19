@@ -126,10 +126,12 @@ class ForecastTask:
     imputation_delay : numpy.ndarray or None
         The daily pmf of the delay the data provider subtracts from a
         report date to impute a missing onset date, on days 0 onward.
-        None where the data impute no onsets.
+        None where the data impute no onsets. Only models with
+        `reads_places` set have it in their fit key.
     places : pandas.DataFrame or None
         Each location's `population`, `latitude` and `longitude`, by
-        `location`, covering the task's locations and their zones.
+        `location`, covering the task's locations and their zones. Only
+        models with `reads_places` set have it in their fit key.
     """
 
     vintage: str

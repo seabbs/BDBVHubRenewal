@@ -107,7 +107,7 @@ def zone_places() -> pd.DataFrame:
 
     Centroids and WorldPop counts of the hub's mapped health zones, from
     `zone_centres.csv` (see its header). A zone the map lacks has no
-    row; the zone model places it in its province
+    row. The zone model places it in its province
     (`forecasters.zonerenewal`).
 
     Returns
@@ -122,8 +122,13 @@ def zone_places() -> pd.DataFrame:
     return table.loc[:, list(PLACE_COLUMNS)]
 
 
-def hub_places() -> pd.DataFrame:
+def hub_places(data_dir: Path | str | None = None) -> pd.DataFrame:
     """Return the places of the hub's tasks: country, provinces and zones.
+
+    Parameters
+    ----------
+    data_dir : pathlib.Path or str, optional
+        Directory holding the tidy tables (`load_locations`).
 
     Returns
     -------
@@ -131,5 +136,5 @@ def hub_places() -> pd.DataFrame:
         Columns `PLACE_COLUMNS`: the country and provinces
         (`load_locations`), then the mapped zones (`zone_places`).
     """
-    provinces = load_locations().loc[:, list(PLACE_COLUMNS)]
+    provinces = load_locations(data_dir).loc[:, list(PLACE_COLUMNS)]
     return pd.concat([provinces, zone_places()], ignore_index=True)

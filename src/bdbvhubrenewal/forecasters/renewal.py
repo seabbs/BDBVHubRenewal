@@ -1203,6 +1203,7 @@ class RenewalModel:
     progress: Path | None = None
     supports_mask: bool = field(init=False, default=True)
     reads_zones: ClassVar[bool] = True
+    reads_places: ClassVar[bool] = True
     name: str = field(init=False)
     fit_diagnostics: list[dict[str, Any]] = field(
         init=False, default_factory=list

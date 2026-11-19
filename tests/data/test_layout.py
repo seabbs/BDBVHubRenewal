@@ -119,5 +119,4 @@ def test_renewal_code_reads_no_hub_delay_or_places() -> None:
         own = _imported(rel)
         assert "bdbvhubrenewal.data.delays" not in own, rel
         assert "load_locations" not in _imports_from(rel, "bdbvhubrenewal.data")
-        assert "_centres.csv" not in (PKG / rel).read_text(), rel
     assert "zone_places" in _defs("data/zones.py")

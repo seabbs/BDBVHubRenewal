@@ -37,10 +37,11 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbvhubrenewal.data import PROVINCE_CENTRES, PROVINCE_POPULATIONS
+from bdbvhubrenewal.data import PROVINCE_POPULATIONS
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
 from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.data.releases import release_cutoff
+from bdbvhubrenewal.data.tidy import province_places
 from bdbvhubrenewal.forecasters.base import NATIONAL
 from bdbvhubrenewal.model.censored import censored_pmf
 from bdbvhubrenewal.model.inputs import (
@@ -590,14 +591,7 @@ def simulate_outbreak(
     if s.rt_paths is not None and s.seed_curves is not None:
         rt = np.asarray(s.rt_paths, dtype=float)
         seeding = np.asarray(s.seed_curves, dtype=float).T / pop
-    table = pd.DataFrame(
-        {
-            "location": s.locations,
-            "population": pop,
-            "latitude": [PROVINCE_CENTRES[p][0] for p in s.locations],
-            "longitude": [PROVINCE_CENTRES[p][1] for p in s.locations],
-        }
-    )
+    table = province_places(s.locations)
     mixing = mixing_matrix(
         jnp.asarray(model_gravity_kernel(s.locations, table)),
         s.importation,

@@ -45,7 +45,9 @@ from bdbvhubrenewal.data import (  # noqa: E402
     load_locations,
     load_target,
 )
+from bdbvhubrenewal.data.delays import hub_delay_pmf  # noqa: E402
 from bdbvhubrenewal.data.simulate import simulate_outbreak  # noqa: E402
+from bdbvhubrenewal.data.zones import hub_places  # noqa: E402
 from bdbvhubrenewal.evaluation.ppc import summarise_draws  # noqa: E402
 from bdbvhubrenewal.evaluation.scoring import crps_sample  # noqa: E402
 from bdbvhubrenewal.forecasters import renewal as adapter  # noqa: E402
@@ -195,6 +197,8 @@ def task_for(target, delays, vintage, locations, kind) -> ForecastTask:
         delays=delays,
         locations=locations,
         target_end_dates=weeks(vintage),
+        imputation_delay=hub_delay_pmf(vintage),
+        places=hub_places(),
     )
 
 

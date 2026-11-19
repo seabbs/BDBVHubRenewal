@@ -160,6 +160,10 @@ ZONE_FIELDS: Final = ("zone_history", "zone_daily_history", "zone_codes")
 """Task fields in the fit key of a model only if it reads zones
 (`reads_zones`), so zone data never refits the others."""
 
+PLACE_FIELDS: Final = ("imputation_delay", "places")
+"""Task fields in the fit key of a model only if it reads them
+(`reads_places`)."""
+
 COMMIT_FILE: Final = ".commit"
 """The store branch commit, written by `scripts/fit-store.sh fetch`."""
 
@@ -549,6 +553,7 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
     """
     digest = hashlib.sha256()
     zones = getattr(model, "reads_zones", False)
+    reads_places = getattr(model, "reads_places", False)
     head = {
         "model": _settings(model),
         "code": code,
@@ -561,6 +566,8 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
     digest.update(json.dumps(head, sort_keys=True).encode())
     for f in fields(task):
         if f.name in ZONE_FIELDS and not zones:
+            continue
+        if f.name in PLACE_FIELDS and not reads_places:
             continue
         value = getattr(task, f.name)
         if f.name == "places" and value is not None and not zones:
