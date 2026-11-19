@@ -24,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from . import bias, learning, logs, nowcasts, scores, svg, training
+from . import bias, learning, logs, nowcasts, scores, svg, training, wis
 from .mirror import Source
 from .runs import Reference, Run, split_label
 
@@ -431,7 +431,9 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
     out = []
     for r in ctx.runs:
         base = own.get(r.base or "") if r.base else None
-        refs = {"full0": base["full0"], "src0": base["src0"]} if base else None
+        refs = (
+            {k: base[k] for k in ("full0", "src0", "parts0")} if base else None
+        )
         out.append(
             training.loss_run(r, ctx.log(r), cks[r.key], st.spo, refs, r.colour)
         )
@@ -623,6 +625,8 @@ def nowcasts_section(
                 for r in ctx.runs
             ],
             "defaults": defaults,
+            # WIS parts in the paper's order, each its share of the colour.
+            "parts": [[p, wis.part_share(p)] for p in wis.PARTS],
         }
     )
     first = defaults.get("source")
@@ -637,6 +641,18 @@ def nowcasts_section(
         controls + f'<script type="application/json" id=gdata>{data}</script>'
         f"<script>{_asset('nowcasts.js')}</script>"
     )
+
+
+def wis_section(ctx: Context, rows: Sequence[Mapping[str, str]]) -> str:
+    """Return the mean WIS bars by component; none before any are scored.
+
+    Runs' bars are of the view's default source (`dashboard.defaults`).
+    """
+    source = ((ctx.view or {}).get("defaults") or {}).get("source")
+    bars = scores.wis_bars(
+        rows, ctx.runs, ctx.references, ctx.rule, source, ctx.excluded
+    )
+    return wis.section(bars, ctx.view or {}, tip)
 
 
 def mail_section(ctx: Context) -> str:
@@ -807,6 +823,9 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         ),
         ("nowcasts", "Nowcasts", nowcasts_section(ctx, sizes, builts), True),
     ]
+    bars = wis_section(ctx, score_rows)
+    if bars:
+        parts.append(("wis", "Mean WIS", bars, True))
     if mail:
         parts.append(("mailbox", "Recent activity", mail, True))
     tables = tables_section(ctx, info) + notes_section(ctx)
@@ -815,7 +834,12 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     return live, bar, selector_data(ctx, builts), parts
 
 
-NAV = {"status": "Status", "mailbox": "Activity", "learning": "Learning"}
+NAV = {
+    "status": "Status",
+    "mailbox": "Activity",
+    "learning": "Learning",
+    "wis": "WIS",
+}
 """Short names in the top bar, where they differ from the section titles."""
 
 

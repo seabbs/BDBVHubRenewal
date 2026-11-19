@@ -28,6 +28,8 @@ from bdbvhubrenewal.forecasters.finetune import (
     AHEAD_WEEKS,
     BINNED,
     MIXED,
+    ROLLING,
+    release_days,
     training_block,
     weekly_cutoffs,
 )
@@ -41,7 +43,9 @@ MAX_LAGS = {
     "daily": tuple(range(14, 50)),
     "3day": tuple(range(5, 17)),
     "daily+weekly": tuple(range(14, 50)),
+    "daily+rolling7": tuple(range(14, 50)),
     "daily+3day": tuple(range(14, 50)),
+    "daily+rolling3": tuple(range(14, 50)),
 }
 """Release lags $D$ the blocks are drawn from; daily blocks with period
 totals have daily lags."""
@@ -52,25 +56,118 @@ DAYS_PER_STEP = {
     "daily": 1,
     "3day": 3,
     "daily+weekly": 1,
+    "daily+rolling7": 1,
     "daily+3day": 1,
+    "daily+rolling3": 1,
 }
 """Days in a step of each source."""
 
 
-SOURCE_SHARES = {
-    "daily": 0.25,
-    "weekly": 0.25,
-    "3day": 0.15,
-    "daily+weekly": 0.25,
-    "daily+3day": 0.10,
-}
-"""Share of blocks of each layout, for one model of every frequency:
-daily, weekly and 3-day blocks, and daily blocks with each place's weekly
-or 3-day totals on period-end days (`finetune.MIXED`)."""
+NATIVE_CADENCE = {1: "daily", 3: "3day", 7: "weekly"}
+"""The regular release cadence of each step width, in days."""
 
+
+DESIGNS = {
+    "r5": {
+        "source_shares": {
+            "daily": 0.25,
+            "weekly": 0.25,
+            "3day": 0.15,
+            "daily+weekly": 0.25,
+            "daily+3day": 0.10,
+        },
+        "cadences": {c: {"weekly": 1.0} for c in NATIVE_CADENCE.values()},
+    },
+    "r6": {
+        "source_shares": {
+            "daily": 0.25,
+            "weekly": 0.25,
+            "3day": 0.15,
+            "daily+weekly": 0.125,
+            "daily+rolling7": 0.125,
+            "daily+3day": 0.05,
+            "daily+rolling3": 0.05,
+        },
+        "cadences": {
+            "daily": {
+                "daily": 0.6,
+                "weekly": 0.2,
+                "daily_gaps": 0.1,
+                "weekdays": 0.1,
+            },
+            "3day": {"3day": 0.8, "3day_gaps": 0.2},
+            "weekly": {"weekly": 0.8, "weekly_gaps": 0.2},
+        },
+    },
+}
+"""Block designs by training grid: each layout's share of blocks
+(`source_shares`), and the release cadences of each step width with their
+shares (`cadences`, `finetune.release_days`).
+
+r5: every block has weekly releases.
+r6: releases follow the layout's steps, daily, every 3 days or weekly.
+Daily layouts also get weekly releases (the BDBV hub's daily data), daily
+releases on weekdays only, and missed releases (`_gaps`); 3-day and weekly
+layouts get missed releases. Daily blocks with weekly or 3-day totals have
+them either on period-end days only (`finetune.MIXED`) or as rolling sums
+on every day (`finetune.ROLLING`). Overall, 36% of blocks have daily
+releases, 32% weekly (12% daily blocks, 20% weekly blocks), 12% 3-day,
+6% daily with gaps, 6% weekdays only, 5% weekly with gaps and 3% 3-day
+with gaps."""
+
+DESIGN = "r6"
+"""The design in use (`use_design`)."""
+
+SOURCE_SHARES = dict(DESIGNS[DESIGN]["source_shares"])
+"""Share of blocks of each layout (`DESIGNS`)."""
+
+CADENCES = {k: dict(v) for k, v in DESIGNS[DESIGN]["cadences"].items()}
+"""Release cadences of each step width and their shares (`DESIGNS`)."""
 
 SOURCES = tuple(SOURCE_SHARES)
 """Sources blocks are cut from, drawn at `SOURCE_SHARES`."""
+
+
+GRID_DESIGNS = {**{f"r{i}": "r5" for i in range(1, 6)}, "r6": "r6"}
+"""Each training grid's block design: grids before r6 keep r5's."""
+
+
+def use_design(grid: str) -> str:
+    """Set the block design of a training grid (`GRID_DESIGNS`).
+
+    Grids before r6 keep r5's design, so a run of one keeps its blocks.
+
+    Returns
+    -------
+    str
+        The design used.
+
+    Raises
+    ------
+    ValueError
+        For a grid with no design, so a typo or a new grid is not
+        silently given r5's blocks.
+    """
+    global DESIGN, SOURCE_SHARES, CADENCES
+    if grid not in GRID_DESIGNS:
+        raise ValueError(
+            f"grid {grid!r} has no block design; known: {sorted(GRID_DESIGNS)}"
+        )
+    DESIGN = GRID_DESIGNS[grid]
+    SOURCE_SHARES = dict(DESIGNS[DESIGN]["source_shares"])
+    CADENCES = {k: dict(v) for k, v in DESIGNS[DESIGN]["cadences"].items()}
+    return DESIGN
+
+
+def native_cadence(source: str) -> str:
+    """Return the regular cadence of a source's steps (`NATIVE_CADENCE`)."""
+    return NATIVE_CADENCE[DAYS_PER_STEP[source]]
+
+
+def draw_cadence(source: str, rng: np.random.Generator) -> str:
+    """Draw a block's release cadence at its source's shares (`CADENCES`)."""
+    mix = CADENCES[native_cadence(source)]
+    return str(rng.choice(list(mix), p=list(mix.values())))
 
 
 def check_sources(sources: tuple[str, ...]) -> None:
@@ -82,7 +179,12 @@ def check_sources(sources: tuple[str, ...]) -> None:
     bad = [
         s
         for s in sources
-        if (s not in foundation.SOURCES and s not in BINNED and s not in MIXED)
+        if (
+            s not in foundation.SOURCES
+            and s not in BINNED
+            and s not in MIXED
+            and s not in ROLLING
+        )
         or s not in DAYS_PER_STEP
         or s not in MAX_LAGS
     ]
@@ -360,7 +462,8 @@ def outbreak_blocks(
     and its places (`choose_places`) are about that many series at its
     lag, with the country first. A block whose places have no release
     rows by its cut (strata with no cases) is skipped and, with `empty`,
-    described there.
+    described there. Each block's releases run up to its cut at a cadence
+    drawn for its source (`draw_cadence`), recorded as its `cadence`.
     """
     # Cut-offs fall Wednesday to Saturday, as the hub's releases do.
     weekday = int(rng.integers(2, 6))
@@ -396,7 +499,7 @@ def outbreak_blocks(
                 size = np.exp(rng.uniform(0, np.log(MAX_SERIES)))
                 # A place's rows: its counts, its lags and, with period
                 # totals, one more.
-                rows = lag + 1 + (source in MIXED)
+                rows = lag + 1 + (source in MIXED or source in ROLLING)
                 fits = MAX_SERIES // rows - 1
                 budget = min(round(size / rows) - 1, fits)
                 places, mix = choose_places(provinces, budget, rng)
@@ -406,16 +509,20 @@ def outbreak_blocks(
             parent = "exact"
             if len(places) > 1 and places[0] == NATIONAL:
                 parent = str(parent_rng.choice(PARENT_MIX))
+            options = block_options(source, option_rng)
+            # The releases follow the source's cadence (`CADENCES`), up to
+            # the slot's cut.
+            cadence = draw_cadence(source, option_rng)
             block = training_block(
                 counts,
                 source,
                 places,
-                cutoffs[: cut + 1],
+                release_days(first, cutoffs[cut], cadence, option_rng),
                 max_lag=lag,
                 totals=any("-" in p for p in provinces),
                 parent=parent,
                 rng=parent_rng,
-                **(options := block_options(source, option_rng)),
+                **options,
             )
             if block is None:
                 if empty is not None:
@@ -432,6 +539,7 @@ def outbreak_blocks(
             padded |= options
             padded["mix"] = mix
             padded["source"] = source
+            padded["cadence"] = cadence
             out.append(padded)
     return out
 
@@ -564,5 +672,6 @@ def real_blocks(
         padded["places"] = tuple(places)
         padded["mix"] = "real"
         padded["source"] = "weekly"
+        padded["cadence"] = "weekly"
         out.append(padded)
     return out

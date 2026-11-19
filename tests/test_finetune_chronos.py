@@ -236,6 +236,63 @@ def test_a_split_batch_starts_from_clear_gradients():
     assert value == 0.5
 
 
+def test_a_block_that_runs_out_once_is_retried_before_it_is_skipped():
+    from finetune_stream import accumulate
+
+    calls: list[list[int]] = []
+    zeroed: list[int] = []
+    skipped: list[int] = []
+
+    def backward(part, _share):
+        calls.append(list(part))
+        # Out of memory the first time only, as when another process
+        # held the memory for a moment.
+        if len(calls) == 1:
+            raise RuntimeError("CUDA out of memory")
+        return 0.5
+
+    value = accumulate([7], backward, lambda: zeroed.append(1), skipped.append)
+    assert value == 0.5
+    assert skipped == []
+    # Memory is freed (`zero`) before the retry.
+    assert calls == [[7], [7]]
+    assert zeroed == [1]
+
+
+def test_a_block_that_never_fits_is_skipped_after_one_retry():
+    from finetune_stream import accumulate
+
+    calls: list[list[int]] = []
+    skipped: list[int] = []
+
+    def backward(part, _share):
+        calls.append(list(part))
+        raise RuntimeError("CUDA out of memory")
+
+    value = accumulate([7], backward, lambda: None, skipped.append)
+    assert np.isnan(value)
+    assert skipped == [7]
+    assert calls == [[7], [7]]
+
+
+def test_blocks_left_after_a_skip_share_the_whole_gradient():
+    from finetune_stream import accumulate
+
+    shares: dict[int, float] = {}
+
+    def backward(part, share):
+        if 9 in part:
+            raise RuntimeError("CUDA out of memory")
+        for i in part:
+            shares[i] = share / len(part)
+        return 0.5
+
+    accumulate([1, 2, 3, 9], backward, shares.clear, print)
+    # The three blocks used weigh a third each, as a batch of three would.
+    assert sorted(shares) == [1, 2, 3]
+    assert sum(shares.values()) == pytest.approx(1.0)
+
+
 def _checkpoint(tmp_path):
     ckpt = tmp_path / "finetuned-ckpt"
     ckpt.mkdir()
@@ -566,7 +623,9 @@ def test_workers_take_the_trainer_block_settings():
     )
     try:
         lags = {"daily": (28,)}
-        init_worker(100, lags, ("daily",))
+        init_worker(100, lags, ("daily",), grid="r5")
+        assert finetune_chronos.DESIGN == "r5"
+        assert finetune_chronos.CADENCES["daily"] == {"weekly": 1.0}
         assert finetune_chronos.MAX_SERIES == 100
         assert lags == finetune_chronos.MAX_LAGS
         assert finetune_chronos.SOURCES == ("daily",)
@@ -576,6 +635,7 @@ def test_workers_take_the_trainer_block_settings():
             finetune_chronos.MAX_LAGS,
             finetune_chronos.SOURCES,
         ) = saved
+        finetune_chronos.use_design("r6")
 
 
 def test_blocks_reach_deployed_sizes_on_many_places():
@@ -1013,6 +1073,51 @@ def test_steps_in_a_row_do_not_sum_gradients():
         assert torch.equal(a, b)
 
 
+def test_every_layout_has_cadences_whose_shares_sum_to_one():
+    for source in ft.SOURCE_SHARES:
+        mix = ft.CADENCES[ft.native_cadence(source)]
+        assert sum(mix.values()) == pytest.approx(1)
+    assert ft.native_cadence("daily+rolling7") == "daily"
+    assert ft.native_cadence("3day") == "3day"
+    assert ft.native_cadence("weekly") == "weekly"
+
+
+@pytest.mark.parametrize("source", ["daily", "3day", "weekly"])
+def test_each_layout_draws_its_cadences_at_their_shares(source):
+    rng = np.random.default_rng(0)
+    drawn = [ft.draw_cadence(source, rng) for _ in range(4000)]
+    for cadence, share in ft.CADENCES[ft.native_cadence(source)].items():
+        assert drawn.count(cadence) / len(drawn) == pytest.approx(
+            share, abs=0.03
+        )
+
+
+def _lag_fill(b) -> float:
+    n = b["n_targets"]
+    ctx = b["context"][:, : ft.CONTEXT]
+    seen = np.isfinite(ctx[0])
+    return float(np.isfinite(ctx[n:, seen]).mean())
+
+
+def test_blocks_record_their_cadence_and_daily_releases_fill_lags(
+    tmp_path, monkeypatch
+):
+    import finetune_chronos
+    from finetune_stream import cut
+
+    ids = _sim_dir(tmp_path)
+    monkeypatch.setattr(finetune_chronos, "SOURCES", ("daily",))
+    fills = {}
+    for cadence in ("daily", "weekly"):
+        monkeypatch.setitem(finetune_chronos.CADENCES, "daily", {cadence: 1.0})
+        blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
+        assert blocks
+        assert {b["cadence"] for b in blocks} == {cadence}
+        fills[cadence] = np.mean([_lag_fill(b) for b in blocks])
+    assert fills["daily"] > 0.8
+    assert fills["weekly"] < 0.3
+
+
 def test_evaluation_cadence_defaults_to_the_recipe_s():
     import finetune_stream as fs
 
@@ -1027,3 +1132,58 @@ def test_evaluation_cadence_defaults_to_the_recipe_s():
         fs.check_cadence(300, 1000)
     with pytest.raises(ValueError, match="positive"):
         fs.check_cadence(0, 0)
+
+
+def test_an_unknown_grid_has_no_design():
+    import finetune_chronos
+
+    with pytest.raises(ValueError, match="r7"):
+        finetune_chronos.use_design("r7")
+    finetune_chronos.use_design("r6")
+
+
+def test_grids_before_r6_keep_r5s_blocks(tmp_path):
+    import finetune_chronos
+    from finetune_stream import cut
+
+    try:
+        for grid in ("r5", "r4"):
+            assert finetune_chronos.use_design(grid) == "r5"
+            assert finetune_chronos.SOURCE_SHARES == {
+                "daily": 0.25,
+                "weekly": 0.25,
+                "3day": 0.15,
+                "daily+weekly": 0.25,
+                "daily+3day": 0.10,
+            }
+            for mix in finetune_chronos.CADENCES.values():
+                assert mix == {"weekly": 1.0}
+        finetune_chronos.SOURCES = ("daily", "daily+weekly")
+        ids = _sim_dir(tmp_path)
+        blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
+        assert blocks
+        assert {b["cadence"] for b in blocks} == {"weekly"}
+    finally:
+        finetune_chronos.use_design("r6")
+        finetune_chronos.SOURCES = tuple(finetune_chronos.SOURCE_SHARES)
+
+
+def test_the_trainer_takes_its_design_from_the_grid():
+    import finetune_chronos
+    import finetune_stream as fs
+
+    args = fs.build_parser().parse_args(
+        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r5"]
+    )
+    assert args.sources is None
+    try:
+        finetune_chronos.use_design(args.grid)
+        assert tuple(args.sources or finetune_chronos.SOURCE_SHARES) == (
+            "daily",
+            "weekly",
+            "3day",
+            "daily+weekly",
+            "daily+3day",
+        )
+    finally:
+        finetune_chronos.use_design("r6")

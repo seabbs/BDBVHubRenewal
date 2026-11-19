@@ -379,3 +379,167 @@ def test_a_mixed_blocks_totals_in_the_context_are_the_releases_counts() -> None:
         assert np.allclose(agg[:, e], daily[:, e - 6 : e + 1].sum(1))
     truth = training_block(counts, "daily", places, ["2026-12-31"], max_lag=3)
     assert truth is not None
+
+
+@pytest.mark.parametrize(
+    ("source", "width"), [("daily+rolling7", 7), ("daily+rolling3", 3)]
+)
+def test_a_rolling_block_adds_each_places_rolling_sums_every_day(
+    source, width
+) -> None:
+    counts = _two_places()
+    cutoffs = ["2026-09-23", "2026-09-30"]
+    places = (NATIONAL, "A", "B")
+    block = training_block(counts, source, places, cutoffs, max_lag=3)
+    daily = training_block(counts, "daily", places, cutoffs, max_lag=3)
+    n = len(places)
+    assert block["n_targets"] == 2 * n
+    assert list(block["target_places"]) == [*range(n), *range(n)]
+    x, d = block["context"], daily["context"]
+    assert np.array_equal(x[:n], d[:n], equal_nan=True)
+    assert np.array_equal(x[2 * n :], d[n:], equal_nan=True)
+    agg = x[n : 2 * n]
+    # Every day from the first whole window has its window's sum.
+    assert np.isnan(agg[:, : width - 1]).all()
+    assert np.isfinite(agg[:, width - 1 :]).all()
+    for e in range(width - 1, agg.shape[1]):
+        assert np.allclose(agg[:, e], d[:n, e - width + 1 : e + 1].sum(1))
+
+
+def test_rolling_totals_sum_each_window_ending_on_each_day() -> None:
+    from bdbvhubrenewal.forecasters.foundation import rolling_totals
+
+    days = np.arange(10, dtype=float)[None, :]
+    out = rolling_totals(days, 3)
+    assert np.isnan(out[0, :2]).all()
+    assert np.allclose(out[0, 2:], [3, 6, 9, 12, 15, 18, 21, 24])
+
+
+def test_daily_releases_are_every_day_to_the_cut() -> None:
+    from bdbvhubrenewal.forecasters.finetune import release_days
+
+    rng = np.random.default_rng(0)
+    out = release_days("2026-09-01", "2026-09-30", "daily", rng)
+    assert out == [
+        d.date().isoformat() for d in pd.date_range("2026-09-01", "2026-09-30")
+    ]
+
+
+@pytest.mark.parametrize(("cadence", "every"), [("3day", 3), ("weekly", 7)])
+def test_periodic_releases_step_back_from_the_cut(cadence, every) -> None:
+    from bdbvhubrenewal.forecasters.finetune import release_days
+
+    rng = np.random.default_rng(0)
+    out = release_days("2026-09-01", "2026-09-30", cadence, rng)
+    assert out[-1] == "2026-09-30"
+    gaps = np.diff(pd.to_datetime(out)).astype("timedelta64[D]").astype(int)
+    assert set(gaps) == {every}
+    assert pd.Timestamp(out[0]) - pd.Timestamp("2026-09-01") < pd.Timedelta(
+        days=every
+    )
+
+
+@pytest.mark.parametrize("cadence", ["daily_gaps", "3day_gaps", "weekly_gaps"])
+def test_releases_with_gaps_keep_the_cut_and_miss_some(cadence) -> None:
+    from bdbvhubrenewal.forecasters.finetune import GAP_SHARE, release_days
+
+    base = cadence.removesuffix("_gaps")
+    rng = np.random.default_rng(1)
+    full = release_days("2025-01-01", "2026-09-30", base, rng)
+    kept, n = 0, 0
+    for seed in range(20):
+        out = release_days(
+            "2025-01-01", "2026-09-30", cadence, np.random.default_rng(seed)
+        )
+        assert out[-1] == "2026-09-30"
+        assert set(out) <= set(full)
+        kept += len(out) - 1
+        n += len(full) - 1
+    assert 1 - kept / n == pytest.approx(GAP_SHARE, abs=0.03)
+
+
+def test_weekday_releases_skip_weekends_but_keep_the_cut() -> None:
+    from bdbvhubrenewal.forecasters.finetune import release_days
+
+    rng = np.random.default_rng(0)
+    out = release_days("2026-09-01", "2026-10-04", "weekdays", rng)
+    # 2026-10-04 is a Sunday: the cut stays, the other weekends go.
+    assert out[-1] == "2026-10-04"
+    assert all(pd.Timestamp(d).weekday() < 5 for d in out[:-1])
+    assert len(out) == 24 + 1
+
+
+def test_an_unknown_cadence_is_refused() -> None:
+    from bdbvhubrenewal.forecasters.finetune import release_days
+
+    rng = np.random.default_rng(0)
+    with pytest.raises(ValueError, match="cadence"):
+        release_days("2026-09-01", "2026-09-30", "hourly", rng)
+
+
+def test_a_cut_before_the_first_day_is_refused() -> None:
+    from bdbvhubrenewal.forecasters.finetune import release_days
+
+    rng = np.random.default_rng(0)
+    with pytest.raises(ValueError, match="before"):
+        release_days("2026-09-30", "2026-09-01", "daily_gaps", rng)
+
+
+def test_daily_releases_fill_every_lag_cell_weekly_ones_one_in_seven() -> None:
+    from bdbvhubrenewal.forecasters.finetune import release_days
+
+    counts = _two_places()
+    places = (NATIONAL, "A", "B")
+    rng = np.random.default_rng(0)
+    fill = {}
+    for cadence in ("daily", "weekly"):
+        cuts = release_days("2026-09-01", "2026-09-30", cadence, rng)
+        block = training_block(counts, "daily", places, cuts, max_lag=4)
+        n, start = block["n_targets"], block["start"]
+        # Lag d of day t needs a release on day t + d, all in the context.
+        lags = block["context"][n:, 4:start]
+        fill[cadence] = np.isfinite(lags).mean()
+    assert fill["daily"] == 1
+    assert fill["weekly"] == pytest.approx(1 / 7, abs=0.05)
+
+
+def _releases_by_loop(counts: pd.DataFrame, cutoffs) -> pd.DataFrame:
+    """The release rows as summed one cut-off at a time (before r6)."""
+    frames = []
+    for cutoff in cutoffs:
+        seen = counts.loc[counts["report_date"] <= pd.Timestamp(cutoff)]
+        rows = seen.groupby(["location", "reference_date"], as_index=False)[
+            "count"
+        ].sum()
+        rows.insert(0, "vintage", cutoff)
+        rows.insert(1, "cutoff", cutoff)
+        frames.append(rows)
+    return pd.concat(frames, ignore_index=True)
+
+
+@pytest.mark.parametrize("source", ["daily", "weekly"])
+def test_releases_match_summing_each_cut_off_alone(source) -> None:
+    from bdbvhubrenewal.forecasters.finetune import _release_rows
+
+    rng = np.random.default_rng(3)
+    n = 400
+    counts = pd.DataFrame(
+        {
+            "location": rng.choice(["A", "B", "C"], n),
+            "reference_date": pd.Timestamp("2026-09-01")
+            + pd.to_timedelta(rng.integers(0, 30, n), "D"),
+            "count": rng.integers(0, 5, n),
+        }
+    )
+    counts["report_date"] = counts["reference_date"] + pd.to_timedelta(
+        rng.integers(0, 20, n), "D"
+    )
+    days = pd.date_range("2026-08-30", "2026-10-25")
+    cutoffs = [
+        d.date().isoformat() for d in days[:: 1 if source == "daily" else 7]
+    ]
+    got = _release_rows(counts, cutoffs)
+    want = _releases_by_loop(counts, cutoffs)
+    pd.testing.assert_frame_equal(
+        got.reset_index(drop=True), want, check_dtype=False
+    )

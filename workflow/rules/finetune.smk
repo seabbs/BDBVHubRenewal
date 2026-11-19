@@ -16,24 +16,9 @@
 # each round's manifest lists them, or from the sims-r<N> releases
 # (`release`). A segment is planned only once its batches can be had: the
 # training seeds count up to the first batch not yet listed, and nothing
-# trains before the whole held-out round is (`available_batches`, listed
-# afresh each tick). From the rounds host, its rounds' manifests and QC
-# exclusions are mirrored in <RUN>/rounds/.
-
-
-checkpoint available_batches:
-    output:
-        f"{RUN}/available-batches.txt",
-    log:
-        f"{RUN}/logs/available-batches.log",
-    localrule: True
-    params:
-        repo=SIM["repo"],
-        rounds=lambda wc: sorted(
-            {FT["held_round"], *(round_of(s) for s in training_seeds())}
-        ),
-    run:
-        list_available(input, output, params, wildcards)
+# trains before the whole held-out round is (`listed_batches`, listed
+# afresh each time a run plans). From the rounds host, its rounds'
+# manifests and QC exclusions are mirrored in <RUN>/rounds/.
 
 
 rule fetch_batch:
@@ -156,6 +141,17 @@ rule train_segment:
         chunk=FT["chunk"],
         eval_every=FT["eval_every"],
         by_source_every=FT["by_source_every"],
+        eval_mode=FT["eval"],
+        # Files publishing reads beside the outputs, copied back with them
+        # from a worker elsewhere (flowlib.compute).
+        copy_back=lambda wc: [
+            f"{TRAIN}/n{wc.n}/{name}"
+            for name in (
+                "outbreaks.txt",
+                "consumed.txt",
+                "finetuned-ckpt/adapter_config.json",
+            )
+        ],
     shell:
         # The run's own state resumes it; the state kept with the prefix
         # before replaces it if missing or behind (flowlib.segments).
@@ -180,6 +176,7 @@ rule train_segment:
             --note "{params.note}" --chunk {params.chunk} \
             --eval-every {params.eval_every} \
             --by-source-every {params.by_source_every} \
+            --eval {params.eval_mode} \
             --exclude {params.run}/excluded.csv {params.bias} \
             --until {wildcards.n} >>{log} 2>&1
         # An optional notification line; it never fails the rule.

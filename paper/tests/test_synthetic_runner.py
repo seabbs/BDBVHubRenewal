@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import yaml
-from bdbvhubrenewal.data.snapshots import parent_code
+from bdbvhubrenewal.data.hierarchy import parent as parent_of
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     ModelUnavailableError,
@@ -348,14 +348,14 @@ def test_strata_take_hub_codes_whose_parents_are_real_nodes(
     assert task.daily_history is not None
     nodes = set(task.daily_history["location"])
     for code in codes:
-        parent = parent_code(code)
+        parent = parent_of(code)
         assert parent in nodes
         # The parent's count is the sum of its children's.
         rows = task.daily_history.loc[
             task.daily_history["vintage"] == task.vintage
         ]
         total = rows.groupby("location")["observed"].sum()
-        kids = [c for c in nodes if parent_code(c) == parent]
+        kids = [c for c in nodes if parent_of(c) == parent]
         assert total[parent] == sum(total[k] for k in kids)
 
 

@@ -175,17 +175,17 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 
 ::: {.callout-note title="Plan"}
 Each section has a figure panel.
-Every panel shows the same four models: `randomwalknowcast`, zero-shot Chronos-2 on complete data only, zero-shot Chronos-2 on the ragged layout, and the fine-tuned model.
+Every panel shows the same four models, named Random walk nowcast, Zero-shot (complete data only), Zero-shot (delays) and Fine-tuned (delays) in every figure and table.
 All three Chronos-2 models use one layout, daily counts and daily lag series with each place's weekly totals as a target row.
 Every other comparison, and the hub teams beyond the hub's baseline, is in the SI.
 Each panel shows:
 
-- nowcasts over time (ribbons);
-- scores relative to the baseline (`randomwalknowcast` for synthetic data, the hub's baseline for each case study), with natural- and log-scale WIS stacked by its decomposition (fair CRPS of samples in the SI);
+- nowcasts over time at the national level (one outbreak for synthetic data), several origins overlaid, each over its horizons against the truth (ribbons) [@Wolffram2023];
+- scores relative to the baseline (the random walk nowcast for synthetic data, the hub's baseline for each case study), with natural- and log-scale WIS stacked by its decomposition (fair CRPS of samples in the SI);
 - bias;
 - 50% and 90% coverage;
 - score variation by location and horizon, supported by SI plots.
-- for Germany and Ebola, a dotted line marking the split between the development and scored parts, with scores split by part.
+- for Germany and Ebola, a dotted line marking the split between the development and scored parts, with scores split by part, each part a row on the score axis.
 
 The plots in primarycensored-paper are a model for these.
 Each section has two paragraphs, one on visual performance and one summarising scores.

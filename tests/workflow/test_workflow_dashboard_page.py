@@ -288,6 +288,27 @@ def test_the_run_size_comes_from_the_config_without_a_trainer(tmp_path):
     assert st.params["prefixes"][-2:] == [8000, 8400]
 
 
+def test_mean_wis_bars_show_once_the_table_has_components(tmp_path):
+    ctx = _machine(tmp_path)
+    assert "<h2>Mean WIS</h2>" not in page.build(ctx)
+    table = tmp_path / "scores" / "tables" / "checkpoint-scores.csv"
+    with table.open() as f:
+        rows = list(csv.DictReader(f))
+    parts = ("wis", "dispersion", "underprediction", "overprediction")
+    rows[0] |= dict(zip(parts, ("1.0", "0.5", "0.2", "0.3"), strict=True))
+    with table.open("w") as f:
+        w = csv.DictWriter(f, [*rows[0]])
+        w.writeheader()
+        w.writerows(rows)
+    ctx.view["defaults"]["source"] = "daily"
+    out = page.build(ctx)
+    assert "<h2>Mean WIS</h2>" in out
+    assert '<a href="#wis">WIS</a>' in out
+    assert "Germany, national" in out
+    assert "my run n250" in out
+    assert "wis" in page.sections(ctx)
+
+
 def test_a_segment_s_empty_folder_is_not_a_checkpoint_being_scored(tmp_path):
     ctx = _machine(tmp_path)
     folder = ctx.runs[0].folder

@@ -73,6 +73,11 @@ BY_SOURCE_EVERY = 200
 """Steps between held-out losses by source, which cost three monitor
 evals (the default of `--by-source-every`)."""
 
+EVAL_MODES = ("local", "offload")
+"""Where held-out evaluation runs (`--eval`)."""
+HELD_OUT_BLOCKS = "held-out-blocks.pkl"
+"""The held-out blocks an offloaded run saves for its evaluator."""
+
 POLL = 60
 """Seconds between checks for a chunk's simulations."""
 
@@ -499,9 +504,11 @@ def init_worker(
     univariate: float = ft.UNIVARIATE_SHARE,
     draws: int | None = None,
     subset_seed: int = 0,
+    grid: str = ft.DESIGN,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     global DRAWS_PER_PASS, SUBSET_SEED
+    ft.use_design(grid)
     ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
     ft.UNIVARIATE_SHARE = univariate
     DRAWS_PER_PASS, SUBSET_SEED = draws, subset_seed
@@ -769,6 +776,115 @@ class ByLength:
             yield self._build_batch(indices)
 
 
+def nowcast_steps(block: dict) -> int:
+    """Return a block's nowcast steps, from its start to the cut-off.
+
+    A block starts $D$ steps before the release's cut-off, where $D$ is
+    its release lag, and each of its places has one lag series for each
+    of those steps, so $D$ is its lag series over its places.
+    """
+    places = len(block.get("places", ())) or int(block["n_targets"])
+    return int(block["n_covariates"]) // places
+
+
+class _LossSplit:
+    """Chronos-2's loss, then its parts over the nowcast and forecast steps.
+
+    While open, each loss Chronos-2 computes is computed twice more, with
+    the targets masked to the steps before `steps[row]` and then from
+    them. The loss is a mean over every prediction step, so the parts sum
+    to it, and the loss itself is computed as before.
+    """
+
+    def __init__(self) -> None:
+        self.steps = None
+        self.parts: dict[str, float] = {}
+
+    def __enter__(self):
+        import torch
+        from chronos.chronos2.model import Chronos2Model
+
+        self.original = original = Chronos2Model._compute_loss
+
+        def compute(model, **kwargs):
+            loss = original(model, **kwargs)
+            if self.steps is None:
+                return loss
+            target = kwargs["future_target"]
+            mask = kwargs["future_target_mask"]
+            mask = ~torch.isnan(target) if mask is None else mask > 0
+            at = torch.arange(target.shape[-1], device=mask.device)
+            steps = torch.as_tensor(self.steps, device=mask.device)
+            now = at[None, :] < steps[:, None]
+            for part, keep in (("nowcast", now), ("forecast", ~now)):
+                kwargs["future_target_mask"] = (mask & keep).float()
+                self.parts[part] = float(original(model, **kwargs))
+            return loss
+
+        Chronos2Model._compute_loss = compute
+        return self
+
+    def __exit__(self, *exc) -> None:
+        from chronos.chronos2.model import Chronos2Model
+
+        Chronos2Model._compute_loss = self.original
+
+
+def held_out_parts(
+    model, blocks: list[dict], batch_size: int
+) -> dict[str, float]:
+    """Return the mean quantile loss of a model on blocks, and its parts.
+
+    `loss` is `held_out_loss`; `nowcast` and `forecast` are its parts
+    over the steps to each block's cut-off (`nowcast_steps`) and after
+    it, which sum to it.
+    """
+    import torch
+    from chronos.chronos2.dataset import DatasetMode
+    from chronos.chronos2.model import Chronos2Model
+
+    data = ByLength(
+        blocks, batch_size, DatasetMode.VALIDATION, series_bias.has_bias(model)
+    )
+    accepted = inspect.signature(Chronos2Model.forward).parameters
+    training = model.training
+    model.eval()
+    losses: dict[str, list[float]] = {"loss": [], "nowcast": [], "forecast": []}
+    weights = []
+    with torch.no_grad(), _LossSplit() as split:
+        for indices in data.indices():
+            batch = data._build_batch(indices)
+            split.steps = np.concatenate(
+                [
+                    np.full(
+                        int(blocks[i]["context"].shape[0]),
+                        nowcast_steps(blocks[i]),
+                    )
+                    for i in indices
+                ]
+            )
+            if len(split.steps) != len(batch["context"]):
+                raise ValueError("a batch's rows are not its blocks' rows")
+            losses["loss"].append(float(forward(model, batch, accepted).loss))
+            for part in ("nowcast", "forecast"):
+                losses[part].append(split.parts[part])
+            weights.append(len(batch["context"]))
+    model.train(training)
+    return {k: float(np.average(v, weights=weights)) for k, v in losses.items()}
+
+
+def loss_parts(name: str, parts: dict[str, float]) -> dict[str, float]:
+    """Return a loss's nowcast and forecast parts as `<name>_<part>`."""
+    return {f"{name}_{k}": parts[k] for k in ("nowcast", "forecast")}
+
+
+def _described(parts: dict[str, float]) -> str:
+    """Describe a loss's nowcast and forecast parts for the log."""
+    return (
+        f" (nowcast {parts['nowcast']:.4f}, forecast {parts['forecast']:.4f})"
+    )
+
+
 def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
     """Return the mean quantile loss of a Chronos-2 model on blocks."""
     import torch
@@ -895,20 +1011,26 @@ def accumulate(indices: list[int], backward, zero, skip) -> float:
     """Return a batch's loss, accumulating its gradients by `backward`.
 
     The gradients are clear when it starts (`finite_step`). If memory runs
-    out, they are cleared (`zero`) and the batch is run again in halves,
-    and so on; a single block that still does not fit is left out
-    (`skip`). Every other block is used once.
+    out, they are cleared and the memory freed (`zero`) and the batch is
+    run again in halves, and so on. A single block that runs out is run
+    once more, in case the memory was held for a moment by another
+    process, and if it still does not fit it is left out (`skip`). Every
+    other block is used once, and the blocks used share the gradient as
+    a batch of them alone would. A batch with every block left out
+    returns nan.
     """
     parts = [indices]
+    retried: set = set()
     retry = False
     while True:
         if retry:
             zero()
         retry = True
         values, sizes = [], []
+        total = sum(len(p) for p in parts)
         try:
             for part in parts:
-                values.append(backward(part, len(part) / len(indices)))
+                values.append(backward(part, len(part) / total))
                 sizes.append(len(part))
             return (
                 float(np.average(values, weights=sizes)) if values else np.nan
@@ -916,7 +1038,9 @@ def accumulate(indices: list[int], backward, zero, skip) -> float:
         except RuntimeError as error:
             if "out of memory" not in str(error):
                 raise
-            if len(part) == 1:
+            if len(part) == 1 and part[0] not in retried:
+                retried.add(part[0])
+            elif len(part) == 1:
                 skip(part[0])
                 parts = [p for p in parts if p is not part]
             else:
@@ -1179,7 +1303,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     # Sources to train on: weekly, daily, and 3-day blocks summed from the
     # daily triangle; one of them trains an adapter for it alone.
-    parser.add_argument("--sources", nargs="+", default=list(ft.SOURCES))
+    # Every layout of the grid's design (`ft.DESIGNS`) by default.
+    parser.add_argument("--sources", nargs="+")
     # Draws of each simulation this pass trains on, all 16 snapshots
     # each, picked by --subset-seed; all draws if not given.
     parser.add_argument("--draws-per-simulation", type=int)
@@ -1219,9 +1344,49 @@ def build_parser() -> argparse.ArgumentParser:
     # Steps between held-out evaluations: the monitor, and by source on
     # a multiple of its steps. They only score, so the steps trained and
     # the settings hash are the same whatever they are.
+    # Evaluate in the trainer (local) or leave adapter snapshots for
+    # scripts/finetune_evaluate.py to score elsewhere (offload). Training
+    # and the settings hash are the same either way.
+    parser.add_argument("--eval", choices=EVAL_MODES, default="local")
     parser.add_argument("--eval-every", type=int, default=ft.EVAL_EVERY)
     parser.add_argument("--by-source-every", type=int, default=BY_SOURCE_EVERY)
     return parser
+
+
+def check_offload(mode: str, stop_from: int, outbreaks: int) -> None:
+    """Raise if evaluation is offloaded while early stopping can act.
+
+    Stopping reads each checkpoint's held-out loss, which an offloaded
+    run does not compute.
+    """
+    if mode == "offload" and stop_from <= outbreaks:
+        raise ValueError(
+            f"--eval offload needs --stop-from above --outbreaks "
+            f"({stop_from} <= {outbreaks}): stopping reads held-out loss"
+        )
+
+
+def save_snapshot(model, where: Path, request: dict) -> None:
+    """Save the adapter (and series bias) and what to evaluate on it.
+
+    For `scripts/finetune_evaluate.py`. Written beside `where` and then
+    moved into place, so an evaluator never reads part of one. Reading
+    the weights changes nothing the training uses.
+    """
+    tmp = where.with_name(where.name + ".tmp")
+    shutil.rmtree(tmp, ignore_errors=True)
+    model.save_pretrained(tmp / "adapter")
+    (tmp / "request.json").write_text(json.dumps(request))
+    shutil.rmtree(where, ignore_errors=True)
+    tmp.rename(where)
+
+
+def save_blocks(blocks: list[dict], path: Path) -> None:
+    """Save the held-out blocks, so an evaluator scores exactly these."""
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("wb") as f:
+        pickle.dump(blocks, f, protocol=pickle.HIGHEST_PROTOCOL)
+    tmp.rename(path)
 
 
 def check_cadence(eval_every: int, by_source_every: int) -> None:
@@ -1246,7 +1411,9 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
     CHUNK = args.chunk
-    ft.SOURCES = tuple(args.sources)
+    # The grid picks the block design; grids before r6 keep r5's blocks.
+    ft.use_design(args.grid)
+    ft.SOURCES = tuple(args.sources or ft.SOURCE_SHARES)
     ft.check_sources(ft.SOURCES)
     ft.check_package(Path(__file__).parents[1])
     ft.UNIVARIATE_SHARE = args.univariate_share
@@ -1271,8 +1438,14 @@ def main() -> None:
         parser.error("give one of --train-seeds and --seed-list")
     try:
         check_cadence(args.eval_every, args.by_source_every)
+        check_offload(args.eval, args.stop_from, args.outbreaks)
     except ValueError as error:
         parser.error(str(error))
+    # A release carries the held-out losses, which an offloaded run's
+    # checkpoint gets later (the workflow's publish rule).
+    if args.eval == "offload" and args.publish:
+        parser.error("--eval offload publishes through the workflow")
+    offload = args.eval == "offload"
 
     def training_seeds() -> range | list[int]:
         if args.seed_list is not None:
@@ -1314,12 +1487,15 @@ def main() -> None:
             ft.UNIVARIATE_SHARE,
             DRAWS_PER_PASS,
             SUBSET_SEED,
+            args.grid,
         ),
     )
     held_pairs, empty = cut_in_workers(
         pool, sim_dir, held, args.seed, k, args.cut_workers
     )
     val = [b for _, b in held_pairs]
+    if offload:
+        save_blocks(val, out / HELD_OUT_BLOCKS)
     log(
         f"{len(held)} held-out outbreaks, {len(val)} blocks, "
         f"{len(empty)} skipped with no rows"
@@ -1365,6 +1541,7 @@ def main() -> None:
         "univariate_share": ft.UNIVARIATE_SHARE,
         "parent_mix": list(ft.PARENT_MIX),
         "source_shares": ft.SOURCE_SHARES,
+        **({"release_cadences": ft.CADENCES} if ft.DESIGN != "r5" else {}),
         "aggregate_end": ft.AGGREGATE_END,
         **(
             {
@@ -1439,9 +1616,28 @@ def main() -> None:
     seen = {"blocks": 0, "series": 0}
     losses: list[float] = []
     skipped: list[dict] = []
-    if state is None:
+
+    def request(kinds: list[str], **extra) -> dict:
+        """Return what an offloaded evaluation of the model now scores."""
+        return {
+            "step": step,
+            "kinds": kinds,
+            "batch_size": args.batch_size,
+            "n_validation": len(val),
+            **extra,
+        }
+
+    if state is None and offload:
         consumed.write_text("")
-        start_loss = held_out_loss(model, val, args.batch_size)
+        step = 0
+        start_loss = None
+        history = [{"step": 0}]
+        save_snapshot(model, out / "evals" / "step-0000000", request(["start"]))
+        log("held-out loss at the start left to the evaluator")
+    elif state is None:
+        consumed.write_text("")
+        start_parts = held_out_parts(model, val, args.batch_size)
+        start_loss = start_parts["loss"]
         by_level = held_out_by_level(model, val, LEVEL_BLOCKS)
         by_source = held_out_by_source(
             model, val, args.batch_size, ft.EVAL_BLOCKS
@@ -1450,12 +1646,14 @@ def main() -> None:
             {
                 "step": 0,
                 "held_out_loss": start_loss,
+                **loss_parts("held_out_loss", start_parts),
                 "by_level": by_level,
                 "by_source": by_source,
             }
         ]
         log(
-            f"held-out loss at the start {start_loss:.4f}; first "
+            f"held-out loss at the start {start_loss:.4f}"
+            f"{_described(start_parts)}; first "
             f"{ft.EVAL_BLOCKS} blocks by source {_by_source(by_source)}"
         )
     else:
@@ -1613,7 +1811,15 @@ def main() -> None:
             optimiser.zero_grad()
             value = accumulate(list(indices), backward, zero, skip)
             if not finite_step(params, optimiser, value):
-                log(f"step {step + 1}: no update (loss {value})")
+                left_out = sum(s["step"] == step + 1 for s in skipped)
+                why = (
+                    "every block too large for memory"
+                    if left_out == len(indices)
+                    else f"loss {value}"
+                )
+                # The step still counts, so the schedule, the evaluation
+                # steps and consumed.txt keep their step numbers.
+                log(f"step {step + 1}: no update ({why})")
             # Batches differ in shape, so cached buffers pile up unless they
             # are freed every step.
             free_memory()
@@ -1634,12 +1840,37 @@ def main() -> None:
                 report(
                     stage="training", step=step, outbreaks=done, gpu=memory()
                 )
-            if step % args.eval_every == 0:
+            if step % args.eval_every == 0 and offload:
                 since = time.perf_counter()
-                monitor = held_out_loss(
+                kinds = ["monitor"]
+                if step % args.by_source_every == 0:
+                    kinds.append("by_source")
+                save_snapshot(
+                    model, out / "evals" / f"step-{step:07d}", request(kinds)
+                )
+                entry = {"step": step, "lr": group_rates(optimiser)}
+                bias = bias_summary(model)
+                if bias:
+                    entry["bias"] = bias
+                split["eval_s"] += time.perf_counter() - since
+                history.append(entry)
+                log(
+                    f"step {step}: loss {value:.4f}, held-out "
+                    f"({', '.join(kinds)}) left to the evaluator, "
+                    f"{time.perf_counter() - t0:.0f} s"
+                )
+                (out / "history.json").write_text(json.dumps(history))
+            elif step % args.eval_every == 0:
+                since = time.perf_counter()
+                parts = held_out_parts(
                     model, val[: ft.EVAL_BLOCKS], args.batch_size
                 )
-                entry = {"step": step, "eval_loss": monitor}
+                monitor = parts["loss"]
+                entry = {
+                    "step": step,
+                    "eval_loss": monitor,
+                    **loss_parts("eval_loss", parts),
+                }
                 described = ""
                 if step % args.by_source_every == 0:
                     entry["by_source"] = held_out_by_source(
@@ -1657,7 +1888,8 @@ def main() -> None:
                 history.append(entry)
                 log(
                     f"step {step}: loss {value:.4f}, held-out "
-                    f"(first {ft.EVAL_BLOCKS} blocks) {monitor:.4f}, "
+                    f"(first {ft.EVAL_BLOCKS} blocks) {monitor:.4f}"
+                    f"{_described(parts)}, "
                     f"{described}{time.perf_counter() - t0:.0f} s; {memory()}"
                 )
                 (out / "history.json").write_text(json.dumps(history))
@@ -1679,6 +1911,9 @@ def main() -> None:
             parents = seen.setdefault("parents", {})
             kind = block.get("parent", "exact")
             parents[kind] = parents.get(kind, 0) + 1
+            cadences = seen.setdefault("cadences", {})
+            cell = f"{block['source']}:{block['cadence']}"
+            cadences[cell] = cadences.get(cell, 0) + 1
         # Blocks of strata with no cases by their cut are not laid out.
         mix["empty"] = mix.get("empty", 0) + len(empty)
         if done in prefixes:
@@ -1700,6 +1935,11 @@ def main() -> None:
                 "blocks": seen["blocks"],
                 "series": seen["series"],
                 "level_mix": seen.get("mix", {}),
+                **(
+                    {"cadence_mix": seen.get("cadences", {})}
+                    if ft.DESIGN != "r5"
+                    else {}
+                ),
                 "tokens": seen.get("tokens", 0),
                 "skipped_blocks": skipped,
                 "memory_gb": args.memory_gb,
@@ -1710,57 +1950,81 @@ def main() -> None:
             # checkpoint is rebuilt from it to the same hash.
             settings["code_commit"] = commit
             settings["device"] = device
-            settings["held_out_loss_start"] = start_loss
-            settings["held_out_loss"] = held_out_loss(
-                model, val, args.batch_size
-            )
-            if args.real_validation:
-                real = real_validation
-                settings["real_validation_sha256"] = ft._sha256(
-                    args.real_validation
+            if offload:
+                # The evaluator scores the checkpoint's adapter.
+                if args.real_validation:
+                    settings["real_validation_sha256"] = ft._sha256(
+                        args.real_validation
+                    )
+                settings["seconds"] = time.perf_counter() - t0
+                (where / "settings.json").write_text(
+                    json.dumps(settings, indent=1)
                 )
-                settings["real_validation_loss"] = held_out_loss(
-                    model, real, args.batch_size
+                history.append({"step": step, "n_outbreaks": done, "hash": key})
+                (out / "history.json").write_text(json.dumps(history))
+                log(
+                    f"checkpoint n{done}: hash {key}, held-out loss left to "
+                    f"the evaluator; {memory()}"
                 )
-            settings["held_out_loss_by_level"] = held_out_by_level(
-                model, val, LEVEL_BLOCKS
-            )
-            settings["held_out_loss_by_source"] = held_out_by_source(
-                model, val, args.batch_size
-            )
-            settings["seconds"] = time.perf_counter() - t0
-            (where / "settings.json").write_text(json.dumps(settings, indent=1))
-            history.append(
-                {
-                    "step": step,
-                    "n_outbreaks": done,
-                    "held_out_loss": settings["held_out_loss"],
-                    "hash": key,
-                }
-            )
-            (out / "history.json").write_text(json.dumps(history))
-            log(
-                f"checkpoint n{done}: hash {key}, held-out loss "
-                f"{settings['held_out_loss']:.4f} (start {start_loss:.4f}); "
-                f"{memory()}"
-            )
-            report(last_checkpoint=f"n{done} {key}")
-            # A checkpoint whose hash does not recompute from its commit
-            # is kept but not published.
-            mismatch = finetune_verify.problems(where)
-            if mismatch:
-                log(f"n{done} not published: {'; '.join(mismatch)}")
-            elif args.publish:
-                # Bias checkpoints are released apart (`release_tag`).
-                spec = f"{SLOTS_PREFIX}{key}" if args.series_bias else key
-                publish(where, spec)
-                report(last_release=release_tag(spec))
-            # From `stop_from` on, go on only while the last doubling cut
-            # held-out loss by more than `min_gain`.
-            losses.append(settings["held_out_loss"])
-            if should_stop(losses, done, args.stop_from, args.min_gain):
-                log(f"held-out loss gained under {args.min_gain:.0%}: stop")
-                break
+                report(last_checkpoint=f"n{done} {key}")
+                mismatch = finetune_verify.problems(where)
+                if mismatch:
+                    log(f"n{done} does not verify: {'; '.join(mismatch)}")
+            else:
+                settings["held_out_loss_start"] = start_loss
+                parts = held_out_parts(model, val, args.batch_size)
+                settings["held_out_loss"] = parts["loss"]
+                settings |= loss_parts("held_out_loss", parts)
+                if args.real_validation:
+                    real = real_validation
+                    settings["real_validation_sha256"] = ft._sha256(
+                        args.real_validation
+                    )
+                    real_parts = held_out_parts(model, real, args.batch_size)
+                    settings["real_validation_loss"] = real_parts["loss"]
+                    settings |= loss_parts("real_validation_loss", real_parts)
+                settings["held_out_loss_by_level"] = held_out_by_level(
+                    model, val, LEVEL_BLOCKS
+                )
+                settings["held_out_loss_by_source"] = held_out_by_source(
+                    model, val, args.batch_size
+                )
+                settings["seconds"] = time.perf_counter() - t0
+                (where / "settings.json").write_text(
+                    json.dumps(settings, indent=1)
+                )
+                history.append(
+                    {
+                        "step": step,
+                        "n_outbreaks": done,
+                        "held_out_loss": settings["held_out_loss"],
+                        **loss_parts("held_out_loss", parts),
+                        "hash": key,
+                    }
+                )
+                (out / "history.json").write_text(json.dumps(history))
+                log(
+                    f"checkpoint n{done}: hash {key}, held-out loss "
+                    f"{settings['held_out_loss']:.4f}{_described(parts)} "
+                    f"(start {start_loss:.4f}); {memory()}"
+                )
+                report(last_checkpoint=f"n{done} {key}")
+                # A checkpoint whose hash does not recompute from its commit
+                # is kept but not published.
+                mismatch = finetune_verify.problems(where)
+                if mismatch:
+                    log(f"n{done} not published: {'; '.join(mismatch)}")
+                elif args.publish:
+                    # Bias checkpoints are released apart (`release_tag`).
+                    spec = f"{SLOTS_PREFIX}{key}" if args.series_bias else key
+                    publish(where, spec)
+                    report(last_release=release_tag(spec))
+                # From `stop_from` on, go on only while the last doubling cut
+                # held-out loss by more than `min_gain`.
+                losses.append(settings["held_out_loss"])
+                if should_stop(losses, done, args.stop_from, args.min_gain):
+                    log(f"held-out loss gained under {args.min_gain:.0%}: stop")
+                    break
         split["eval_s"] += time.perf_counter() - tick
         log(
             "chunk time: "
