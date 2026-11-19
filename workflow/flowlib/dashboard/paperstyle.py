@@ -28,6 +28,11 @@ def model_colour(model: str) -> str:
     return style.model_style(model, [model])[0]
 
 
+def model_dash(model: str) -> str:
+    """Return a model's line style in the paper figures (`solid`, ...)."""
+    return labels.MODEL_STYLES.get(model, ("", "solid"))[1]
+
+
 def model_label(model: str) -> str:
     """Return a model's display name (`labels.model_label`)."""
     return labels.model_label(model)
@@ -38,6 +43,15 @@ WIS_PARTS: tuple[str, ...] = tuple(scores.WIS_PARTS)
 
 INK_TEXT: str = style.INK["text"]
 """The paper's text ink, whose shades key the parts in a legend."""
+
+
+WIS_STACK: tuple[str, ...] = tuple(labels.WIS_PART_STACK)
+"""WIS parts in the order they stack, from the bottom or left."""
+
+
+def part_fill(part: str) -> str:
+    """Return a WIS part's fill: `solid`, `hatch-up` or `hatch-down`."""
+    return str(labels.WIS_PART_FILLS[part])
 
 
 def part_share(part: str) -> float:

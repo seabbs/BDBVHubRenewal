@@ -451,3 +451,17 @@ def test_checkpoint_tables_have_no_real_data_validation_column(tmp_path):
     # Its loss is on BDBV pseudo-origins, held out (Sam 11:20).
     out = page.build(_machine(tmp_path))
     assert "real-val" not in out
+
+
+def test_wis_parts_are_told_apart_by_fill_and_stack_in_one_order(tmp_path):
+    # Sam 12:00: dispersion solid, over- and underprediction hatched the
+    # two ways, stacked underprediction, dispersion, overprediction.
+    sel = page.sections(_machine(tmp_path))["nowcasts"]
+    data = json.loads(sel.split("id=gdata>", 1)[1].split("</script>", 1)[0])
+    fills = dict(data["parts"])
+    assert fills == {
+        "dispersion": "solid",
+        "overprediction": "hatch-up",
+        "underprediction": "hatch-down",
+    }
+    assert data["stack"] == ["underprediction", "dispersion", "overprediction"]

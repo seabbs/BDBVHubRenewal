@@ -192,3 +192,12 @@ def test_runs_take_the_shared_name_and_colour_whatever_their_label(tmp_path):
     assert several[2].colour == blue
     assert {several[0].colour, several[1].colour} <= set(context.RUN_SHADES)
     assert several[0].colour != several[1].colour
+
+
+def test_references_take_their_line_style_from_the_shared_map():
+    # Sam 11:55: zero-shot dotted, complete data dashed, as in the paper.
+    from flowlib.dashboard import paperstyle
+
+    assert paperstyle.model_dash("fm_chronos_daily_ragged") == "dotted"
+    assert paperstyle.model_dash("fm_chronos_daily_complete") == "dashed"
+    assert paperstyle.model_dash("fm_chronos_daily_ragged_ft") == "solid"

@@ -134,7 +134,8 @@ def test_chronos_variants_have_distinct_styles(family) -> None:
     # The daily models are the main figures' and differ in colour; the
     # weekly ones (SI only) share one.
     assert len({c for c, _ in styles}) == (3 if family == "daily" else 1)
-    assert [d for _, d in styles] == ["dotted", "dashed", "solid"]
+    # Complete data dashed, with delays dotted, fine-tuned solid (Sam 11:55).
+    assert [d for _, d in styles] == ["dashed", "dotted", "solid"]
     # Bars are filled with the model's colour, never hatched (Sam, #367).
     bars = [bar_style(n, []) for n in names]
     assert all("hatch" not in b for b in bars)

@@ -178,3 +178,49 @@ def test_main_models_stand_out_on_light_and_dark(theme) -> None:
     for model in MAIN:
         colour = MODEL_STYLES[model][0]
         assert _contrast(colour, _BACKGROUNDS[theme]) >= 3, (model, colour)
+
+
+def _oklab(rgb: np.ndarray) -> np.ndarray:
+    m1 = np.array(
+        [
+            [0.4122214708, 0.5363325363, 0.0514459929],
+            [0.2119034982, 0.6806995451, 0.1073969566],
+            [0.0883024619, 0.2817188376, 0.6299787005],
+        ]
+    )
+    m2 = np.array(
+        [
+            [0.2104542553, 0.7936177850, -0.0040720468],
+            [1.9779984951, -2.4285922050, 0.4505937099],
+            [0.0259040371, 0.7827717662, -0.8086757660],
+        ]
+    )
+    return m2 @ np.cbrt(m1 @ np.clip(rgb, 0, 1))
+
+
+def test_zero_shots_meet_the_palette_validator_against_the_main_models():
+    # Sam 11:55: Zero-shot (green) and Zero-shot complete data (purple) are
+    # clearly distinct from Fine-tuned (delays) and Random walk nowcast:
+    # the dataviz validator's thresholds, OKLab Delta E x 100 of at least 8
+    # under simulated deuteranopia and protanopia and 15 under normal
+    # vision, for every pair of the four.
+    models = [
+        "fm_chronos_daily_ragged_ft",
+        "randomwalknowcast",
+        "fm_chronos_daily_ragged",
+        "fm_chronos_daily_complete",
+    ]
+    colours = [MODEL_STYLES[m][0] for m in models]
+    for vision, floor in (("normal", 15), ("deutan", 8), ("protan", 8)):
+        lab = [_oklab(np.array(_CVD[vision]) @ _linear(c)) for c in colours]
+        worst = min(
+            100 * float(np.linalg.norm(lab[i] - lab[j]))
+            for i in range(4)
+            for j in range(i + 1, 4)
+        )
+        assert worst >= floor, (vision, worst)
+    # Line styles differ too: complete data dashed, delays dotted.
+    dashes = [MODEL_STYLES[m][1] for m in models[::2]] + [
+        MODEL_STYLES["fm_chronos_daily_complete"][1]
+    ]
+    assert dashes == ["solid", "dotted", "dashed"]
