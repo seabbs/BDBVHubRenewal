@@ -723,6 +723,56 @@ def test_a_loss_horizon_stops_blocks_days_after_the_cut_off(
     assert shorter
 
 
+def _raw(target_past, target_after, lags):
+    """A raw block of one place: start 3, nowcast 2, two lag series."""
+    lag = np.array(lags, dtype=float)
+    target = np.array([[*target_past, *target_after]], dtype=float)
+    return {
+        "context": np.concatenate([target, lag]),
+        "n_targets": 1,
+        "start": len(target_past),
+        "nowcast": 2,
+    }
+
+
+def test_a_block_with_no_recent_reports_is_quiet_whatever_follows():
+    from finetune_chronos import quiet
+
+    nan = np.nan
+    # Daily steps; the cut-off is step 4 (start 3 + nowcast 2 - 1).
+    no_reports = [[0, 0, 0, 0, 0, nan, nan], [0, 0, 0, 0, nan, nan, nan]]
+    # Cases after the cut-off, in the target, do not count.
+    assert quiet(_raw([0, 0, 0], [0, 0, 9, 9], no_reports), 1, 28)
+    # A case reported by the cut-off, in a lag series, does.
+    late = [[0, 0, 0, 0, 1, nan, nan], [0, 0, 0, 0, nan, nan, nan]]
+    assert not quiet(_raw([0, 0, 0], [0, 0, 0, 0], late), 1, 28)
+    # So does one in the targets' context within the window.
+    assert not quiet(_raw([0, 0, 2], [0, 0, 0, 0], no_reports), 1, 28)
+    # But not one before the window.
+    assert quiet(_raw([2, 0, 0], [0, 0, 0, 0], no_reports), 1, 3)
+    # The window is in days: 35 days of 7-day steps reach back to step 0.
+    assert not quiet(_raw([2, 0, 0], [0, 0, 0, 0], no_reports), 7, 35)
+    assert quiet(_raw([2, 0, 0], [0, 0, 0, 0], no_reports), 7, 28)
+
+
+def test_quiet_cut_offs_are_not_cut_when_set(tmp_path, monkeypatch):
+    import finetune_chronos
+    from finetune_chronos import CONTEXT, DAYS_PER_STEP
+    from finetune_stream import cut
+
+    ids = _sim_dir(tmp_path)
+    monkeypatch.setattr(finetune_chronos, "QUIET_DAYS", 28)
+    blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
+    assert blocks
+    for b in blocks:
+        x, t, now = b["context"], b["n_targets"], b["nowcast"]
+        k = -(-28 // DAYS_PER_STEP[b["source"]])
+        cut_at = CONTEXT + now
+        lo = cut_at - k
+        reported = np.nansum(x[:t, lo:CONTEXT]) + np.nansum(x[t:, lo:cut_at])
+        assert reported > 0
+
+
 def test_batches_share_one_prediction_length():
     from finetune_chronos import plan_by_length
 
