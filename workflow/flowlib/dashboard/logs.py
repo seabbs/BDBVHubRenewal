@@ -233,16 +233,12 @@ def checkpoints(folder: Path | str) -> list[tuple[str, dict, float | None]]:
     for d in sorted(Path(folder).glob("train/n*"), key=lambda p: _size(p.name)):
         s = CACHE.get(d / "settings.json")
         if isinstance(s, dict):
-            # An offloaded checkpoint's held-out losses, from its sidecar.
-            side = CACHE.get(d / SIDECAR) if (d / SIDECAR).exists() else None
+            side = CACHE.get(d / SIDECAR)
             s = with_sidecar(s, side if isinstance(side, dict) else None)
+            latest = d / SIDECAR if side else d / "settings.json"
             try:
-                mtime = max(
-                    p.stat().st_mtime
-                    for p in (d / "settings.json", d / SIDECAR)
-                    if p.exists()
-                )
-            except (OSError, ValueError):
+                mtime = latest.stat().st_mtime
+            except OSError:
                 mtime = None
             out.append((d.name, s, mtime))
     return out

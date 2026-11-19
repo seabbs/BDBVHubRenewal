@@ -11,6 +11,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Final
 
+HELD_OUT_BLOCKS: Final = "held-out-blocks.pkl"
+"""The held-out blocks an offloaded run saves for its evaluator; must
+match `HELD_OUT_BLOCKS` in scripts/finetune_stream.py (tested)."""
+
 SIDECAR: Final = "held-out.json"
 """The sidecar's file name, beside `settings.json` and in the release."""
 

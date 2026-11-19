@@ -59,7 +59,8 @@ def batch_priority(seed: int, base: float, seed_base: int) -> float:
 
 EVAL_MODES = ("local", "offload")
 """Where the trainer's held-out evaluation runs: in the trainer, or in the
-`evaluate` rules on whichever machine `WORKER_GROUPS` gives that group."""
+`evaluate` rules on whichever machine `WORKER_GROUPS` gives that group.
+Must match `EVAL_MODES` in scripts/finetune_stream.py (tested)."""
 
 
 def check_eval(mode: str) -> None:

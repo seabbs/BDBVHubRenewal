@@ -163,7 +163,7 @@ def test_a_batch_s_priority_stays_between_the_trainer_and_scoring():
         assert 15 <= segments.batch_priority(seed, 15, 30000) < 16
 
 
-def test_offloaded_evaluation_is_allowed_now_rules_score_it():
+def test_check_eval_accepts_local_and_offload_only():
     segments.check_eval("local")
     segments.check_eval("offload")
     with pytest.raises(ValueError, match="elsewhere"):

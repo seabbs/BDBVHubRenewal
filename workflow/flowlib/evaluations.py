@@ -21,19 +21,13 @@ from typing import Any
 from bdbvhubrenewal.evaluation.sidecar import RESULT_ONLY, SIDECAR, with_sidecar
 
 __all__ = [
-    "HELD_OUT_BLOCKS",
-    "RESULT_ONLY",
-    "SIDECAR",
     "checkpoint_settings",
     "merged_history",
     "pending",
     "start_loss",
+    "step_of",
     "step_results",
 ]
-
-HELD_OUT_BLOCKS = "held-out-blocks.pkl"
-"""The held-out blocks an offloaded run saves for its evaluator
-(`finetune_stream.HELD_OUT_BLOCKS`)."""
 
 
 def _read(path: Path) -> Any:
@@ -61,7 +55,7 @@ def step_results(train: Path | str) -> dict[int, dict[str, Any]]:
         got = _read(path)
         if not isinstance(got, dict):
             continue
-        step = got.get("step", int(path.stem.removeprefix("step-")))
+        step = got.get("step", step_of(path.with_suffix("")))
         out[int(step)] = {k: v for k, v in got.items() if k not in RESULT_ONLY}
     return out
 
@@ -69,12 +63,7 @@ def step_results(train: Path | str) -> dict[int, dict[str, Any]]:
 def merged_history(
     history: Sequence[Mapping[str, Any]], train: Path | str
 ) -> list[dict[str, Any]]:
-    """Return the trainer's history with each step's offloaded losses.
-
-    A step's result fills that step's evaluation entry (not a checkpoint's,
-    which carries a `hash`), or is added as an entry if the trainer logged
-    none; the trainer's own fields are kept.
-    """
+    """Return the trainer's history with each step's offloaded losses."""
     results = step_results(train)
     out = []
     for entry in history:
@@ -88,7 +77,7 @@ def merged_history(
 
 def step_of(snapshot: Path) -> int:
     """Return a step snapshot's step, from its name `step-<k>`."""
-    return int(snapshot.name.removeprefix("step-").removesuffix(".json"))
+    return int(snapshot.name.removeprefix("step-"))
 
 
 def pending(
@@ -117,8 +106,11 @@ def start_loss(train: Path | str) -> float | None:
     got = _read(train / "evals" / "step-0000000.json")
     if isinstance(got, dict) and "held_out_loss" in got:
         return float(got["held_out_loss"])
-    for settings in sorted(train.glob("n*/settings.json")):
-        s = _read(settings)
+    # A checkpoint evaluated in the trainer, or an earlier sidecar.
+    for path in sorted(
+        [*train.glob("n*/settings.json"), *train.glob(f"n*/{SIDECAR}")]
+    ):
+        s = _read(path)
         if isinstance(s, dict) and s.get("held_out_loss_start") is not None:
             return float(s["held_out_loss_start"])
     return None

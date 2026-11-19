@@ -91,6 +91,15 @@ def test_start_loss_comes_from_step_0_else_an_earlier_checkpoint(tmp_path):
     assert evaluations.start_loss(train) == pytest.approx(0.40)
 
 
+def test_start_loss_falls_back_to_an_earlier_sidecar(tmp_path):
+    # An offloaded trainer's own settings never hold it; the first
+    # segment's sidecar does.
+    train = tmp_path / "train"
+    write(train / "n250" / "settings.json", {"hash": "h"})
+    write(train / "n250" / "held-out.json", {"held_out_loss_start": 0.39})
+    assert evaluations.start_loss(train) == pytest.approx(0.39)
+
+
 def test_the_blocks_file_is_the_trainer_s():
     import sys
     from pathlib import Path
@@ -98,5 +107,9 @@ def test_the_blocks_file_is_the_trainer_s():
     pytest.importorskip("torch")
     sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
     import finetune_stream as fs
+    from flowlib import segments
 
-    assert evaluations.HELD_OUT_BLOCKS == fs.HELD_OUT_BLOCKS
+    from bdbvhubrenewal.evaluation import sidecar
+
+    assert sidecar.HELD_OUT_BLOCKS == fs.HELD_OUT_BLOCKS
+    assert segments.EVAL_MODES == fs.EVAL_MODES

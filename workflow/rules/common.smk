@@ -18,6 +18,8 @@ from flowlib import (
     topup,
 )
 
+from bdbvhubrenewal.evaluation.sidecar import HELD_OUT_BLOCKS, SIDECAR
+
 LOCAL = localconfig.read()
 HOST = LOCAL["HOST_NAME"]
 ROUNDS_DIR = f"{LOCAL['ROOT']}/rounds"
@@ -144,7 +146,7 @@ def evaluate_inputs_from(n):
     """Files a checkpoint's evaluation reads that no rule declares."""
     return [
         f"{TRAIN}/n{n}/finetuned-ckpt/",
-        f"{TRAIN}/{evaluations.HELD_OUT_BLOCKS}",
+        f"{TRAIN}/{HELD_OUT_BLOCKS}",
         f"{TRAIN}/evals/step-0000000.json",
         *(f"{TRAIN}/n{p}/settings.json" for p in FT["prefixes"]),
         *([FT["real_validation"]] if FT["real_validation"] else []),
@@ -155,7 +157,7 @@ def offloaded(n):
     """Checkpoint n's held-out sidecar when the run offloads evaluation."""
     if FT["eval"] != "offload":
         return []
-    return f"{TRAIN}/n{n}/{evaluations.SIDECAR}"
+    return f"{TRAIN}/n{n}/{SIDECAR}"
 
 
 PREV = dict((n, p) for p, n in segments.segments(FT["prefixes"]))

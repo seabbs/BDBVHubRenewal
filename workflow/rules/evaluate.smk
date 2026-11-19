@@ -28,7 +28,7 @@ rule evaluate_steps:
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=[
             f"{TRAIN}/evals/",
-            f"{TRAIN}/{evaluations.HELD_OUT_BLOCKS}",
+            f"{TRAIN}/{HELD_OUT_BLOCKS}",
             *([FT["real_validation"]] if FT["real_validation"] else []),
         ],
         copy_back=[f"{TRAIN}/evals/"],
@@ -46,7 +46,7 @@ rule evaluate_checkpoint:
         # Step 0's result, base Chronos-2's loss, is scored with the steps.
         steps=f"{TRAIN}/evals/n{{n}}.done",
     output:
-        f"{TRAIN}/n{{n}}/{evaluations.SIDECAR}",
+        f"{TRAIN}/n{{n}}/{SIDECAR}",
     log:
         f"{TRAIN}/logs/evaluate-checkpoint-n{{n}}.log",
     priority: EVALUATE_PRIORITY
