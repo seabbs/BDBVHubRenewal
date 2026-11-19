@@ -42,6 +42,17 @@ simulate:
   # A batch's memory, and its one retry's (MB).
   mem_mb: 16384
   retry_mem_mb: 20480
+  # The sim QC's fixed plausibility thresholds (scripts/sim_qc.py): a
+  # simulation is excluded if its cases per stratum pass the largest size
+  # the grid's sampling distribution allows (5e5), if weekly cases rise
+  # more than max_weekly_jump-fold in a week with no reporting shock (the
+  # grid caps daily growth at 0.2, about 4-fold a week), or if its mean
+  # reporting delay passes max_mean_delay_days (the grid's mean delay is
+  # at most 21 days).
+  qc:
+    max_cases_per_stratum: 500000
+    max_weekly_jump: 1000
+    max_mean_delay_days: 35
   # Tries of the top-up (target `topup`): each try simulates the cells
   # still missing after the sim QC of the try before.
   topup_tries: 5

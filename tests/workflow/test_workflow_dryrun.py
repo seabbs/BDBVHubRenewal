@@ -925,3 +925,14 @@ def test_r6_release_of_an_r5_round_is_refused(tmp_path):
 def test_r6_simulates_its_held_out_round_20(tmp_path):
     jobs = dry(tmp_path, "simulate", config={"rounds": [20]})
     assert jobs["simulate_batch"] == 40
+
+
+def test_the_sim_qc_checks_fixed_thresholds_from_the_config(tmp_path):
+    # The deterministic check, with simulate.qc's thresholds; no model.
+    blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
+    qc = next(b for b in blocks if re.match(r"(local)?rule sim_qc:", b))
+    assert "scripts/sim_qc.py" in qc
+    assert "--max-cases-per-stratum 500000" in qc
+    assert "--max-weekly-jump 1000" in qc
+    assert "--max-mean-delay-days 35" in qc
+    assert "claude" not in qc
