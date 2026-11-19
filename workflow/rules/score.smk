@@ -16,7 +16,7 @@
 # Chronos-2 block is too large for an 8 GB GPU. They are their own target,
 # `zones`, which refreshes the tables; `score` takes the zone rows cached.
 #
-# Targets: `score`, `zones`, or one unit, <SCORE_CACHE>/germany/<label>.done.
+# Targets: `score`, `zones`, or one unit, <SCORE_CACHE>/germany-days/<label>.done.
 # `land` (opt-in) commits the tables to evidence/ and pushes.
 
 
@@ -93,9 +93,9 @@ rule score_zones:
 
 rule score_germany:
     output:
-        f"{CACHE}/germany/{{label}}.done",
+        f"{CACHE}/germany-days/{{label}}.done",
     log:
-        f"{CACHE}/log/germany-{{label}}.log",
+        f"{CACHE}/log/germany-days-{{label}}.log",
     priority: unit_priority(5)
     conda:
         TOOLS_ENV

@@ -336,7 +336,7 @@ def table_inputs(wc):
     every = [*SC["reference"], *labels]
     return {
         "bdbv": expand(f"{CACHE}/bdbv/{{label}}.done", label=every),
-        "germany": expand(f"{CACHE}/germany/{{label}}.done", label=every),
+        "germany": expand(f"{CACHE}/germany-days/{{label}}.done", label=every),
         "release": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
     }
 
@@ -371,7 +371,7 @@ def slots_labels():
 def main_scores(wc):
     return [
         f"{CACHE}/bdbv/{wc.label}.done",
-        f"{CACHE}/germany/{wc.label}.done",
+        f"{CACHE}/germany-days/{wc.label}.done",
     ]
 
 

@@ -369,3 +369,19 @@ def test_relative_rows_mean_the_wis_components():
         row["dispersion"] + row["overprediction"] + row["underprediction"]
         == 3.0
     )
+
+
+def test_german_units_and_tasks_live_in_their_own_folder(
+    tmp_path: Path,
+) -> None:
+    # Every one of the hub's 29 target days (#398): the 5-day units in
+    # `germany` are not read.
+    assert ck.GERMANY_UNIT == "germany-days"
+    tri = tmp_path / "t.csv"
+    tri.write_text("x")
+    assert ck.german_tasks_dir(tmp_path, tri, 10, 1).parent == (
+        tmp_path / "germany-days"
+    )
+    old = tmp_path / "germany" / "abc"
+    old.mkdir(parents=True)
+    assert ck.germany_rows(tmp_path, ["abc"]).empty

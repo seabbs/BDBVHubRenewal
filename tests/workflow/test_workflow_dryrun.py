@@ -483,7 +483,7 @@ def test_a_checkpoint_released_after_the_tables_is_scored(tmp_path):
     cache = tmp_path / "scores"
     for unit, labels in (
         ("bdbv", ["reference", "slots-aaa"]),
-        ("germany", ["reference", "slots-aaa"]),
+        ("germany-days", ["reference", "slots-aaa"]),
         ("heldout", ["slots-aaa"]),
     ):
         (cache / unit).mkdir(parents=True)
@@ -523,6 +523,17 @@ def test_finished_units_are_kept(tmp_path):
     config = {"score": {"labels": ["aaa"], "data": str(data)}}
     jobs = dry(tmp_path, "score", config=config)
     assert jobs["score_bdbv"] == 1
+
+
+def test_german_units_of_5_target_days_are_rescored(tmp_path):
+    # Units before every target day was scored (#398) are in `germany`:
+    # their stamps do not count, so every label's German unit reruns.
+    old = tmp_path / "scores" / "germany"
+    old.mkdir(parents=True)
+    for label in ("reference", "aaa"):
+        (old / f"{label}.done").write_text("")
+    jobs = dry(tmp_path, "score", config={"score": {"labels": ["aaa"]}})
+    assert jobs["score_germany"] == 2
 
 
 def test_score_runs_no_follow_ups_by_default(tmp_path):
@@ -675,13 +686,13 @@ def _scored(tmp_path):
     data = tmp_path / "target.csv"
     data.write_text("x\n")
     cache = tmp_path / "scores"
-    for study in ("bdbv", "germany", "heldout"):
+    for study in ("bdbv", "germany-days", "heldout"):
         (cache / study).mkdir(parents=True, exist_ok=True)
     stamps = [
         cache / "bdbv" / "reference.done",
-        cache / "germany" / "reference.done",
+        cache / "germany-days" / "reference.done",
         cache / "bdbv" / "aaa.done",
-        cache / "germany" / "aaa.done",
+        cache / "germany-days" / "aaa.done",
         cache / "heldout" / "aaa.done",
     ]
     for f in stamps:

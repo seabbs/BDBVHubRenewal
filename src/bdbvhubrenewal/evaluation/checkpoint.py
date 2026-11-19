@@ -71,6 +71,10 @@ COMPLETE: Final = ("fm_chronos_daily_complete", "fm_chronos_weekly_complete")
 N_DRAWS: Final = 1000
 SCORED_FROM: Final = "2026-11-21"
 """The first scored BDBV round; origins from it are never scored here."""
+GERMANY_UNIT: Final = "germany-days"
+"""The cache folder of the German units, which score every one of the
+hub's 29 target days (#398). The 5-day units before them, in `germany`,
+are left as they are and not read."""
 GERMANY_CHUNK: Final = 20
 """German dates forecast together (`germany_unit`) unless `SCORE_DATES`
 in the environment (local config) says otherwise."""
@@ -579,7 +583,7 @@ def german_tasks_dir(
     fields = [f.name for f in dataclasses.fields(base.ForecastTask)]
     h.update(repr(fields).encode())
     h.update(f"{n_samples}-{seed}".encode())
-    return Path(cache) / "germany" / f"tasks-{h.hexdigest()[:12]}"
+    return Path(cache) / GERMANY_UNIT / f"tasks-{h.hexdigest()[:12]}"
 
 
 def germany_unit(cache: Path, label: str) -> None:
@@ -593,7 +597,7 @@ def germany_unit(cache: Path, label: str) -> None:
     triangle = hub_triangle(path)
     # Built once for every checkpoint, then read back.
     tasks_dir = german_tasks_dir(cache, path, config.n_samples, config.seed)
-    root = cache / "germany" / label
+    root = cache / GERMANY_UNIT / label
     root.mkdir(parents=True, exist_ok=True)
     record_precision(root)
     dates = de.nowcast_dates(config, held_out=False)
@@ -680,7 +684,7 @@ def germany_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
     config = de.load_germany_config("config/germany.toml")
     parts = []
     for label in labels:
-        fc = _cached(cache / "germany" / label)
+        fc = _cached(cache / GERMANY_UNIT / label)
         if fc is None:
             continue
         fc = fc.loc[fc["origin"] < config.split_date]
@@ -699,7 +703,7 @@ def germany_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
         return pd.DataFrame(columns=COLUMNS)
     sc = pd.concat(parts, ignore_index=True).rename(columns={"pool": "level"})
     out = relative(matched(sc, GERMANY_CELL), "germany", ("wis", "log_wis"))
-    return _with_precision(out, cache / "germany", labels)
+    return _with_precision(out, cache / GERMANY_UNIT, labels)
 
 
 def bdbv_rows(

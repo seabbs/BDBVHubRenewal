@@ -13,8 +13,9 @@ The first half is for developing and checking our setup; the second is
 held out for the paper (`nowcast_dates`).
 
 `germany_forecasts` runs our models on the tasks of each nowcast date
-(`bdbvhubrenewal.data.germany.nowcast_tasks`), for the sums ending 0, 7,
-14, 21 and 28 days back (`HORIZONS`), and keeps their quantiles at
+(`bdbvhubrenewal.data.germany.nowcast_tasks`), for the sums ending on
+every day from 0 to 28 days back (`HORIZONS`, one task pair per weekday
+offset), and keeps their quantiles at
 `QUANTILE_LEVELS`: a model's own where it gives them, else those of its
 samples (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
 `team_forecasts` takes the hub teams' submitted quantiles at the same
@@ -30,6 +31,7 @@ made: `randomwalknowcast` on the page, the hub's own baseline in the paper.
 from __future__ import annotations
 
 import datetime as dt
+import gzip
 import json
 import logging
 import pickle
@@ -376,17 +378,21 @@ def _tasks(
     seed: int,
     root: Path | None,
 ) -> list[ForecastTask]:
-    """Return a date's tasks, from the store `root` if it holds them."""
+    """Return a date's tasks, from the store `root` if it holds them.
+
+    The store holds each date's tasks of every offset as a gzip-compressed
+    pickle (level 1: about 40 times smaller, and fast to read).
+    """
     if root is None:
         return nowcast_tasks(triangle, date, n_samples, seed)
-    path = Path(root) / f"{date}.pkl"
+    path = Path(root) / f"{date}.pkl.gz"
     if path.exists():
-        with path.open("rb") as f:
-            return list(pickle.load(f))
+        return list(pickle.loads(gzip.decompress(path.read_bytes())))
     tasks = nowcast_tasks(triangle, date, n_samples, seed)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_bytes(pickle.dumps(tasks, protocol=pickle.HIGHEST_PROTOCOL))
+    raw = pickle.dumps(tasks, protocol=pickle.HIGHEST_PROTOCOL)
+    tmp.write_bytes(gzip.compress(raw, compresslevel=1))
     tmp.rename(path)
     return tasks
 
