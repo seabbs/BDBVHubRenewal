@@ -78,6 +78,8 @@ def test_bias_settings_enter_the_hash_only_when_on():
     assert on["init"] == "zero"
     assert on["learning_rate"] == 1e-3
     assert "nearest" in on["parent_rule"]
+    # A checkpoint states its relations, so runs with others hash apart.
+    assert on["relations"] == ["same", "up", "down"]
 
 
 def test_the_bias_trains_in_its_own_group_at_its_own_rate():
@@ -199,3 +201,24 @@ def test_neither_group_has_weight_decay():
     assert isinstance(opt, torch.optim.AdamW)
     decay = {g["name"]: g["weight_decay"] for g in opt.param_groups}
     assert decay == {"lora": 0.0, "bias": 0.0}
+
+
+def test_a_state_with_other_pairs_is_not_resumed(tmp_path):
+    # A run continues only with the bias it was trained with.
+    other = (series_bias._SAVED_ONLY, *series_bias.PAIRS)
+    model = tiny_model()
+    series_bias.attach(model, other)
+    model = fs.lora_model(model, fs.lora_config(True), None)
+    opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, 1e-3))
+    fs.save_state(tmp_path / "state", model, opt, {"step": 3})
+    model.save_pretrained(tmp_path / "adapter")
+    fresh = tiny_model()
+    series_bias.attach(fresh)
+    peft = fs.lora_model(fresh, fs.lora_config(True), None)
+    opt2 = torch.optim.AdamW(fs.param_groups(peft, 1e-5, 1e-3))
+    with pytest.raises(ValueError, match="code it was trained with"):
+        fs.load_state(tmp_path / "state", peft, opt2)
+    fresh = tiny_model()
+    series_bias.attach(fresh)
+    with pytest.raises(ValueError, match="code it was trained with"):
+        fs.lora_model(fresh, fs.lora_config(True), tmp_path / "adapter")

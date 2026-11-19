@@ -676,8 +676,8 @@ def checkpoint_table(
     den = {"raw": 1, "start": info["full0"], "base": info["bfull"]}[mode]
     by_head = "".join(f"<th>{html.escape(src)}" for src in sources)
     out = [
-        f"<table><tr><th>run<th>ckpt<th>hash<th>{head}<th>held-out "
-        f"start{by_head}<th>saved</tr>"
+        f"<table><tr><th>run<th>ckpt<th>hash<th>{head}<th>nowcast part"
+        f"<th>forecast part<th>held-out start{by_head}<th>saved</tr>"
     ]
     for name, s, mtime in rows:
         by = s.get("held_out_loss_by_source") or {}
@@ -687,6 +687,15 @@ def checkpoint_table(
             name,
             html.escape(str(s.get("hash", ""))),
             _fmt(ho / den if ho and den else None) or "n/a",
+            # The held-out loss's two parts (labels.HORIZON_PARTS), at the
+            # same scale as the loss.
+            *(
+                _fmt(part / den if part is not None and den else None) or "n/a"
+                for part in (
+                    s.get("held_out_loss_nowcast"),
+                    s.get("held_out_loss_forecast"),
+                )
+            ),
             _fmt(s.get("held_out_loss_start")),
             *(_fmt(by.get(src)) or "n/a" for src in sources),
             datetime.fromtimestamp(mtime).strftime("%m-%d %H:%M")
@@ -828,6 +837,11 @@ def nowcasts_section(
                 [p, paperstyle.part_fill(p)] for p in paperstyle.WIS_PARTS
             ],
             "stack": list(paperstyle.WIS_STACK),
+            # The horizon's parts: name, label and fill (labels).
+            "horizon": [
+                [k, labels.HORIZON_PARTS[k], labels.HORIZON_FILLS[k]]
+                for k in labels.HORIZON_PARTS
+            ],
         }
     )
     first = defaults.get("source")

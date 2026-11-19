@@ -1,4 +1,4 @@
-"""The workflow reads machine settings as scripts/local_config.sh does."""
+"""The workflow reads the machine settings from the local config."""
 
 import os
 import subprocess
@@ -8,7 +8,6 @@ import pytest
 from flowlib import localconfig
 
 ROOT = Path(__file__).parents[2]
-SHELL = ROOT / "scripts" / "local_config.sh"
 
 
 def test_with_no_file_everything_is_on_this_machine(tmp_path):
@@ -48,6 +47,49 @@ def test_later_lines_see_earlier_ones_and_quotes_are_dropped(tmp_path):
     )
 
 
+def test_a_line_may_use_a_later_one(tmp_path):
+    path = tmp_path / "local.env"
+    path.write_text("SCORE_CACHE=$ROOT/cache\nRUN=${ROOT}/run\nROOT=/data\n")
+    cfg = localconfig.read(path, {"HOME": str(tmp_path)})
+    assert cfg["SCORE_CACHE"] == "/data/cache"
+    assert cfg["RUN"] == "/data/run"
+
+
+def test_a_line_may_use_a_default(tmp_path):
+    path = tmp_path / "local.env"
+    path.write_text("SCORE_CACHE=$RUN/cache\n")
+    cfg = localconfig.read(path, {"HOME": str(tmp_path)})
+    assert (
+        cfg["SCORE_CACHE"] == f"{tmp_path}/bdbv-rounds/checkpoints/slots/cache"
+    )
+
+
+def test_a_setting_in_the_environment_is_seen_by_the_file(tmp_path):
+    path = tmp_path / "local.env"
+    path.write_text("SCORE_CACHE=$ROOT/cache\nROOT=/data\n")
+    cfg = localconfig.read(path, {"HOME": str(tmp_path), "ROOT": "/env"})
+    assert cfg["ROOT"] == "/env"
+    assert cfg["SCORE_CACHE"] == "/env/cache"
+
+
+def test_a_line_that_uses_itself_takes_the_environment_s_value(tmp_path):
+    # As the shell reads `ROOT=$ROOT/x`: unset, it is empty; set, the
+    # environment wins over the line.
+    path = tmp_path / "local.env"
+    path.write_text("ROOT=$ROOT/x\nPYTHONPATH=$PYTHONPATH:/x\n")
+    env = {"HOME": str(tmp_path), "PYTHONPATH": "/lib"}
+    cfg = localconfig.read(path, env)
+    assert cfg["ROOT"] == "/x"
+    assert cfg["PYTHONPATH"] == "/lib"
+
+
+def test_settings_that_use_each_other_are_an_error(tmp_path):
+    path = tmp_path / "local.env"
+    path.write_text("ROOT=$RUN/x\nRUN=$ROOT/y\n")
+    with pytest.raises(ValueError, match="ROOT"):
+        localconfig.read(path, {"HOME": str(tmp_path)})
+
+
 def test_workflow_paths_default_under_the_rounds_folder(tmp_path):
     path = tmp_path / "local.env"
     path.write_text("ROOT=/data/rounds\n")
@@ -63,33 +105,6 @@ def test_the_path_comes_from_local_config_when_set(tmp_path):
     path.write_text("ROOT=/elsewhere\n")
     env = {"HOME": str(tmp_path), "LOCAL_CONFIG": str(path)}
     assert localconfig.read(None, env)["ROOT"] == "/elsewhere"
-
-
-@pytest.mark.skipif(not SHELL.exists(), reason="needs scripts/local_config.sh")
-def test_same_values_as_the_shell_loader(tmp_path):
-    path = tmp_path / "local.env"
-    path.write_text(
-        "ROOT=$HOME/r\nMAILBOX=${HOME}/m.md\nHOST_NAME=h\nINBOX=i.md\n"
-    )
-    env = {
-        "PATH": os.environ["PATH"],
-        "HOME": str(tmp_path),
-        "LOCAL_CONFIG": str(path),
-    }
-    keys = ("ROOT", "MAILBOX", "HOST_NAME", "INBOX")
-    out = subprocess.run(
-        [
-            "bash",
-            "-c",
-            f'source "{SHELL}"; ' + "; ".join(f'echo "${k}"' for k in keys),
-        ],
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split("\n")
-    cfg = localconfig.read(None, env)
-    assert [cfg[k] for k in keys] == out[: len(keys)]
 
 
 def test_paper_logs_default_under_home(tmp_path):

@@ -49,14 +49,13 @@ def masks(place, parent):
     )
 
 
-def test_pairs_mark_self_same_place_child_to_parent_and_back():
+def test_pairs_mark_same_place_child_to_parent_and_back():
     # Any number of places.
     n = 300
-    me, same, up, down = masks(
-        *series_bias.block_rows(range(n), 0, [-1] + [0] * (n - 1))
-    )
-    assert me.shape == same.shape == up.shape == down.shape == (n, n)
-    assert torch.equal(me, torch.eye(n, dtype=torch.bool))
+    got = masks(*series_bias.block_rows(range(n), 0, [-1] + [0] * (n - 1)))
+    assert list(got) == list(series_bias.PAIRS) == ["same", "up", "down"]
+    same, up, down = got.values()
+    assert same.shape == up.shape == down.shape == (n, n)
     assert not same.any()  # one row per place: no other row of it
     assert bool(up[1, 0])  # a child's row attends to its parent's
     assert bool(down[0, 1])  # and the parent's to its child's
@@ -67,23 +66,22 @@ def test_pairs_mark_self_same_place_child_to_parent_and_back():
     # Each place's lags are its own: same with each other and its count.
     par = series_bias.parents_of(HIER)
     rows = series_bias.row_places(len(HIER), 2 * len(HIER))
-    me, same, up, down = masks(
+    same, up, down = masks(
         *series_bias.block_rows(range(len(HIER)), 2 * len(HIER), par)
-    )
+    ).values()
     for i, p in enumerate(rows):
         for j, q in enumerate(rows):
-            assert bool(me[i, j]) == (i == j)
             assert bool(same[i, j]) == (p == q and i != j)
             assert bool(up[i, j]) == (par[p] == q)
             assert bool(down[i, j]) == (par[q] == p)
 
 
-def test_the_four_biases_are_zero_fp32_scalars_per_layer_and_head():
+def test_the_three_biases_are_zero_fp32_scalars_per_layer_and_head():
     model = tiny_model().to(torch.bfloat16)
     series_bias.attach(model)
     module = getattr(model, series_bias.BIAS_MODULE)
     names = dict(module.named_parameters())
-    assert set(names) == {"self_", "same", "up", "down"}
+    assert set(names) == {"same", "up", "down"}
     for p in names.values():
         assert p.shape == (model.config.num_layers, model.config.num_heads)
         assert p.dtype == torch.float32

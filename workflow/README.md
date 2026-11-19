@@ -26,7 +26,7 @@ Low level, any output file, for example:
 ```sh
 uv run --group paper snakemake <ROOT>/rounds/r4/sims/counts-30421.csv.gz  # one batch
 uv run --group paper snakemake <RUN>/train/n1000/settings.json            # one checkpoint
-uv run --group paper snakemake <SCORE_CACHE>/germany/slots-<hash>.done    # one checkpoint's German scores
+uv run --group paper snakemake <SCORE_CACHE>/germany-days/slots-<hash>.done    # one checkpoint's German scores
 ```
 
 Helpers: `task dag` draws the rule graph, `task progress` lists what exists and what would run, `task report` writes Snakemake's HTML report, and `task workflow:check` runs the tests and dry runs CI runs.
@@ -34,7 +34,8 @@ Helpers: `task dag` draws the rule graph, `task progress` lists what exists and 
 ## Machine settings
 
 Paths and host details are in `config/local.env`, which git ignores; `config/local.env.example` lists every key.
-The same file is read by the Taskfile (`dotenv`), by the shell scripts (`scripts/local_config.sh`) and by the workflow (`workflow/flowlib/localconfig.py`).
+The file is read by `workflow/flowlib/localconfig.py`, which the Taskfile and shell scripts call (`python3 workflow/flowlib/localconfig.py KEY`).
+A value may use another setting, `$ROOT` say, in any order.
 A variable in the environment wins, and with no file everything runs on this machine.
 The workflow uses:
 

@@ -191,9 +191,40 @@ def read_file(
     return out
 
 
+def wis_split(
+    scored: Sequence[tuple[str, Sequence[float], float]], origin: str
+) -> dict[str, Any]:
+    """Return mean WIS of the nowcast part and of each forecast week ahead.
+
+    `scored` holds (target date, seven quantiles, truth). The nowcast part
+    is the target dates up to the nowcast date `origin`; the forecast part
+    the dates after it, by week ahead (days 1 to 7 after are week 1), as
+    the held-out loss and the paper split them (`labels.HORIZON_PARTS`).
+    Each part is [mean WIS, dates], the mean None with no dates.
+    """
+    o = pd.Timestamp(origin)
+    now: list[float] = []
+    ahead: dict[str, list[float]] = {}
+    for day, q, y in scored:
+        days = (pd.Timestamp(day) - o).days
+        if days <= 0:
+            now.append(wis(q, y))
+        else:
+            ahead.setdefault(str(-(-days // 7)), []).append(wis(q, y))
+
+    def mean(v: list[float]) -> list[Any]:
+        return [round(sum(v) / len(v), 4) if v else None, len(v)]
+
+    return {
+        "nowcast": mean(now),
+        "forecast": {k: mean(ahead[k]) for k in sorted(ahead, key=int)},
+    }
+
+
 def digest(
     rows: Mapping[tuple[str, str, str, str], Mapping[str, Mapping[str, Any]]],
     picks: Sequence[int],
+    origin: str | None = None,
 ) -> list[tuple]:
     """Return one file's series, stats, score, truth and latest by key.
 
@@ -204,7 +235,7 @@ def digest(
     """
     out = []
     for (loc, sid, src, tgt), dates in rows.items():
-        times, drawn, scored, outers = [], [], [], []
+        times, drawn, scored, outers, days = [], [], [], [], []
         ninety = all(all(k in dates[d]["q"] for k in OUTER) for d in dates)
         seen: dict[str, tuple[str, float]] = {}
         last: dict[str, float] = {}
@@ -221,6 +252,7 @@ def digest(
             drawn.append([round(band[i], 1) for i in picks])
             if e["y"] is not None:
                 scored.append((seven, e["y"], e["s"]))
+                days.append(day)
                 outers.append(outer)
                 seen[day] = (e["v"], e["y"])
             if e["l"] is not None:
@@ -240,6 +272,16 @@ def digest(
                 # A file's own score may not be WIS, so it has no parts.
                 if all(s is None for _, _, s in scored):
                     entry["parts"] = wis_parts([(q, y) for q, y, _ in scored])
+                    if origin is not None:
+                        entry["split"] = wis_split(
+                            [
+                                (d, q, y)
+                                for d, (q, y, _) in zip(
+                                    days, scored, strict=True
+                                )
+                            ],
+                            origin,
+                        )
         out.append((loc, sid, src, tgt, entry, seen, last))
     return out
 
@@ -277,6 +319,7 @@ def build(
     series: dict = {}
     score: dict = {}
     parts: dict = {}
+    split: dict = {}
     stat: dict = {}
     truth: dict = {}
     latest: dict = {}
@@ -297,7 +340,7 @@ def build(
             key = (st.st_mtime_ns, st.st_size, tuple(picks))
             if str(path) not in files or files[str(path)][0] != key:
                 rows = read_file(path, folder.name, which)
-                files[str(path)] = (key, digest(rows, picks))
+                files[str(path)] = (key, digest(rows, picks, origin))
             for loc, sid, src, tgt, entry, seen, last in files[str(path)][1]:
                 targets.add(tgt)
                 for day, (vintage, y) in seen.items():
@@ -315,6 +358,8 @@ def build(
                     _put(score, keys, entry["score"])
                     if "parts" in entry:
                         _put(parts, keys, entry["parts"])
+                    if "split" in entry:
+                        _put(split, keys, entry["split"])
 
     def rank(loc: str) -> tuple[int, str]:
         hit = (i for i, (_, rx) in enumerate(order) if re.match(rx, loc))
@@ -333,6 +378,7 @@ def build(
         "series": series,
         "score": score,
         "parts": parts,
+        "split": split,
         "stats": stat,
         "truth": truth,
         "latest": latest,
@@ -400,6 +446,7 @@ def location(built: Mapping[str, Any] | None, loc: str) -> dict[str, Any]:
         "series": built["series"][loc],
         "score": built["score"].get(loc, {}),
         "parts": built.get("parts", {}).get(loc, {}),
+        "split": built.get("split", {}).get(loc, {}),
         "stats": built["stats"].get(loc, {}),
         "truth": line(built["truth"].get(loc, {}), lambda v: v[1]),
         "latest": line(built["latest"].get(loc, {})),

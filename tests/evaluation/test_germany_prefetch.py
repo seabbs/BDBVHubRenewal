@@ -56,23 +56,26 @@ def test_dates_share_chronos_passes(monkeypatch: pytest.MonkeyPatch) -> None:
     triangle = read_triangle(FIXTURE)
     pipe = _Pipeline()
     monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)
-    alone = pd.concat(
-        [germany_forecasts(MODELS, triangle, [d], 30, 1) for d in DATES],
-        ignore_index=True,
-    )
-    per_date = pipe.calls
+    # One pass holds every row of a model, task schema and horizon.
+    monkeypatch.setenv("CHRONOS_BATCH", str(10**6))
+    alone = []
+    calls = []
+    for d in DATES:
+        pipe.calls = 0
+        alone.append(germany_forecasts(MODELS, triangle, [d], 30, 1))
+        calls.append(pipe.calls)
     pipe.calls = 0
     together = germany_forecasts(MODELS, triangle, DATES, 30, 1)
     pd.testing.assert_frame_equal(
         together.reset_index(drop=True),
-        alone.sort_values(
-            [*together.columns[:5], "quantile"], kind="stable"
-        ).reset_index(drop=True),
+        pd.concat(alone, ignore_index=True)
+        .sort_values([*together.columns[:5], "quantile"], kind="stable")
+        .reset_index(drop=True),
     )
-    # A pass for each model, task schema (states, age groups) and horizon
-    # (dates on other weekdays have other daily horizons), not for each
-    # date and task.
-    assert pipe.calls <= per_date / 2
+    # The dates' tasks share their horizons, so all of them take the
+    # passes of one: a pass for each model, schema and horizon.
+    assert len(set(calls)) == 1
+    assert pipe.calls == calls[0]
 
 
 def test_tasks_are_built_once_and_reused(
@@ -85,8 +88,10 @@ def test_tasks_are_built_once_and_reused(
     triangle = read_triangle(FIXTURE)
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _Pipeline())
     first = germany_forecasts(MODELS, triangle, DATES, 30, 1, tmp_path)
+    # gzip-compressed: a date's 7 offsets would be 7 times the plain
+    # pickle's disk.
     assert sorted(p.name for p in tmp_path.iterdir()) == [
-        f"{d}.pkl" for d in sorted(DATES)
+        f"{d}.pkl.gz" for d in sorted(DATES)
     ]
 
     def no_build(*_a, **_k):

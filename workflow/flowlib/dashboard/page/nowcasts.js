@@ -143,8 +143,8 @@ function plots(){
   var ms_=Object.keys(miss);
   if(ms_.length)$("gplot").insertAdjacentHTML("beforeend",'<p class=mut>No forecast for some nowcast dates: '+ms_.join(", ")+'</p>');
   // The score card compares every ticked model, in either view.
-  wisChart(all[0],ticked())}).catch(function(){$("gplot").innerHTML='<p class=mut>Could not load data.</p>'})}
-function wisChart(d,eff){
+  wisChart(all[0],ticked(),ds)}).catch(function(){$("gplot").innerHTML='<p class=mut>Could not load data.</p>'})}
+function wisChart(d,eff,ds){
  var W_=function(id){return ((d.score[id]||{})[TGT()]||{})[S.src]};
  var X_=function(id){return (((d.stats||{})[id]||{})[TGT()]||{})[S.src]};
  var sel=eff.map(function(e){return e.id}).filter(function(id){return W_(id)&&X_(id)});
@@ -163,9 +163,13 @@ function wisChart(d,eff){
  var PN=(D.parts||[]).map(function(p){return p[0]}),PF=(D.parts||[]).map(function(p){return p[1]});
  var ORDER=(D.stack||PN).map(function(n){return PN.indexOf(n)}).filter(function(k){return k>=0});
  var PATS={},PID=0;
- function fill(c,k){if(PF[k]=="solid")return c;var key=c+PF[k];if(!PATS[key])PATS[key]={id:"wp"+(++PID)+"_"+Math.random().toString(36).slice(2,6),c:c,up:PF[k]=="hatch-up"};return "url(#"+PATS[key].id+")"}
+ // A fill by kind (labels.WIS_PART_FILLS, HORIZON_FILLS): solid, or a
+ // hatch rising, falling or crossed, drawn once per colour and kind.
+ function fillKind(c,kind){if(kind=="solid")return c;var key=c+kind;if(!PATS[key])PATS[key]={id:"wp"+(++PID)+"_"+Math.random().toString(36).slice(2,6),c:c,kind:kind};return "url(#"+PATS[key].id+")"}
+ function fill(c,k){return fillKind(c,PF[k])}
  function defs(){return '<defs>'+Object.keys(PATS).map(function(k){var p=PATS[k];
-  return '<pattern id="'+p.id+'" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate('+(p.up?45:135)+')"><rect width="5" height="5" fill="var(--bg)" /><line x1="0" y1="0" x2="0" y2="5" stroke="'+p.c+'" stroke-width="2.2" /></pattern>'}).join("")+'</defs>'}
+  var lines='<line x1="0" y1="0" x2="0" y2="5" stroke="'+p.c+'" stroke-width="'+(p.kind=="hatch-cross"?1.4:2.2)+'" />'+(p.kind=="hatch-cross"?'<line x1="0" y1="0" x2="5" y2="0" stroke="'+p.c+'" stroke-width="1.4" />':'');
+  return '<pattern id="'+p.id+'" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate('+(p.kind=="hatch-down"?135:45)+')"><rect width="5" height="5" fill="var(--bg)" />'+lines+'</pattern>'}).join("")+'</defs>'}
  function seg(x,y,w,h,c,k,v,tot){if(w<=0)return "";var g=w>2?w-1:w;
   return '<rect x="'+x+'" y="'+y+'" width="'+g+'" height="'+h+'" fill="'+fill(c,k)+'" stroke="'+c+'" stroke-width=".8"><title>'+PN[k]+' '+fmt(v)+' of '+fmt(tot)+'</title></rect>'}
  function stack(id,y,vals,tot,mx,sc){var x=0,o='';ORDER.forEach(function(k){var v=vals[k],w=v/mx*sc;o+=seg(x,y,w,12,colour(id),k,v,tot);x+=w});return o}
@@ -201,11 +205,30 @@ function wisChart(d,eff){
  sel.forEach(function(id,i){var y=2+i*RH,x0=bw/2,w=Math.abs(bias[i])*(bw/2-34);
   h3+=lab(id,y)+'<rect x="'+(bias[i]>=0?x0:x0-w)+'" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+colour(id)+'"><title>bias '+bias[i].toFixed(3)+' (positive: forecast above truth)</title></rect><text x="'+(bias[i]>=0?x0+w+3:x0-w-3)+'" y="'+(y+22)+'" text-anchor="'+(bias[i]>=0?"start":"end")+'" class=ax>'+bias[i].toFixed(2)+'</text>'});
  h3+='<line x1="'+bw/2+'" x2="'+bw/2+'" y1="0" y2="'+H2+'" stroke="var(--fg)" stroke-width="1" />';
+ // WIS by part of the horizon for the nowcast date(s) shown: the nowcast
+ // part (targets up to the nowcast date) and each forecast week ahead,
+ // means over the dates weighted by their targets (nowcasts.wis_split).
+ var HZ=D.horizon||[],HF={},HL={};HZ.forEach(function(h){HL[h[0]]=h[1];HF[h[0]]=h[2]});
+ var S_=function(id){return (((d.split||{})[id]||{})[TGT()]||{})[S.src]};
+ function pool(id){var s=S_(id)||{},now=[0,0],ahead={};
+  (ds||[]).forEach(function(o){var e=s[o];if(!e)return;
+   if(e.nowcast[0]!==null){now[0]+=e.nowcast[0]*e.nowcast[1];now[1]+=e.nowcast[1]}
+   Object.keys(e.forecast||{}).forEach(function(k){var f=e.forecast[k];if(f[0]===null)return;ahead[k]=ahead[k]||[0,0];ahead[k][0]+=f[0]*f[1];ahead[k][1]+=f[1]})});
+  var out=[];if(now[1])out.push(["nowcast","now",now[0]/now[1]]);
+  Object.keys(ahead).sort(function(a,b){return a-b}).forEach(function(k){out.push(["forecast","wk "+k,ahead[k][0]/ahead[k][1]])});return out}
+ var hz=sel.map(pool),hmax=Math.max.apply(null,hz.reduce(function(a,r){return a.concat(r.map(function(x){return x[2]}))},[0]))*1.05||1,h5='';
+ var anyFc=hz.some(function(r){return r.some(function(x){return x[0]=="forecast"})});
+ sel.forEach(function(id,i){var y=2+i*RH,bars=hz[i],bw2=(W-60)/Math.max(1,bars.length);
+  h5+=lab(id,y);bars.forEach(function(b,j){var w=Math.max(0,b[2]/hmax*(bw2-34)),x=j*bw2;
+   h5+='<rect x="'+x+'" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+fillKind(colour(id),HF[b[0]]||"solid")+'" stroke="'+colour(id)+'" stroke-width=".8"><title>'+(b[0]=="nowcast"?"nowcast part":"forecast, week "+b[1].slice(3)+" ahead")+': '+C.metric+' '+fmt(b[2])+'</title></rect><text x="'+(x+w+2)+'" y="'+(y+22)+'" class=ax>'+b[1]+'</text>'})});
+ var hzNote=anyFc?'':'<div class=mut style="font-size:11px">No forecast dates in '+C.label+': its targets end at the nowcast date, so all of its '+C.metric+' is the nowcast part.</div>';
+ var hzKey=HZ.map(function(h){return '<span class=lg><svg width=16 height=12 viewBox="0 0 16 12"><rect x=".5" y=".5" width="15" height="11" fill="'+fillKind("var(--fg)",h[2])+'" stroke="var(--fg)" stroke-width=".8" /></svg>'+h[1]+'</span>'}).join("");
  var any=parts.some(function(p){return p});
  // One legend on top: the three parts' fills, labelled, in stack order;
  // its hidden defs hold every bar's pattern once.
- var top=any?'<div style="font-size:11px">'+key()+'</div>':'';
+ var top=(any?'<div style="font-size:11px">'+key()+'</div>':'<svg width=0 height=0 style="position:absolute">'+defs()+'</svg>');
  $("gwis").innerHTML=top+rows("mean "+C.metric,h1,H2,"wis")+(any?rows("mean "+C.metric+" on the log scale, log(x + 1)",h4,H2,"logwis"):'')+rows("coverage 50% and "+outs.join("% or ")+"% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
+  +rows(C.metric+" by part of the horizon, nowcast date(s) shown",h5,H2,"wissplit")+'<div style="font-size:11px">'+hzKey+'</div>'+hzNote
   +'<div class=mut style="font-size:11px">'+com.length+' common nowcast dates</div>';
 }
 function chips(){var h='';
