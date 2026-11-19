@@ -92,6 +92,11 @@ def problems(
     return found
 
 
+def settings_problems(settings: dict) -> list[str]:
+    """Stub."""
+    raise NotImplementedError
+
+
 def main() -> None:
     """Check the checkpoint in `sys.argv[1]`."""
     found = problems(Path(sys.argv[1]))
