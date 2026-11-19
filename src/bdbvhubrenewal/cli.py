@@ -1456,10 +1456,6 @@ def _hub_forecast(
         result = forecast
     elif config:
         result = run_forecast(get_config(config), task, fit)
-        if fit is not None and (Path(fit) / ZONES_FILE).exists():
-            own = pd.read_csv(
-                Path(fit) / ZONES_FILE, dtype={"target_end_date": str}
-            )
     else:
         loaded = get_model(str(model))
         checkpoint = getattr(loaded, "checkpoint", None)
@@ -1468,6 +1464,11 @@ def _hub_forecast(
         check_samples(samples, task)
         result = Forecast(samples)
         own = getattr(loaded, "zone_samples", None)
+    if fit is not None and (Path(fit) / ZONES_FILE).exists():
+        # A zone fit's own zones, given a fit directory or stored samples.
+        own = pd.read_csv(
+            Path(fit) / ZONES_FILE, dtype={"target_end_date": str}
+        )
     name = get_config(config).model if config else model
     zones, zone_note = _zones(data, name, task, result.samples, own)
     # A model that forecasts zones itself gives them through `zones`.
