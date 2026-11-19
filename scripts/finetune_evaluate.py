@@ -74,26 +74,28 @@ def evaluate(
     model.eval()
     val = list(blocks)
     out: dict[str, Any] = {}
+    if "start" in kinds or "checkpoint" in kinds:
+        parts = fs.held_out_parts(model, val, batch_size)
+        out["held_out_loss"] = parts["loss"]
+        out |= fs.loss_parts("held_out_loss", parts)
     if "start" in kinds:
-        out["held_out_loss"] = fs.held_out_loss(model, val, batch_size)
         out["by_level"] = fs.held_out_by_level(model, val, fs.LEVEL_BLOCKS)
         out["by_source"] = fs.held_out_by_source(
             model, val, batch_size, ft.EVAL_BLOCKS
         )
     if "monitor" in kinds:
-        out["eval_loss"] = fs.held_out_loss(
-            model, val[: ft.EVAL_BLOCKS], batch_size
-        )
+        parts = fs.held_out_parts(model, val[: ft.EVAL_BLOCKS], batch_size)
+        out["eval_loss"] = parts["loss"]
+        out |= fs.loss_parts("eval_loss", parts)
     if "by_source" in kinds:
         out["by_source"] = fs.held_out_by_source(
             model, val, batch_size, ft.EVAL_BLOCKS
         )
     if "checkpoint" in kinds:
-        out["held_out_loss"] = fs.held_out_loss(model, val, batch_size)
         if real:
-            out["real_validation_loss"] = fs.held_out_loss(
-                model, list(real), batch_size
-            )
+            parts = fs.held_out_parts(model, list(real), batch_size)
+            out["real_validation_loss"] = parts["loss"]
+            out |= fs.loss_parts("real_validation_loss", parts)
         out["held_out_loss_by_level"] = fs.held_out_by_level(
             model, val, fs.LEVEL_BLOCKS
         )

@@ -774,6 +774,115 @@ class ByLength:
             yield self._build_batch(indices)
 
 
+def nowcast_steps(block: dict) -> int:
+    """Return a block's nowcast steps, from its start to the cut-off.
+
+    A block starts $D$ steps before the release's cut-off, where $D$ is
+    its release lag, and each of its places has one lag series for each
+    of those steps, so $D$ is its lag series over its places.
+    """
+    places = len(block.get("places", ())) or int(block["n_targets"])
+    return int(block["n_covariates"]) // places
+
+
+class _LossSplit:
+    """Chronos-2's loss, then its parts over the nowcast and forecast steps.
+
+    While open, each loss Chronos-2 computes is computed twice more, with
+    the targets masked to the steps before `steps[row]` and then from
+    them. The loss is a mean over every prediction step, so the parts sum
+    to it, and the loss itself is computed as before.
+    """
+
+    def __init__(self) -> None:
+        self.steps = None
+        self.parts: dict[str, float] = {}
+
+    def __enter__(self):
+        import torch
+        from chronos.chronos2.model import Chronos2Model
+
+        self.original = original = Chronos2Model._compute_loss
+
+        def compute(model, **kwargs):
+            loss = original(model, **kwargs)
+            if self.steps is None:
+                return loss
+            target = kwargs["future_target"]
+            mask = kwargs["future_target_mask"]
+            mask = ~torch.isnan(target) if mask is None else mask > 0
+            at = torch.arange(target.shape[-1], device=mask.device)
+            steps = torch.as_tensor(self.steps, device=mask.device)
+            now = at[None, :] < steps[:, None]
+            for part, keep in (("nowcast", now), ("forecast", ~now)):
+                kwargs["future_target_mask"] = (mask & keep).float()
+                self.parts[part] = float(original(model, **kwargs))
+            return loss
+
+        Chronos2Model._compute_loss = compute
+        return self
+
+    def __exit__(self, *exc) -> None:
+        from chronos.chronos2.model import Chronos2Model
+
+        Chronos2Model._compute_loss = self.original
+
+
+def held_out_parts(
+    model, blocks: list[dict], batch_size: int
+) -> dict[str, float]:
+    """Return the mean quantile loss of a model on blocks, and its parts.
+
+    `loss` is `held_out_loss`; `nowcast` and `forecast` are its parts
+    over the steps to each block's cut-off (`nowcast_steps`) and after
+    it, which sum to it.
+    """
+    import torch
+    from chronos.chronos2.dataset import DatasetMode
+    from chronos.chronos2.model import Chronos2Model
+
+    data = ByLength(
+        blocks, batch_size, DatasetMode.VALIDATION, series_bias.has_bias(model)
+    )
+    accepted = inspect.signature(Chronos2Model.forward).parameters
+    training = model.training
+    model.eval()
+    losses: dict[str, list[float]] = {"loss": [], "nowcast": [], "forecast": []}
+    weights = []
+    with torch.no_grad(), _LossSplit() as split:
+        for indices in data.indices():
+            batch = data._build_batch(indices)
+            split.steps = np.concatenate(
+                [
+                    np.full(
+                        int(blocks[i]["context"].shape[0]),
+                        nowcast_steps(blocks[i]),
+                    )
+                    for i in indices
+                ]
+            )
+            if len(split.steps) != len(batch["context"]):
+                raise ValueError("a batch's rows are not its blocks' rows")
+            losses["loss"].append(float(forward(model, batch, accepted).loss))
+            for part in ("nowcast", "forecast"):
+                losses[part].append(split.parts[part])
+            weights.append(len(batch["context"]))
+    model.train(training)
+    return {k: float(np.average(v, weights=weights)) for k, v in losses.items()}
+
+
+def loss_parts(name: str, parts: dict[str, float]) -> dict[str, float]:
+    """Return a loss's nowcast and forecast parts as `<name>_<part>`."""
+    return {f"{name}_{k}": parts[k] for k in ("nowcast", "forecast")}
+
+
+def _described(parts: dict[str, float]) -> str:
+    """Describe a loss's nowcast and forecast parts for the log."""
+    return (
+        f" (nowcast {parts['nowcast']:.4f}, forecast {parts['forecast']:.4f})"
+    )
+
+
 def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
     """Return the mean quantile loss of a Chronos-2 model on blocks."""
     import torch
@@ -1513,7 +1622,8 @@ def main() -> None:
         log("held-out loss at the start left to the evaluator")
     elif state is None:
         consumed.write_text("")
-        start_loss = held_out_loss(model, val, args.batch_size)
+        start_parts = held_out_parts(model, val, args.batch_size)
+        start_loss = start_parts["loss"]
         by_level = held_out_by_level(model, val, LEVEL_BLOCKS)
         by_source = held_out_by_source(
             model, val, args.batch_size, ft.EVAL_BLOCKS
@@ -1522,12 +1632,14 @@ def main() -> None:
             {
                 "step": 0,
                 "held_out_loss": start_loss,
+                **loss_parts("held_out_loss", start_parts),
                 "by_level": by_level,
                 "by_source": by_source,
             }
         ]
         log(
-            f"held-out loss at the start {start_loss:.4f}; first "
+            f"held-out loss at the start {start_loss:.4f}"
+            f"{_described(start_parts)}; first "
             f"{ft.EVAL_BLOCKS} blocks by source {_by_source(by_source)}"
         )
     else:
@@ -1728,10 +1840,15 @@ def main() -> None:
                 (out / "history.json").write_text(json.dumps(history))
             elif step % args.eval_every == 0:
                 since = time.perf_counter()
-                monitor = held_out_loss(
+                parts = held_out_parts(
                     model, val[: ft.EVAL_BLOCKS], args.batch_size
                 )
-                entry = {"step": step, "eval_loss": monitor}
+                monitor = parts["loss"]
+                entry = {
+                    "step": step,
+                    "eval_loss": monitor,
+                    **loss_parts("eval_loss", parts),
+                }
                 described = ""
                 if step % args.by_source_every == 0:
                     entry["by_source"] = held_out_by_source(
@@ -1749,7 +1866,8 @@ def main() -> None:
                 history.append(entry)
                 log(
                     f"step {step}: loss {value:.4f}, held-out "
-                    f"(first {ft.EVAL_BLOCKS} blocks) {monitor:.4f}, "
+                    f"(first {ft.EVAL_BLOCKS} blocks) {monitor:.4f}"
+                    f"{_described(parts)}, "
                     f"{described}{time.perf_counter() - t0:.0f} s; {memory()}"
                 )
                 (out / "history.json").write_text(json.dumps(history))
@@ -1829,17 +1947,17 @@ def main() -> None:
                     log(f"n{done} does not verify: {'; '.join(mismatch)}")
             else:
                 settings["held_out_loss_start"] = start_loss
-                settings["held_out_loss"] = held_out_loss(
-                    model, val, args.batch_size
-                )
+                parts = held_out_parts(model, val, args.batch_size)
+                settings["held_out_loss"] = parts["loss"]
+                settings |= loss_parts("held_out_loss", parts)
                 if args.real_validation:
                     real = real_validation
                     settings["real_validation_sha256"] = ft._sha256(
                         args.real_validation
                     )
-                    settings["real_validation_loss"] = held_out_loss(
-                        model, real, args.batch_size
-                    )
+                    real_parts = held_out_parts(model, real, args.batch_size)
+                    settings["real_validation_loss"] = real_parts["loss"]
+                    settings |= loss_parts("real_validation_loss", real_parts)
                 settings["held_out_loss_by_level"] = held_out_by_level(
                     model, val, LEVEL_BLOCKS
                 )
@@ -1855,13 +1973,14 @@ def main() -> None:
                         "step": step,
                         "n_outbreaks": done,
                         "held_out_loss": settings["held_out_loss"],
+                        **loss_parts("held_out_loss", parts),
                         "hash": key,
                     }
                 )
                 (out / "history.json").write_text(json.dumps(history))
                 log(
                     f"checkpoint n{done}: hash {key}, held-out loss "
-                    f"{settings['held_out_loss']:.4f} "
+                    f"{settings['held_out_loss']:.4f}{_described(parts)} "
                     f"(start {start_loss:.4f}); {memory()}"
                 )
                 report(last_checkpoint=f"n{done} {key}")
