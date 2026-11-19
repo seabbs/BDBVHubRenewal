@@ -9,7 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.zones import hub_zones, weekly_zone_counts
+from bdbvhubrenewal.data.snapshots import weekly_counts
+from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters.zones import zone_task
@@ -103,7 +104,7 @@ def test_the_copula_record_is_rho_p_with_its_pairs(task) -> None:
 def test_zones_are_their_own_forecasts_and_not_paired(
     name: str, task, daily: pd.DataFrame, daily_zones: pd.DataFrame
 ) -> None:
-    counts = weekly_zone_counts(daily_zones, task.vintage)
+    counts = weekly_counts(daily_zones, task.vintage)
     codes = hub_zones(DATA / "hub-config" / "tasks.json")
     active = tuple(z for z in codes if z in set(counts["location"]))
     zt = zone_task(task, counts, active, pd.concat([daily, daily_zones]))

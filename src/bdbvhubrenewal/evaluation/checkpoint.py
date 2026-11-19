@@ -295,7 +295,7 @@ def zone_truth(
 
     Each release counts every forecast zone and week from the zone's
     first report (its earliest week with an onset in any release), 0
-    where it reports no onset (`weekly_zone_counts` lists weeks with
+    where it reports no onset (`weekly_counts` lists weeks with
     one). Earlier weeks are left out: no release reports the zone yet,
     and a 0 there would score every model as exact.
 
@@ -315,10 +315,10 @@ def zone_truth(
     pandas.DataFrame
         As `rolling_truth`.
     """
-    from bdbvhubrenewal.data.zones import weekly_zone_counts
+    from bdbvhubrenewal.data.snapshots import weekly_counts
     from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 
-    counts = {v: weekly_zone_counts(daily_zones, v) for v in cutoffs}
+    counts = {v: weekly_counts(daily_zones, v) for v in cutoffs}
     weeks = sorted(
         set().union(*(set(c["target_end_date"]) for c in counts.values()))
     )

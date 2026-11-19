@@ -160,7 +160,7 @@ FT = {
         "prefixes": [250, 500],
         "outbreaks": 500,
         "rounds": [2],
-        "held_round": 1,
+        "validation_round": 1,
         "sims_from": "local",
         "real_validation": None,
     },
@@ -936,3 +936,87 @@ def test_the_sim_qc_checks_fixed_thresholds_from_the_config(tmp_path):
     ]["qc"]
     for key, value in limits.items():
         assert f"--{key.replace('_', '-')} {value}" in qc
+
+
+def _done_round(root, r, batches=40):
+    """A simulated, QC'd round on disk, its files' times in rule order."""
+    import os
+
+    d = root / "rounds" / f"r{r}"
+    first = 30000 + 100 * r
+    for sub in ("sims", "records", "qc"):
+        (d / sub).mkdir(parents=True, exist_ok=True)
+    stages = [
+        [
+            d / "sims" / f"counts-{s}.csv.gz"
+            for s in range(first, first + batches)
+        ]
+        + [
+            d / "sims" / f"settings-{s}.csv"
+            for s in range(first, first + batches)
+        ],
+        [
+            d / "records" / f"record-{s}.csv"
+            for s in range(first, first + batches)
+        ],
+        [d / "manifest.csv"],
+        [d / "qc" / "excluded.csv", d / "qc" / "summary.txt"],
+        [d / "seeds.txt", d / "READY"],
+    ]
+    for k, files in enumerate(stages):
+        for f in files:
+            if f.name == "excluded.csv":
+                f.write_text("simulation,reason,evidence\n")
+            elif f.name.startswith("settings-"):
+                f.write_text("outbreak\n")
+            else:
+                f.write_text("x\n")
+            os.utime(f, (1_000_000 + 10 * k, 1_000_000 + 10 * k))
+    return 1_000_000 + 10 * len(stages)
+
+
+TOPUP = {"grid_rounds": {"r6": {"rounds": [4], "topup_round": 32}}}
+
+
+def test_the_top_up_plans_its_first_try_from_the_rounds_qc(tmp_path):
+    _done_round(tmp_path, 4)
+    jobs = dry(tmp_path, "topup", config=TOPUP)
+    assert jobs["topup_plan"] == 1
+    assert "simulate_batch" not in jobs
+
+
+def test_the_top_up_waits_for_every_training_round(tmp_path):
+    # Round 5 is not simulated yet: it is simulated and QC'd first.
+    _done_round(tmp_path, 4)
+    config = {"grid_rounds": {"r6": {"rounds": [4, 5], "topup_round": 32}}}
+    jobs = dry(tmp_path, "topup", config=config)
+    assert jobs["simulate_batch"] == 40
+    assert jobs["sim_qc"] == 1
+    assert jobs["topup_plan"] == 1
+
+
+def test_a_top_up_batch_simulates_its_planned_cells(tmp_path):
+    import os
+
+    after = _done_round(tmp_path, 4)
+    plan = tmp_path / "rounds" / "r32" / "topup" / "plan-0.txt"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("33200 3364 3365\n")
+    os.utime(plan, (after, after))
+    blocks = score_jobs(tmp_path, TOPUP, target="topup")
+    sims = [b for b in blocks if re.match(r"rule simulate_batch:", b)]
+    assert len(sims) == 1
+    shell = " ".join(sims[0].replace("\\\n", " ").split())
+    assert 'ENW_CELLS="3364,3365"' in shell
+    assert "finetune_simulate.R 2 33200" in shell
+    qc = [b for b in blocks if re.match(r"rule topup_qc:", b)]
+    assert len(qc) == 1
+    assert "--max-weekly-jump 1000" in qc[0]
+
+
+def test_a_round_s_batch_names_no_cells(tmp_path):
+    blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
+    text = " ".join("".join(blocks).replace("\\\n", " ").split())
+    shell = text[text.index("finetune_simulate.R") - 400 :]
+    assert 'ENW_CELLS=""' in shell
+    assert "finetune_simulate.R 21 " in shell

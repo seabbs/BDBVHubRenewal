@@ -24,7 +24,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from . import bias, learning, logs, nowcasts, scores, svg, training, wis
+from bdbvhubrenewal.evaluation import labels
+
+from . import bias, learning, logs, nowcasts, paperstyle, scores, svg, training
 from .mirror import Source
 from .runs import Reference, Run, split_label
 
@@ -58,6 +60,8 @@ class Context:
     datasets: Sequence[Mapping[str, Any]] = ()
     mailbox: Path | None = None
     mail_filter: str = ""
+    mail_hide: str = ""
+    hidden_studies: set = field(default_factory=set)
     mail_lines: int = 400
     once: bool = False
     view: Mapping[str, Any] = field(default_factory=dict)
@@ -166,6 +170,19 @@ def _json(payload: Any) -> str:
     return json.dumps(payload, separators=(",", ":")).replace("</", "<\\/")
 
 
+def ui_colours() -> str:
+    """Return the dashboard's accent colours as CSS variables.
+
+    From the shared map (`labels.UI_COLOURS`), light and dark; the page's
+    stylesheet holds only neutrals.
+    """
+    light = ";".join(f"--{k}:{v[0]}" for k, v in labels.UI_COLOURS.items())
+    dark = ";".join(f"--{k}:{v[1]}" for k, v in labels.UI_COLOURS.items())
+    return (
+        f":root{{{light}}}@media(prefers-color-scheme:dark){{:root{{{dark}}}}}"
+    )
+
+
 def tip(key: str) -> str:
     """Return the info marker of a note in `EXPLAIN`."""
     text = html.escape(EXPLAIN.get(key, ""), quote=True)
@@ -208,6 +225,8 @@ class Status:
     nxt: int | None
     trained: float | None = None
     steps: Callable[[int], tuple[int, bool]] | None = None
+    sims_rate: float | None = None
+    span: float | None = None
 
     @property
     def target(self) -> int:
@@ -223,8 +242,18 @@ class Status:
         return bool(self.steps and self.steps(n)[1])
 
     def eta(self, n: int | None) -> str:
-        """Return the time until checkpoint `n` at the recent speed."""
-        if not (self.rate and self.step is not None and n):
+        """Return the time until checkpoint `n` at the recent speed.
+
+        From simulations a minute where known (the checkpoints are
+        simulation counts), else from steps a second.
+        """
+        if not n or self.step is None:
+            return "n/a"
+        if self.sims_rate and self.trained is not None:
+            if self.trained >= n:
+                return "due now"
+            return _dur((n - self.trained) / self.sims_rate)
+        if not self.rate:
             return "n/a"
         if self.at(n) <= self.step:
             return "due now"
@@ -256,13 +285,23 @@ def live_status(
     """
     step = rows[-1]["step"] if rows else None
     last_t = rows[-1]["t"] if rows else None
-    recent = [r for r in rows if r["t"] >= (last_t or 0) - 1800]
-    rate = None
-    if len(recent) >= 2 and recent[-1]["t"] > recent[0]["t"]:
-        rate = (recent[-1]["step"] - recent[0]["step"]) / (
-            recent[-1]["t"] - recent[0]["t"]
-        )
     folder = live.folder
+    # Timestamped steps: every logged step, and the trainer's status file
+    # (written every few steps), as evaluations log a step only every few
+    # hundred (`training.recent_rate`).
+    points = [(r["t"], r["step"]) for r in rows]
+    status = training.status_point(folder) if folder else None
+    if status:
+        points.append(status)
+        if step is None or status[1] > step:
+            step = int(status[1])
+    rate, span = training.recent_rate(points)
+    sims_rate = None
+    if rate and span and sims:
+        newest = max(points)
+        first_s = newest[1] - rate * span
+        done = sims(newest[1]) - sims(first_s)
+        sims_rate = done / span if done > 0 else None
     args = logs.trainer_args(folder) if folder else ""
     trained = sims(step) if sims and step is not None else None
     params = (
@@ -313,6 +352,8 @@ def live_status(
         nxt,
         trained,
         None if params["lr_steps"] else steps,
+        sims_rate,
+        span,
     )
 
 
@@ -368,10 +409,19 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             "",
         ),
         (
-            "Steps / s (30 min)",
+            "Steps / s",
             "t_rate",
             f"{st.rate:.3f}" if st.rate else "n/a",
-            f"{st.rate * 60:.1f} steps/min" if st.rate else "",
+            "; ".join(
+                x
+                for x in (
+                    f"{st.sims_rate * 60:.2f} simulations/min"
+                    if st.sims_rate
+                    else "",
+                    f"over the last {_dur(st.span)}" if st.span else "",
+                )
+                if x
+            ),
             "",
         ),
         ("Next checkpoint", "t_next", next_v, next_s, ""),
@@ -506,6 +556,16 @@ def lr_card(
     )
 
 
+LOSS_TYPES = {
+    "total": "total",
+    "nowcast": "nowcast",
+    "forecast": "forecast",
+    "layout": "by layout",
+    "level": "by level",
+}
+"""The held-out loss types the Loss panel offers."""
+
+
 def loss_section(ctx: Context, live: Run, st: Status) -> str:
     """Return the loss controls and the client-side loss plots' data."""
     cks = {r.key: _checkpoints(r) for r in ctx.runs}
@@ -519,7 +579,9 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
     for r in ctx.runs:
         base = own.get(r.base or "") if r.base else None
         refs = (
-            {k: base[k] for k in ("full0", "src0", "parts0")} if base else None
+            {k: base[k] for k in ("full0", "src0", "parts0", "lvl0")}
+            if base
+            else None
         )
         out.append(
             training.loss_run(
@@ -536,7 +598,17 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
         (n for n in st.params["prefixes"] if n not in st.saved), None
     )
     xlim = max([1.2 * now, 50] + ([next_ck] if next_ck else []))
-    data = _json({"runs": out, "marks": marks, "xlim": xlim})
+    # Layout and level colours from the shared map; others by position.
+    data = _json(
+        {
+            "runs": out,
+            "marks": marks,
+            "xlim": xlim,
+            "layouts": labels.LAYOUT_COLOURS,
+            "levels": labels.LEVEL_COLOURS,
+            "categorical": list(labels.CATEGORICAL),
+        }
+    )
     modebar = (
         '<div class="sctl modebar"><span class=mut>Loss scale</span>'
         "<button class=tog data-mode=raw>raw</button>"
@@ -548,6 +620,14 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
         "<button class=tog data-rng=zoom>live run</button>"
         "<button class=tog data-rng=full>full range</button>"
         + tip("lossscale")
+        + "</div>"
+        # Which held-out loss the held-out panel draws, for every run.
+        + '<div class="sctl modebar"><span class=mut>Loss type</span>'
+        + "".join(
+            f"<button class=tog data-lt={k}>{v}</button>"
+            for k, v in LOSS_TYPES.items()
+        )
+        + tip("losstype")
         + "</div>"
     )
     return (
@@ -597,7 +677,7 @@ def checkpoint_table(
     by_head = "".join(f"<th>{html.escape(src)}" for src in sources)
     out = [
         f"<table><tr><th>run<th>ckpt<th>hash<th>{head}<th>held-out "
-        f"start<th>real-val{by_head}<th>saved</tr>"
+        f"start{by_head}<th>saved</tr>"
     ]
     for name, s, mtime in rows:
         by = s.get("held_out_loss_by_source") or {}
@@ -608,7 +688,6 @@ def checkpoint_table(
             html.escape(str(s.get("hash", ""))),
             _fmt(ho / den if ho and den else None) or "n/a",
             _fmt(s.get("held_out_loss_start")),
-            _fmt(s.get("real_validation_loss")),
             *(_fmt(by.get(src)) or "n/a" for src in sources),
             datetime.fromtimestamp(mtime).strftime("%m-%d %H:%M")
             if mtime
@@ -660,11 +739,33 @@ def _caption(ctx: Context, ds: Mapping[str, Any]) -> str:
 def nowcasts_section(
     ctx: Context, sizes: Mapping[str, int], builts: Mapping[str, Any]
 ) -> str:
-    """Return the nowcast panels of every dataset, behind a selector."""
+    """Return the nowcast panels of every dataset, behind a selector.
+
+    Every configured dataset is listed (Germany's development half and
+    the held-out simulations; BDBV is held out). One with no
+    nowcasts yet is listed as empty, with why (its `missing`), so the
+    selector always offers it.
+    """
     datasets, sources = [], set()
     for ds in ctx.datasets:
         built = builts.get(ds["key"])
         if not built or not built["origins"] or not built["locs"]:
+            datasets.append(
+                {
+                    "key": ds["key"],
+                    "label": ds.get("label", ds["key"]),
+                    "metric": ds.get("metric", ""),
+                    "empty": True,
+                    "missing": ds.get("missing", ""),
+                    "truth": "",
+                    "meta": [],
+                    "locs": [],
+                    "origins": [],
+                    "targets": [],
+                    "preload": {},
+                    "groups": [],
+                }
+            )
             continue
         meta = nowcasts.meta(
             built, ctx.runs, ctx.references, sizes, ctx.excluded
@@ -709,7 +810,7 @@ def nowcasts_section(
                 ],
             }
         )
-    if not datasets:
+    if not any(not d.get("empty") for d in datasets):
         return "<p class=mut>No nowcasts yet.</p>"
     defaults = dict((ctx.view or {}).get("defaults") or {})
     data = _json(
@@ -720,8 +821,13 @@ def nowcasts_section(
                 for r in ctx.runs
             ],
             "defaults": defaults,
-            # WIS parts in the paper's order, each its share of the colour.
-            "parts": [[p, wis.part_share(p)] for p in wis.PARTS],
+            # WIS parts in the data's order, each with its fill (solid or
+            # hatched, labels.WIS_PART_FILLS), and the order they stack in
+            # (labels.WIS_PART_STACK, from the left).
+            "parts": [
+                [p, paperstyle.part_fill(p)] for p in paperstyle.WIS_PARTS
+            ],
+            "stack": list(paperstyle.WIS_STACK),
         }
     )
     first = defaults.get("source")
@@ -738,18 +844,6 @@ def nowcasts_section(
     )
 
 
-def wis_section(ctx: Context, rows: Sequence[Mapping[str, str]]) -> str:
-    """Return the mean WIS bars by component; none before any are scored.
-
-    Runs' bars are of the view's default source (`dashboard.defaults`).
-    """
-    source = ((ctx.view or {}).get("defaults") or {}).get("source")
-    bars = scores.wis_bars(
-        rows, ctx.runs, ctx.references, ctx.rule, source, ctx.excluded
-    )
-    return wis.section(bars, ctx.view or {}, tip)
-
-
 def mail_section(ctx: Context) -> str:
     """Return the notes file's last matching lines; none without one."""
     if not ctx.mailbox:
@@ -757,9 +851,15 @@ def mail_section(ctx: Context) -> str:
     if not ctx.mailbox.exists():
         return "<p class=mut>no notes yet</p>"
     rx = re.compile(ctx.mail_filter, re.I) if ctx.mail_filter else None
+    # Lines about a held-out study (BDBV) are never shown.
+    hide = re.compile(ctx.mail_hide, re.I) if ctx.mail_hide else None
     with ctx.mailbox.open(errors="replace") as f:
         tail = deque(f, maxlen=ctx.mail_lines)
-    lines = [x.rstrip("\n") for x in tail if not rx or rx.search(x)]
+    lines = [
+        x.rstrip("\n")
+        for x in tail
+        if (not rx or rx.search(x)) and not (hide and hide.search(x))
+    ]
     if not lines:
         return "<p class=mut>no matching lines</p>"
 
@@ -835,7 +935,7 @@ def selector_data(ctx: Context, builts: Mapping[str, Any]) -> str:
                     {
                         "key": s,
                         "label": s.removeprefix("model:"),
-                        "color": "#94a3b8",
+                        "color": labels.NEUTRAL,
                     }
                 )
     shown = [r.key for r in ctx.runs] + [
@@ -896,7 +996,11 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     for r in ctx.runs:
         base = info.get(r.base or r.key, info[r.key])
         info[r.key]["bfull"] = base["full0"]
-    score_rows = scores.read(ctx.source.scores)
+    score_rows = [
+        r
+        for r in scores.read(ctx.source.scores)
+        if r.get("study") not in ctx.hidden_studies
+    ]
     sizes = checkpoint_sizes(ctx, info, score_rows)
     mail = mail_section(ctx)
     builts = {ds["key"]: ctx.nowcasts(ds["key"]) for ds in ctx.datasets}
@@ -924,9 +1028,6 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         ),
         ("nowcasts", "Nowcasts", nowcasts_section(ctx, sizes, builts), True),
     ]
-    bars = wis_section(ctx, score_rows)
-    if bars:
-        parts.append(("wis", "Mean WIS", bars, True))
     if mail:
         parts.append(("mailbox", "Recent activity", mail, True))
     tables = tables_section(ctx, info) + notes_section(ctx)
@@ -939,7 +1040,6 @@ NAV = {
     "status": "Status",
     "mailbox": "Activity",
     "learning": "Learning",
-    "wis": "WIS",
 }
 """Short names in the top bar, where they differ from the section titles."""
 
@@ -990,7 +1090,8 @@ def build(ctx: Context) -> str:
         "<!doctype html><html><head><meta charset=utf-8>"
         '<meta name=viewport content="width=device-width,initial-scale=1">'
         "<title>Fine-tuning dashboard</title>"
-        f"<style>{_asset('style.css')}</style><script>{info_js}</script>"
+        f"<style>{ui_colours()}{_asset('style.css')}</style>"
+        f"<script>{info_js}</script>"
         f"<script>{_asset('player.js')}\n{_asset('sel.js')}</script></head>"
         f"<body>{body}<script>{_asset('mode.js')}\n{_asset('nav.js')}\n"
         f"{_asset('expand.js')}\n{'' if ctx.once else _asset('live.js')}"

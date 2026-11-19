@@ -152,8 +152,30 @@ LORA_TARGETS = (
 """Modules the LoRA adapter trains."""
 
 
-BIAS_CODE = ("src/bdbvhubrenewal/forecasters/series_bias.py",)
-"""The series bias's code and its parent rule, hashed into its settings."""
+BIAS_CODE = {
+    "src/bdbvhubrenewal/forecasters/series_bias.py": (
+        "src/bdbvhubrenewal/forecasters/series_bias.py"
+    ),
+}
+"""The series bias's code and its parent rule, hashed into its settings,
+by name then path as `finetune_chronos.CODE`."""
+
+
+def code_paths(bias: bool) -> dict[str, str]:
+    """Return where each name in `code_sha256` is now.
+
+    The trainer's own file is named `finetune_chronos.TRAINER`, and the
+    `foundation.<function>` entries are read from `foundation`.
+    """
+    root = Path(__file__).resolve().parents[1]
+    paths = {
+        **ft.CODE,
+        ft.TRAINER: Path(__file__).resolve().relative_to(root).as_posix(),
+        "foundation": ft.FOUNDATION_PATH,
+    }
+    if bias:
+        paths.update(BIAS_CODE)
+    return paths
 
 
 def lora_config(bias: bool):
@@ -1523,11 +1545,11 @@ def main() -> None:
         "grid": args.grid,
         "chronos_revision": CHRONOS_REVISION,
         "code_sha256": {
-            **{p: ft._sha256(Path(p)) for p in ft.CODE},
-            "scripts/finetune_stream.py": ft._sha256(Path(__file__)),
+            **{n: ft._sha256(Path(p)) for n, p in ft.CODE.items()},
+            ft.TRAINER: ft._sha256(Path(__file__)),
             # The bias's code shapes a bias checkpoint, so it is hashed.
             **(
-                {c: ft._sha256(Path(c)) for c in BIAS_CODE}
+                {n: ft._sha256(Path(p)) for n, p in BIAS_CODE.items()}
                 if args.series_bias
                 else {}
             ),
@@ -1954,6 +1976,9 @@ def main() -> None:
             # The commit the trainer ran from, outside the hash: the
             # checkpoint is rebuilt from it to the same hash.
             settings["code_commit"] = commit
+            # Where each hashed name is at that commit, also outside the
+            # hash, so a moved file keeps its checkpoints' hashes.
+            settings["code_paths"] = code_paths(args.series_bias)
             settings["device"] = device
             if args.real_validation:
                 settings["real_validation_sha256"] = ft._sha256(

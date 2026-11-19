@@ -84,7 +84,9 @@ rule simulate_batch:
         sim_slots=1,
     params:
         sims=lambda wc, output: Path(output.counts).parent,
-        batch=SIM["batch"],
+        # A top-up batch: its planned cells and their number (topup.smk).
+        batch=batch_size,
+        cells=batch_cells,
         draws=SIM["draws"],
         seed_base=SIM["seed_base"],
         lib=ENW_LIB,
@@ -114,7 +116,7 @@ rule simulate_batch:
         rm -rf "$tmp" && mkdir -p "$tmp"
         trap 'rm -rf "$tmp"' EXIT
         rscript=$(command -v Rscript)
-        TMPDIR="$tmp" ENW_DRAWS={params.draws} \
+        TMPDIR="$tmp" ENW_DRAWS={params.draws} ENW_CELLS="{params.cells}" \
             ENW_SEED_BASE={params.seed_base} ENW_LIB={params.lib} \
             PATH="$(getconf PATH):$PATH" {params.prefix} \
             workflow/scripts/timed.sh \

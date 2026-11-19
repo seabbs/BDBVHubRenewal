@@ -24,15 +24,13 @@ nav:
   - Fine-tuned foundation:
       - foundation/index.md
       - Paper: paper.md
-      - Using the fine-tuned Chronos-2: methods/finetuned-chronos.md
+      - Using the fine-tuned model: methods/finetuned-chronos.md
       - German nowcast benchmark: germany.md
   - Joint-model-informed renewal:
       - renewal/index.md
       - Methods: renewal/methods.md
-      - Renewal models: methods/model.md
-      - Model building: model-development/model-building.md
-      - Development log: model-development/log.md
-      - Score history: model-development/score-history.md
+      - Methods reference: methods/model.md
+      - Implementation: methods/implementation.md
   - Hub submission:
       - hub/index.md
       - Nowcast: nowcast.md
@@ -52,9 +50,9 @@ nav:
           - Opting in: submission/opting-in.md
           - Submission log: submission/rounds/index.md
   - Packages:
+      - packages/index.md
       - Setup: setup.md
       - Getting started: getting-started.ipynb
-      - Implementation: methods/implementation.md
       - Development:
           - Contributing: development/contributing.md
           - Adding a model: development/adding-a-model.md
@@ -168,6 +166,12 @@ markdown_extensions:
 
 plugins:
   - search
+  # Pages that moved or were removed, so their old addresses still work.
+  - redirects:
+      redirect_maps:
+        model-development/model-building.md: renewal/methods.md
+        model-development/log.md: renewal/index.md
+        model-development/score-history.md: backtest.md
   - mkdocs-jupyter:
       # Only the executed notebook. The .py source would also render to
       # getting-started/ and replace it with a page without outputs.

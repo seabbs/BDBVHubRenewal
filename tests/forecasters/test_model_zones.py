@@ -9,13 +9,9 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data import load_daily_zones
-from bdbvhubrenewal.data.zones import (
-    hub_zones,
-    is_zone,
-    load_zone_data,
-    province_of,
-    weekly_zone_counts,
-)
+from bdbvhubrenewal.data.hierarchy import is_zone, province_of
+from bdbvhubrenewal.data.snapshots import weekly_counts
+from bdbvhubrenewal.data.zones import hub_zones, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters import renewal as rn
@@ -51,7 +47,7 @@ def zone_task(
 
 def _submitted_split(samples: pd.DataFrame, task: ForecastTask) -> pd.DataFrame:
     """The split as the submission made it: the full zone file, hub codes."""
-    counts = weekly_zone_counts(load_daily_zones(DATA), task.vintage)
+    counts = weekly_counts(load_daily_zones(DATA), task.vintage)
     codes = hub_zones(DATA / "hub-config" / "tasks.json")
     return ZoneAllocator().allocate(samples, task, counts, codes)
 
@@ -119,18 +115,22 @@ def test_renewal_forecast_and_fit_dir_carry_the_submitted_zones(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # renewalsp fits provinces, so its zones are split at submission.
     _fake_renewal(monkeypatch)
-    out = get_model("renewal").forecast(zone_task)
+    out = get_model("renewalsp").forecast(zone_task)
     own = out["location"].map(is_zone)
     assert own.any()
     pd.testing.assert_frame_equal(
         _sorted(out.loc[own]),
         _sorted(_submitted_split(out.loc[~own], zone_task)),
     )
-    # The fit directory the submission reads holds the same rows.
+    # The fit directory the submission reads holds the same rows. Its
+    # silent provinces' walk draws with the sampler seed, so it is the
+    # task's here.
+    sampler = {"num_chains": 2, "num_samples": 50, "seed": zone_task.seed}
     rn.fit_renewal(
-        zone_task, {"num_chains": 2, "num_samples": 50, "seed": 7}, tmp_path,
-        variant="renewal", config_name="main",
+        zone_task, sampler, tmp_path,
+        variant="renewalsp", config_name="renewalsp",
     )  # fmt: skip
     read = rn.forecast_renewal(zone_task, tmp_path).samples
     pd.testing.assert_frame_equal(_sorted(read), _sorted(out))
@@ -148,12 +148,16 @@ def test_the_submitted_file_is_unchanged(
     _fake_renewal(monkeypatch)
     # The CI's sampler seed is not the task's, as here.
     sampler = {"num_chains": 2, "num_samples": 50, "seed": 7}
-    run_fit(get_config("main"), zone_task, sampler, tmp_path, model="renewal")
+    run_fit(
+        get_config("renewalsp"), zone_task, sampler, tmp_path,
+        model="renewalsp",
+    )  # fmt: skip
     table, result, *_ = _hub_forecast(
-        zone_task, data=str(DATA), model=None, config="main", fit=tmp_path,
+        zone_task, data=str(DATA), model=None, config="renewalsp",
+        fit=tmp_path,
         forecast_date=VINTAGE,
     )  # fmt: skip
-    # As main wrote it: province samples, split at submission.
+    # As renewalsp wrote it: province samples, split at submission.
     prov = result.samples.loc[~result.samples["location"].map(is_zone)]
     want = to_hub_table(
         prov, zone_task.reference_date, unassigned=result.unassigned,

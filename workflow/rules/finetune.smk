@@ -16,7 +16,7 @@
 # each round's manifest lists them, or from the sims-r<N> releases
 # (`release`). A segment is planned only once its batches can be had: the
 # training seeds count up to the first batch not yet listed, and nothing
-# trains before the whole held-out round is (`listed_batches`, listed
+# trains before the whole validation round is (`listed_batches`, listed
 # afresh each time a run plans). From the rounds host, its rounds'
 # manifests and QC exclusions are mirrored in <RUN>/rounds/.
 
