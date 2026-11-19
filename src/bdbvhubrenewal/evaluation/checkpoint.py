@@ -124,6 +124,7 @@ COLUMNS: Final = [
     "dispersion",
     "overprediction",
     "underprediction",
+    "precision",
 ]
 """The evidence table's columns, those of rows of other studies too."""
 SORT: Final = ["rule", "study", "level", "model", "outbreaks", "checkpoint"]
@@ -409,6 +410,27 @@ def score_dates() -> int:
     return int(os.environ.get("SCORE_DATES") or GERMANY_CHUNK)
 
 
+PRECISION_FILE: Final = "precision.txt"
+
+
+def record_precision(root: Path) -> None:
+    """Write the precision a unit forecasts in to its folder."""
+    from bdbvhubrenewal.forecasters.foundation import (
+        inference_precision,
+        torch_device,
+    )
+
+    Path(root).mkdir(parents=True, exist_ok=True)
+    precision = inference_precision(torch_device())
+    (Path(root) / PRECISION_FILE).write_text(precision + "\n")
+
+
+def unit_precision(root: Path) -> str:
+    """Return the precision a unit forecast in: fp32 before it was kept."""
+    path = Path(root) / PRECISION_FILE
+    return path.read_text().strip() if path.exists() else "fp32"
+
+
 def _pin(label: str) -> None:
     """Pin the checkpoint, so no process resolves `latest` mid-run."""
     os.environ["BDBV_CHRONOS_FT"] = (
@@ -481,6 +503,7 @@ def bdbv_unit(
     )
     root = cache / ("zones" if zones else "bdbv") / label
     root.mkdir(parents=True, exist_ok=True)
+    record_precision(root)
     todo = {
         o: dataclasses.replace(tasks[o], n_samples=N_DRAWS, seed=config.seed)
         for o in bdbv_origins(data)
@@ -531,6 +554,7 @@ def germany_unit(cache: Path, label: str) -> None:
     )
     root = cache / "germany" / label
     root.mkdir(parents=True, exist_ok=True)
+    record_precision(root)
     dates = de.nowcast_dates(config, held_out=False)
     todo = [d for d in dates if not (root / f"{d}.csv.gz").exists()]
     models = list(label_models(label))
@@ -597,6 +621,17 @@ def _cached(root: Path) -> pd.DataFrame | None:
     return rows.loc[keep].drop(columns="target")
 
 
+def _with_precision(
+    rows: pd.DataFrame, root: Path, labels: Sequence[str]
+) -> pd.DataFrame:
+    """Give each checkpoint's rows the precision its unit forecast in."""
+    at = {
+        ("zero-shot" if lb == REFERENCE else lb): unit_precision(root / lb)
+        for lb in labels
+    }
+    return rows.assign(precision=rows["checkpoint"].map(at))
+
+
 def germany_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
     """Return the German development half's rule rows."""
     from bdbvhubrenewal.evaluation import germany as de
@@ -622,7 +657,8 @@ def germany_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
     if not parts:
         return pd.DataFrame(columns=COLUMNS)
     sc = pd.concat(parts, ignore_index=True).rename(columns={"pool": "level"})
-    return relative(matched(sc, GERMANY_CELL), "germany", ("wis", "log_wis"))
+    out = relative(matched(sc, GERMANY_CELL), "germany", ("wis", "log_wis"))
+    return _with_precision(out, cache / "germany", labels)
 
 
 def bdbv_rows(
@@ -678,7 +714,8 @@ def bdbv_rows(
     if not parts:
         return pd.DataFrame(columns=COLUMNS)
     sc = pd.concat(parts, ignore_index=True)
-    return relative(matched(sc, BDBV_CELL), "ebola", ("crps", "log_crps"))
+    out = relative(matched(sc, BDBV_CELL), "ebola", ("crps", "log_crps"))
+    return _with_precision(out, cache / "bdbv", labels)
 
 
 def _existing(path: Path, columns: Sequence[str]) -> pd.DataFrame:
