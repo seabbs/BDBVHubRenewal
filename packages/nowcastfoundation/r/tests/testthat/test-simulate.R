@@ -9,7 +9,8 @@ test_that("a batch simulates outbreaks through epinowcast", {
   grid <- r7()
   model <- suppressMessages(epinowcast::enw_model(threads = FALSE))
   out <- simulate_batch(grid, 99902L, 2L, model = model, weeks = 8L)
-  expect_equal(nrow(out$settings), 2L)
+  expect_equal(nrow(out$settings), 2L,
+    info = paste(unique(out$failures$reason), collapse = " | "))
   expect_gt(nrow(out$counts), 0)
   expect_setequal(unique(out$latent$outbreak), out$settings$outbreak)
   expect_true(all(c("infections", "onsets", "r", "reff", "date") %in% names(out$latent)))

@@ -6,16 +6,16 @@ simulate_outbreak <- function(grid, design, v, ctx) {
   place_ids <- sprintf("P%02d", seq_len(design$n_places))
   age_ids <- sprintf("A%d", seq_len(design$n_ages))
   dates <- as.IDate("2026-01-03") + v$offset + seq_len(n_time) - 1L
-  grid <- CJ(
+  triangle <- CJ(
     place = place_ids, age = age_ids, reference_date = dates,
     delay = 0:(max_delay - 1)
   )
-  grid[, report_date := reference_date + delay][, delay := NULL]
-  grid <- grid[report_date <= max(dates)][, confirm := 0L]
+  triangle[, report_date := reference_date + delay][, delay := NULL]
+  triangle <- triangle[report_date <= max(dates)][, confirm := 0L]
   pobs <- suppressMessages(suppressWarnings(epinowcast::enw_preprocess_data(
-    grid, by = c("place", "age"), max_delay = max_delay
+    triangle, by = c("place", "age"), max_delay = max_delay
   )))
-  rm(grid)
+  rm(triangle)
   strata <- unique(pobs$metareference[[1]][, .(.group, place, age)])
   setorder(strata, .group)
   multi_place <- design$n_places > 1
@@ -30,7 +30,7 @@ simulate_outbreak <- function(grid, design, v, ctx) {
   latent_run <- latent_onsets(grid, n_r, gt, strata, design, v)
   onsets <- latent_run$onsets
   v <- latent_run$values
-  latent <- latent_run$latent[, `:=`(date = dates, location = "all")]
+  latent_path <- latent_run$latent[, `:=`(date = dates, location = "all")]
   # Days before the outbreak first expects one onset a day.
   total <- rowSums(onsets)
   v$low_start_days <- if (any(total >= 1)) {
@@ -271,7 +271,7 @@ simulate_outbreak <- function(grid, design, v, ctx) {
   }
   list(
     values = v,
-    latent = latent,
+    latent = latent_path,
     counts = pp[mean != 0, .(
       outbreak = NA_character_, draw, timestep = "day", location,
       reference_date, report_date, count = as.integer(mean)

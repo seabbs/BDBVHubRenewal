@@ -39,7 +39,11 @@ out <- simulate_batch(
   weeks = if (nzchar(weeks)) as.integer(weeks),
   debug = nzchar(Sys.getenv("ENW_DEBUG"))
 )
-if (nrow(out$settings)) out$settings[, names(stack) := stack]
+if (!nrow(out$settings)) {
+  stop("no simulation of ", n, " succeeded; first failure: ",
+    out$failures$reason[1])
+}
+out$settings[, names(stack) := stack]
 message(sprintf(
   "%d of %d simulations in %.1f s (epinowcast %s, grid %s)",
   nrow(out$settings), n, as.numeric(Sys.time() - t0, units = "secs"),

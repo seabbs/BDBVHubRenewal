@@ -187,7 +187,7 @@ enw_simulate_data <- function(data, growth_rate, parameters, reference,
   )
   # `epinowcast` uses `data` only to bind it to its output, which copies
   # every table in it; the triangle's cells are the one table needed.
-  prepared <- do.call(epinowcast, list(
+  prepared <- do.call(epinowcast::epinowcast, list(
     data = data[, .(new_confirm)], reference = reference, report = report,
     expectation = expectation,
     missing = epinowcast::enw_missing(formula = ~0, data = data), obs = obs,
