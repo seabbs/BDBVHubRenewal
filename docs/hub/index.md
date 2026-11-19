@@ -10,7 +10,7 @@ We submit the random walk nowcast as `seabbs-rwnowcast`, the first renewal model
 - [Backtest](../backtest.md): every model scored on past releases.
 - [Comparison with hub forecasts](../comparison.md): our models against the hub teams.
 - Data: the [hub data](../data.md) and how we [read it](../methods/data.md).
-- Methods: [evaluation](../methods/evaluation.md) and the [pairing sensitivity](../pairing.md).
+- Methods: the [foundation models](../methods/foundation.md), the [baseline models](../methods/baselines.md), [evaluation](../methods/evaluation.md) and the [pairing sensitivity](../pairing.md).
 - Submission: the [workflow](../submission/workflow.md), the [hub specification](../submission/hub-spec.md), [opting in](../submission/opting-in.md) and the [submission log](../submission/rounds/index.md).
 
 Next: [Nowcast](../nowcast.md).
