@@ -89,7 +89,7 @@ finetune:
   # `outbreaks` simulations, and the series bias at its own rate `bias_lr`.
   grid: r7
   draws: 1
-  cuts: 32
+  cuts: 14
   subset_seed: 1
   learning_rate: 1.0e-5
   bias_lr: 1.0e-3
