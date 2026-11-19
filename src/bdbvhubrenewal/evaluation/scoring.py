@@ -9,8 +9,9 @@ epiforecasts/BVDOutbreakSize (`src/scoring.jl`).
   quantile levels $\tau$ with sample quantiles $q_\tau$,
   $$\text{WIS}(F, y) = \frac{1}{K + 1/2}\sum_\tau
   \left(\mathbb{1}\{y < q_\tau\} - \tau\right)(q_\tau - y),$$
-  which equals the usual interval form.
-  It splits into dispersion, overprediction and underprediction.
+  which equals the usual interval form, scoringrules'
+  `weighted_interval_score`. It splits into dispersion, overprediction
+  and underprediction, our own code as scoringrules has no split.
   `wis_quantile` gives the same for forecasts made as quantiles, and
   `score_quantiles` scores those by WIS, the absolute error of the median
   and the coverage of each central interval.
@@ -51,7 +52,6 @@ import numpy as np
 import pandas as pd
 import scoringrules as sr  # type: ignore[import-untyped]
 from numpy.typing import ArrayLike, NDArray
-from scipy.spatial.distance import pdist
 
 __all__ = [
     "QUANTILE_LEVELS",
@@ -68,7 +68,6 @@ __all__ = [
     "score_quantiles",
     "score_sample",
     "summarise_scores",
-    "variogram_sample",
     "wis_quantile",
     "wis_sample",
 ]
@@ -156,18 +155,31 @@ def wis_quantile(
     # Pair each lower level with its upper level.
     lo, hi = q[:, lower], q[:, tau > 0.5][:, ::-1]
     alpha = 2 * tau[lower]
-    med = q[:, np.isclose(tau, 0.5)]
-    disp = np.sum(alpha / 2 * (hi - lo), axis=1)
-    over = np.sum(np.maximum(lo - y, 0), axis=1)
-    over += np.maximum(med - y, 0)[:, 0] / 2
-    under = np.sum(np.maximum(y - hi, 0), axis=1)
-    under += np.maximum(y - med, 0)[:, 0] / 2
+    med = q[:, np.isclose(tau, 0.5)][:, 0]
+    # scoringrules (0.11, 0.12) adds `w_median * median` where the WIS has
+    # `w_median * |y - median|`, so it is given the median's error
+    # (test_scoringrules_wis_adds_the_median_not_its_error).
+    wis = np.atleast_1d(
+        np.asarray(
+            sr.weighted_interval_score(
+                y[:, 0], np.abs(y[:, 0] - med), lo, hi, alpha,
+                backend="numpy",
+            ),
+            dtype=np.float64,
+        )
+    )  # fmt: skip
+    # The split, which scoringrules lacks: it sums to the WIS.
     norm = lower.sum() + 0.5
+    disp = np.sum(alpha / 2 * (hi - lo), axis=1) / norm
+    over = np.sum(np.maximum(lo - y, 0), axis=1)
+    over = (over + np.maximum(med - y[:, 0], 0) / 2) / norm
+    under = np.sum(np.maximum(y - hi, 0), axis=1)
+    under = (under + np.maximum(y[:, 0] - med, 0) / 2) / norm
     return {
-        "wis": (disp + over + under) / norm,
-        "dispersion": disp / norm,
-        "overprediction": over / norm,
-        "underprediction": under / norm,
+        "wis": wis,
+        "dispersion": disp,
+        "overprediction": over,
+        "underprediction": under,
     }
 
 
@@ -200,15 +212,10 @@ def crps_sample(
         raise ValueError(
             f"estimator must be 'fair' or 'nrg', not {estimator!r}."
         )
-    x = np.sort(_as_samples(samples))
-    n = x.size
-    mae = np.mean(np.abs(x - obs))
-    weights = 2 * np.arange(1, n + 1) - n - 1
-    # Half the sum of |x_i - x_j| over all pairs.
-    half = np.sum(weights * x)
+    x = _as_samples(samples)
     if estimator == "nrg":
-        return float(mae - half / n**2)
-    return float(mae - (half / (n * (n - 1)) if n > 1 else 0.0))
+        return float(sr.crps_ensemble(obs, x, estimator="nrg"))
+    return float(_crps(np.array([obs], dtype=np.float64), x[None, :])[0])
 
 
 def energy_sample(obs: ArrayLike, samples: ArrayLike) -> float:
@@ -229,40 +236,7 @@ def energy_sample(obs: ArrayLike, samples: ArrayLike) -> float:
     """
     y = np.asarray(obs, dtype=np.float64)
     x = np.asarray(samples, dtype=np.float64)
-    m = x.shape[0]
-    fit = np.mean(np.linalg.norm(x - y, axis=1))
-    spread = np.sum(pdist(x)) / (m * (m - 1))
-    return float(fit - spread)
-
-
-def variogram_sample(
-    obs: ArrayLike, samples: ArrayLike, p: float = 0.5
-) -> float:
-    r"""Return the variogram score of a sample forecast of a vector.
-
-    $\sum_{i, j} \left(\frac{1}{m} \sum_k |x_{k,i} - x_{k,j}|^p
-    - |y_i - y_j|^p\right)^2$ over every ordered pair of components, as
-    Scheuerer and Hamill (2015) define it, with equal weights.
-
-    Parameters
-    ----------
-    obs : array-like
-        The observed vector, length $d$.
-    samples : array-like
-        Joint samples, shape `[m, d]`.
-    p : float
-        The order.
-
-    Returns
-    -------
-    float
-        The variogram score.
-    """
-    y = np.asarray(obs, dtype=np.float64)
-    x = np.asarray(samples, dtype=np.float64)
-    fcst = np.mean(np.abs(x[:, :, None] - x[:, None, :]) ** p, axis=0)
-    seen = np.abs(y[:, None] - y[None, :]) ** p
-    return float(np.sum((fcst - seen) ** 2))
+    return float(sr.es_ensemble(y, x, estimator="fair", backend="numpy"))
 
 
 def scale_of(location: pd.Series) -> pd.Series:
