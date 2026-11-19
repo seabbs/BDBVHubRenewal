@@ -194,6 +194,7 @@ $$
 L = \frac{1}{N} \sum_{n=1}^{N} \frac{1}{H} \sum_{t=1}^{H} m_{n,t} \sum_{k=1}^{21} 2 \left| \left(\tilde y_{n,t} - \hat q_{n,t,k}\right) \left(\mathbb{1}\!\left[\tilde y_{n,t} \le \hat q_{n,t,k}\right] - \tau_k\right) \right|,
 $$
 where $m_{n,t}$ is 1 for a target step to forecast and 0 for a missing target or a lag series' known future value.
+- The loss covers the nowcast steps and one week ahead, so fine-tuning does not change long-range forecasting, and we score every horizon to 4 weeks.
 
 #### Learning rates
 
@@ -217,7 +218,8 @@ Of the daily blocks, 20% have weekly releases, 10% releases on weekdays only and
 Of the 3-day and weekly blocks, 20% have missed releases.
 In those blocks each release but the last is missed with chance 0.2.
 Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives up to 32 blocks.
-Each block has up to 364 steps of context, and its prediction length is its horizon.
+Each block has up to 364 steps of context, and its prediction length is its nowcast steps and one week ahead, rounded up to whole steps.
+A block with no case reported across its places in the 28 days up to its cut-off is dropped, from what is known at the cut-off.
 We train on 8,400 simulations, 10 balanced blocks of 840, with checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400.
 
 ::: {#tbl-block-layouts}
