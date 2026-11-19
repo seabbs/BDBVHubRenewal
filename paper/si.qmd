@@ -465,6 +465,7 @@ Choices tuned on development data, with their values and the data they were set 
 
 ::: {.callout-note title="Plan"}
 - We break down each case study's scores by location and horizon.
+- For Germany we also score our models' forecasts up to 4 weeks after the nowcast date, which the hub did not ask for.
 - We show each case study's WIS over time.
 - We show held-out synthetic scores by the number of fine-tuning outbreaks.
 :::
@@ -649,13 +650,13 @@ German nowcast hub: WIS of every place relative to {{< meta results.germany.base
 ::: {#fig-germany-si-location-horizon}
 ![](build/figures/si/germany-si-location-horizon.png)
 
-German nowcast hub: relative WIS by location and horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub: relative WIS by location and horizon, on the hub's targets only. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#fig-germany-si-location-horizon-log}
 ![](build/figures/si/germany-si-location-horizon-log.png)
 
-German nowcast hub: relative WIS on the log scale by location and horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub: relative WIS on the log scale by location and horizon, on the hub's targets only. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#fig-germany-si-wis-over-time}
@@ -667,7 +668,7 @@ German nowcast hub: WIS over time, with a dotted line at the split. {{< meta res
 ::: {#tbl-germany-horizon}
 {{< include build/tables/si/germany-scores-by-horizon.md >}}
 
-German nowcast hub scores by horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub scores by horizon, on the hub's targets only. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#tbl-germany-location}
