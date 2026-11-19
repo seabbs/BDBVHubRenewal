@@ -9,6 +9,7 @@ Nothing about a machine is committed.
 
     python3 workflow/flowlib/machine.py args     # Snakemake options
     python3 workflow/flowlib/machine.py device   # cuda, mps or cpu
+    python3 workflow/flowlib/machine.py budget   # cores, mem_mb, gpu (JSON)
 """
 
 from __future__ import annotations
@@ -166,5 +167,9 @@ if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "args"
     if what == "device":
         print(device(cfg))
+    elif what == "budget":
+        import json
+
+        print(json.dumps({**budget(cfg), "gpu": max(1, gpus())}))
     else:
         print(" ".join(args(cfg)))

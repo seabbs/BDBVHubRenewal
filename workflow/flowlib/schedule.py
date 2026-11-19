@@ -33,7 +33,7 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
-from flowlib import machine
+from flowlib import compute
 
 TARGETS = (
     "simulate",
@@ -88,9 +88,7 @@ def _snakemake(cfg: Mapping[str, str], targets: list[str]) -> list[str]:
         "paper",
         "snakemake",
         *targets,
-        "--workflow-profile",
-        "workflow/profiles/default",
-        *machine.args(cfg),
+        *compute.args(cfg),
         *extra,
     ]
 

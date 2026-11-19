@@ -81,6 +81,14 @@ DEFAULTS = (
     # Dashboard runs with a local folder (flowlib.dashboard.runs specs,
     # separated by `;`).
     ("DASHBOARD_RUNS", ""),
+    # Where jobs run (flowlib.compute): single (this machine) or ssh
+    # (this machine coordinates its WORKERS, name=host:ROOT:CHECKOUT,
+    # with rule GROUPS placed on them, group=worker), and the command
+    # running Snakemake in a worker's checkout.
+    ("COMPUTE", "single"),
+    ("WORKERS", ""),
+    ("GROUPS", ""),
+    ("WORKER_SNAKEMAKE", "uv run --group paper snakemake"),
     # Memory and disk a job leaves free when it starts (GB).
     ("MIN_FREE_GB", "20"),
     ("MIN_DISK_GB", "16"),

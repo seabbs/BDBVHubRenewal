@@ -226,8 +226,7 @@ tasks:
       - >-
         {{.SNAKEMAKE}} {{.WF_TARGET}}
         {{if .SNAKEMAKE_PROFILE}}--workflow-profile {{.SNAKEMAKE_PROFILE}}
-        {{else}}--workflow-profile workflow/profiles/default
-        $(python3 workflow/flowlib/machine.py args){{end}}
+        {{else}}$(python3 workflow/flowlib/compute.py){{end}}
         {{.CLI_ARGS}}
 
   all:

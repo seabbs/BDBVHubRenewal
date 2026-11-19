@@ -88,7 +88,7 @@ def _run(coord, worker_spec, croot, state):
         "ROOT": str(croot),
         "REMOTE_STATE": str(state),
         "REMOTE_POLL": "1",
-        "REMOTE_SNAKEMAKE": f"{py} -m snakemake",
+        "WORKER_SNAKEMAKE": f"{py} -m snakemake",
     }
     return subprocess.run(
         [

@@ -1,0 +1,17 @@
+# COMPUTE=ssh (flowlib.compute): this machine coordinates the one run
+# and places each job on a worker (WORKERS, GROUPS in config/local.env)
+# through the scripts in workflow/scripts/remote/. The jobs and
+# resources, the sum of the workers' budgets, come from flowlib.compute.
+executor: cluster-generic
+cluster-generic-submit-cmd: python3 workflow/scripts/remote/submit.py
+cluster-generic-status-cmd: python3 workflow/scripts/remote/status.py
+cluster-generic-cancel-cmd: python3 workflow/scripts/remote/cancel.py
+max-status-checks-per-second: 1
+rerun-triggers: [mtime]
+printshellcmds: true
+keep-going: true
+latency-wait: 30
+default-resources:
+  - mem_mb=2048
+set-threads:
+  - simulate_batch=1

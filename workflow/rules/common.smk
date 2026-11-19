@@ -129,13 +129,18 @@ def available_seeds():
     return order
 
 
-def known_exclusions():
-    """The sim-QC exclusions known now."""
+def exclusion_files():
+    """The sim-QC exclusion lists here now."""
     paths = [Path(f"{RUN}/excluded.csv")]
     paths += Path(ROUNDS_DIR).glob("r*/qc/excluded.csv")
     paths += Path(MIRROR).glob("r*/qc/excluded.csv")
     paths += Path(f"{RUN}/excluded-releases").glob("*.csv")
-    return set().union(*(segments.excluded(p) for p in paths))
+    return sorted(str(p) for p in paths if p.is_file())
+
+
+def known_exclusions():
+    """The sim-QC exclusions known now."""
+    return set().union(*(segments.excluded(p) for p in exclusion_files()))
 
 
 def kept_or_full(seed, skip):
@@ -167,6 +172,9 @@ def segment_inputs(wc):
     out = {
         "sims": expand(f"{RUN}/sims/settings-{{seed}}.csv", seed=segment_seeds(n)),
         "seeds": f"{RUN}/seeds.txt",
+        # Read for the seeds above and by the trainer: inputs, so a
+        # worker elsewhere has them (flowlib.compute).
+        "qc": exclusion_files(),
     }
     if PREV[n] is not None:
         out["prev"] = f"{TRAIN}/n{PREV[n]}/settings.json"

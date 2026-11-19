@@ -157,6 +157,16 @@ rule train_segment:
         eval_every=FT["eval_every"],
         by_source_every=FT["by_source_every"],
         eval_mode=FT["eval"],
+        # Files publishing reads beside the outputs, copied back with them
+        # from a worker elsewhere (flowlib.compute).
+        copy_back=lambda wc: [
+            f"{TRAIN}/n{wc.n}/{name}"
+            for name in (
+                "outbreaks.txt",
+                "consumed.txt",
+                "finetuned-ckpt/adapter_config.json",
+            )
+        ],
     shell:
         # The run's own state resumes it; the state kept with the prefix
         # before replaces it if missing or behind (flowlib.segments).

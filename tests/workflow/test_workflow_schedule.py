@@ -28,6 +28,22 @@ def test_every_target_uses_the_default_profile():
     assert all("workflow/profiles/default" in cmd for _, cmd, _ in got)
 
 
+def test_with_workers_a_tick_coordinates_them(tmp_path, monkeypatch):
+    monkeypatch.setenv("REMOTE_STATE", str(tmp_path))
+    cfg = {
+        "SCHEDULE_TARGETS": "simulate",
+        "COMPUTE": "ssh",
+        "WORKERS": "archie=local",
+        "ROOT": str(tmp_path),
+        "CORES": "4",
+        "MEM_MB": "8192",
+    }
+    (_, cmd, _), *_ = schedule.plan(cfg)
+    assert "workflow/profiles/ssh" in cmd
+    assert cmd[cmd.index("--jobs") + 1] == "4"
+    assert (tmp_path / "budgets.json").is_file()
+
+
 def snakemake_targets(cmd):
     """The targets of a planned Snakemake command."""
     start = cmd.index("snakemake") + 1
