@@ -9,15 +9,15 @@ Load the hub data, build forecast vintages and simulate outbreaks to test models
 
 ::: bdbvhubrenewal.data.tidy
 
-::: bdbvhubrenewal.data.dates
+::: nowcastutils.dates
 
-::: bdbvhubrenewal.data.releases
+::: nowcastutils.releases
 
 ::: bdbvhubrenewal.data.simulate
 
 ::: bdbvhubrenewal.data.delays
 
-::: bdbvhubrenewal.data.snapshots
+::: nowcastutils.snapshots
 
 ::: bdbvhubrenewal.data.bvd
 
