@@ -5,7 +5,7 @@
 import functools
 import json
 
-from flowlib import hosts, localconfig, manifest, notify, releases, segments
+from flowlib import grids, hosts, localconfig, manifest, notify, releases, segments
 
 LOCAL = localconfig.read()
 HOST = LOCAL["HOST_NAME"]
@@ -74,7 +74,7 @@ def grid_name():
 
 # From finetune.smk.
 
-FT = config["finetune"]
+FT = grids.resolve(config["finetune"], config["grid_rounds"])
 # Where batches come from is this machine's choice when set.
 if LOCAL["SIMS_FROM"]:
     FT["sims_from"] = LOCAL["SIMS_FROM"]

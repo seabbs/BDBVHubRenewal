@@ -853,3 +853,16 @@ def test_one_unit_runs_before_the_release_list_exists(tmp_path):
     # base: it never waits on the release_list checkpoint.
     jobs = dry(tmp_path, str(tmp_path / "scores" / "bdbv" / "aaa.done"))
     assert jobs["score_bdbv"] == 1
+
+
+# Each grid has its own rounds (flowlib.grids).
+
+
+def test_r6_release_of_an_r5_round_is_refused(tmp_path):
+    with pytest.raises(AssertionError, match="round 9 is grid r5's"):
+        dry(tmp_path, "release", config={"rounds": [9]})
+
+
+def test_r6_simulates_its_held_out_round_20(tmp_path):
+    jobs = dry(tmp_path, "simulate", config={"rounds": [20]})
+    assert jobs["simulate_batch"] == 40

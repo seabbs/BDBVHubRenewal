@@ -132,3 +132,32 @@ def test_the_model_note_gives_one_draw_and_no_nb2() -> None:
     model = synthetic_grid.model_note(TEXT)
     assert "with one observation draw." in model
     assert "NB2 or NB1" not in model
+
+
+# The simulator in this tree, which may be ahead of the pinned one.
+LOCAL = (PAPER.parent / "scripts" / "finetune_simulate.R").read_text()
+
+
+def test_sampling_distributions_are_read_with_their_reasons() -> None:
+    dists = synthetic_grid.parse_distributions(LOCAL)
+    if not dists:
+        pytest.skip("this simulator has no sampling distributions")
+    assert dists["sqrt_phi"]["dist"] == "halfnormal"
+    table = synthetic_grid.distribution_table(LOCAL).set_index("setting")
+    assert table.loc["sqrt_phi", "distribution"] == "HalfNormal(0.25)"
+    size = table.loc["size_per_stratum", "distribution"]
+    assert size.startswith("LogNormal(median 3,000, sdlog 2.1) on [10, ")
+    assert table["why"].str.len().gt(0).all()
+
+
+def test_draws_from_distributions_appear_in_the_grid_tables() -> None:
+    if not synthetic_grid.parse_distributions(LOCAL):
+        pytest.skip("this simulator has no sampling distributions")
+    tables = synthetic_grid.layer_tables(LOCAL)
+    rep = tables["reporting"].set_index("setting")
+    epi = tables["epidemic"].set_index("setting")
+    assert "HalfNormal(0.25)" in rep.loc["observation", "draws"]
+    assert "50%" in rep.loc["shocks", "levels"]
+    # A summary's <name> is filled from that setting's distribution.
+    assert "±LogNormal(median 0.2" in rep.loc["delay_change", "draws"]
+    assert "<" not in " ".join(epi["draws"])

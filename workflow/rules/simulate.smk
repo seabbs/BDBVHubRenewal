@@ -169,6 +169,19 @@ rule round_ready:
         mark_ready(input, output, params, wildcards)
 
 
+# Refuses to upload into a release of another grid's batches: its notes
+# name the grid (`Grid r6.`), and unmarked releases are r5's
+# (flowlib.grids.release_grid).
+GRID_GUARD = """
+        notes=$(gh release view {params.tag} -R {params.repo} --json body -q .body)
+        found=$(printf '%s\\n' "$notes" | sed -n 's/.*Grid \\(r[0-9][0-9]*\\)\\..*/\\1/p' | head -n 1)
+        if [ "${{found:-r5}}" != "{params.grid}" ]; then
+            echo "{params.tag} holds grid ${{found:-r5}}'s batches, not {params.grid}'s: not uploading"
+            exit 1
+        fi
+"""
+
+
 rule release_batch:
     # Opt-in (target `release`): uploads a batch to the release sims-r<r>,
     # so another machine can train on it before the round ends.
@@ -185,6 +198,7 @@ rule release_batch:
     params:
         repo=SIM["repo"],
         tag="sims-r{round}",
+        grid=grid_name(),
         counts=rules.simulate_batch.output.counts,
         settings=rules.simulate_batch.output.settings,
     shell:
@@ -193,9 +207,12 @@ rule release_batch:
         gh release view {params.tag} -R {params.repo} >/dev/null 2>&1 \
             || gh release create {params.tag} -R {params.repo} --prerelease \
                 --title "Simulations, round {wildcards.round}" \
-                --notes "Fine-tuning simulations of round {wildcards.round}, one batch per asset, with their manifest rows." \
+                --notes "Fine-tuning simulations of round {wildcards.round}, one batch per asset, with their manifest rows. Grid {params.grid}." \
                 >/dev/null 2>&1 \
             || gh release view {params.tag} -R {params.repo} >/dev/null
+        """
+        + GRID_GUARD
+        + """
         gh release upload {params.tag} -R {params.repo} --clobber \
             {params.counts} {params.settings} {input.record}
         """
@@ -217,9 +234,13 @@ rule release_qc:
         repo=SIM["repo"],
         tag="sims-r{round}",
         named=f"{ROUNDS_DIR}/r{{round}}/qc/excluded-r{{round}}.csv",
+        grid=grid_name(),
     shell:
         """
         exec >{log} 2>&1
+        """
+        + GRID_GUARD
+        + """
         cp {input} {params.named}
         gh release upload {params.tag} -R {params.repo} --clobber {params.named}
         """
@@ -263,6 +284,11 @@ rule simulate:
 
 rule release:
     input:
+        # Never another grid's round: its release holds that grid's batches.
+        lambda wc: grids.check_release(
+            config["rounds"], grid_name(), config["grid_rounds"]
+        )
+        or [],
         [
             f"{ROUNDS_DIR}/r{r}/released/{s}.done"
             for r in config["rounds"]

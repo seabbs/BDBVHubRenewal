@@ -566,7 +566,9 @@ def test_workers_take_the_trainer_block_settings():
     )
     try:
         lags = {"daily": (28,)}
-        init_worker(100, lags, ("daily",))
+        init_worker(100, lags, ("daily",), grid="r5")
+        assert finetune_chronos.DESIGN == "r5"
+        assert finetune_chronos.CADENCES["daily"] == {"weekly": 1.0}
         assert finetune_chronos.MAX_SERIES == 100
         assert lags == finetune_chronos.MAX_LAGS
         assert finetune_chronos.SOURCES == ("daily",)
@@ -576,6 +578,7 @@ def test_workers_take_the_trainer_block_settings():
             finetune_chronos.MAX_LAGS,
             finetune_chronos.SOURCES,
         ) = saved
+        finetune_chronos.use_design("r6")
 
 
 def test_blocks_reach_deployed_sizes_on_many_places():
@@ -1072,3 +1075,58 @@ def test_evaluation_cadence_defaults_to_the_recipe_s():
         fs.check_cadence(300, 1000)
     with pytest.raises(ValueError, match="positive"):
         fs.check_cadence(0, 0)
+
+
+def test_an_unknown_grid_has_no_design():
+    import finetune_chronos
+
+    with pytest.raises(ValueError, match="r7"):
+        finetune_chronos.use_design("r7")
+    finetune_chronos.use_design("r6")
+
+
+def test_grids_before_r6_keep_r5s_blocks(tmp_path):
+    import finetune_chronos
+    from finetune_stream import cut
+
+    try:
+        for grid in ("r5", "r4"):
+            assert finetune_chronos.use_design(grid) == "r5"
+            assert finetune_chronos.SOURCE_SHARES == {
+                "daily": 0.25,
+                "weekly": 0.25,
+                "3day": 0.15,
+                "daily+weekly": 0.25,
+                "daily+3day": 0.10,
+            }
+            for mix in finetune_chronos.CADENCES.values():
+                assert mix == {"weekly": 1.0}
+        finetune_chronos.SOURCES = ("daily", "daily+weekly")
+        ids = _sim_dir(tmp_path)
+        blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
+        assert blocks
+        assert {b["cadence"] for b in blocks} == {"weekly"}
+    finally:
+        finetune_chronos.use_design("r6")
+        finetune_chronos.SOURCES = tuple(finetune_chronos.SOURCE_SHARES)
+
+
+def test_the_trainer_takes_its_design_from_the_grid():
+    import finetune_chronos
+    import finetune_stream as fs
+
+    args = fs.build_parser().parse_args(
+        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r5"]
+    )
+    assert args.sources is None
+    try:
+        finetune_chronos.use_design(args.grid)
+        assert tuple(args.sources or finetune_chronos.SOURCE_SHARES) == (
+            "daily",
+            "weekly",
+            "3day",
+            "daily+weekly",
+            "daily+3day",
+        )
+    finally:
+        finetune_chronos.use_design("r6")

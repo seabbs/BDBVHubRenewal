@@ -372,6 +372,7 @@ def outputs(mode):
         for n in (
             "grid-epidemic",
             "grid-reporting",
+            "grid-distributions",
             "epinowcast-model",
             "heldout-set",
         )
@@ -854,6 +855,7 @@ rule grid_tables:
     output:
         epidemic=f"{R}/{{mode}}/tables/si/grid-epidemic.md",
         reporting=f"{R}/{{mode}}/tables/si/grid-reporting.md",
+        distributions=f"{R}/{{mode}}/tables/si/grid-distributions.md",
         model=f"{R}/{{mode}}/tables/si/epinowcast-model.md",
         heldout=f"{R}/{{mode}}/tables/si/heldout-set.md",
     log:
