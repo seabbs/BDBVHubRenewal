@@ -86,15 +86,18 @@ The other fitted models split their provinces across the zones instead ([Health 
 
 The `_ft` models load one LoRA checkpoint of Chronos-2, fine-tuned on outbreaks simulated with epinowcast's generative model (`scripts/finetune_simulate.R`).
 The simulator, `enw_simulate`, is on epinowcast's `feature/829-simulate-forecast` branch, pinned at commit `e084b080`, and is not yet in a release.
-The simulations form the grid `r5`, a crossed design over 21 factors (`factors` in the script).
+The simulations form the grid `r6` (`r5` for the current run), a crossed design over 21 factors (`factors` in the script).
 These include the process (exponential growth, or renewal with a mean generation time of 3, 7 or 15 days), the generation time's shape, the trajectory of $R_t$ (eight shapes, from steady growth to several waves), the delay's family, its form (parametric, non-parametric or both) and how it changes over time (static, drift, step, periodic or random walk), reporting on every day or on one to three weekdays, a reference day-of-week effect, the observation model and the strata.
-Each block of 840 simulations holds every level of each factor in equal shares, shuffled per factor.
+Each block of 840 simulations holds every level of each factor in equal shares, shuffled per factor, except where a level is repeated.
 A round of 40 batches of 21 simulations is one block.
 The observation model is NB1 in four simulations of five and Poisson in the fifth.
+In `r6`, half the simulations have no reporting shock and a quarter each have backlogs or outages; in `r5` each had a third.
 NB1 dispersion is scaled by the expected count and the delay's $\sum_d p_d^2$ (epinowcast#937).
 The strata are one place, 2 to 26 places, 2 to 8 ages, or places by ages, at most 60 strata.
 Outbreaks run 16 to 52 weeks.
-Outbreak sizes have a median of about 3,700 cases, with 90% between 70 and 84,000.
+Continuous settings are drawn from named sampling distributions (`setting_distributions` in the script), checked against real data (`scripts/sim_settings_check.R`).
+In `r6`, cases per stratum are log-normal with a median of 3,000 and a log sd of 2.1, on 10 to 500,000, and NB1's `sqrt_phi` is half-normal with scale 0.25.
+In `r5`, outbreak sizes had a median of about 3,700 cases, with 90% between 70 and 84,000.
 Each simulation gives one observation draw, a daily reporting triangle, and its weekly releases are summed from it.
 
 A training block cuts one draw's releases at one cut-off and lays them out as the ragged layout does, with the target past $t^*$ the outbreak's final counts (`forecasters.finetune.training_block`).
