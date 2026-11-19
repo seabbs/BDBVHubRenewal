@@ -70,19 +70,6 @@ rule seed_list:
         Path(output[0]).write_text("".join(f"{s}\n" for s in training_seeds()))
 
 
-rule real_validation:
-    input:
-        FT["delays"] or [],
-    output:
-        FT["real_validation"] or "no-real-validation",
-    log:
-        f"{RUN}/logs/real-validation.log",
-    conda:
-        TOOLS_ENV
-    shell:
-        "uv run python scripts/finetune_real_validation.py {input} {output} > {log} 2>&1"
-
-
 rule train_segment:
     input:
         unpack(segment_inputs),
@@ -187,7 +174,7 @@ rule train_segment:
 
 rule checkpoint_check:
     # A report, never a gate: does checkpoint `check_at` beat zero-shot on
-    # the held-out simulations and the BDBV pseudo-origins?
+    # the held-out simulations?
     input:
         f"{TRAIN}/n{CHECK}/settings.json",
     output:
@@ -195,8 +182,6 @@ rule checkpoint_check:
     log:
         f"{RUN}/logs/n{CHECK}-check.log",
     localrule: True
-    params:
-        zero_shot=FT["zero_shot_real"],
     run:
         check_report(input, output, params, wildcards)
 

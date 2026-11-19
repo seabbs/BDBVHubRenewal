@@ -85,14 +85,12 @@ finetune:
   eval: local
   series_bias: true
   note: continuous r5
-  # The real validation blocks (scripts/finetune_real_validation.py) and
-  # the delay table they are cut from; null leaves them out.
-  real_validation: output/finetune/real-validation.pkl
-  # `task data` writes it.
-  delays: data/delays.csv.gz
-  # The checkpoint checked against zero-shot Chronos-2's loss on them.
+  # Real validation blocks the trainer scores each checkpoint on, or null.
+  # Null: BDBV is held out for the paper, so no BDBV blocks are scored in
+  # development, and there is no other real-data set yet.
+  real_validation: null
+  # The checkpoint checked against zero-shot on the held-out simulations.
   check_at: 1000
-  zero_shot_real: 4.147
 
 score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
