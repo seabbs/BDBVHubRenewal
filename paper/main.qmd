@@ -44,7 +44,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
   - Key references: [@mcgough2020nowcasting; @gunther2021nowcasting; @Wolffram2023; @Ansari2024; @Das2024a; @Woo2024; @Rasul2023; @Garza2023; @Aksu2024; @Shchur2025; @Kalahasti2026; @Dudley2025].
 - **What we did.**
   - We fine-tuned Chronos-2, a general time series foundation model, on simulated outbreaks rather than training a model from scratch.
-  - We evaluated it on held-out simulations, on the German COVID-19 hospitalisation nowcast hub, and prospectively on the Ebola forecasting hub.
+  - We evaluated it on held-out simulations, on the German COVID-19 hospitalisation nowcast hub, and on the Ebola forecasting hub, partly prospectively.
   - Key references: [@Ansari2025; @Johnson2025].
 :::
 
@@ -126,7 +126,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 ### Evaluation on held-out synthetic data
 
 ::: {.callout-note title="Plan"}
-- We held out a set of simulations from development.
+- We held out a test set of simulations from development, and monitored training on a separate validation set (SI).
 - The fine-tune never trained on the held-out set's seeds (SI).
 - We set each tuned choice on development data, apart from every scored set (SI).
 - We score each model's quantiles with WIS and log-scale WIS, bias, and 50% and 90% coverage, relative to `randomwalknowcast`, and split WIS into dispersion, overprediction and underprediction [@bracherEvaluatingEpidemicForecasts2021].
@@ -153,14 +153,14 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 
 ::: {.callout-note title="Plan"}
 - We compare with the other submissions, relative to the hub's baseline.
-- We score the hub's rounds from 21 November 2026.
-- We used earlier rounds and the release backtest from earlier releases for development (SI).
+- We score every hub round, all held out from model development.
+- Scores of our submitted models are prospective, on the forecasts they submitted before each round closed.
+- Scores of every other model of ours are retrospective, each forecasting a round from the last release before the round closed.
 - We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, with $D$ the 98% point of the hub data's reporting delay, taking the hub teams' quantiles from their samples.
+- $D$ is part of the scoring rule, not a choice tuned on the data.
 - The SI compares the samples directly with the fair CRPS.
 - We score our models on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.
-- We score our submitted models on their submissions.
-- Each other model of ours forecasts a round from the last release before the round closed.
-- The fine-tuned models use the final run's newest checkpoint (`{{< meta results.finetuned >}}`), trained on simulations only.
+- The fine-tuned models use the final run's last checkpoint, at 8,400 simulations (`{{< meta results.finetuned >}}`), trained on simulations only.
 - Key references: [@bdbv_modeling_hub_2026; @Viboud2018; @funkAssessingPerformanceRealtime2019].
 :::
 
@@ -298,8 +298,8 @@ Ebola hub submissions: mean scores, coverage and number of forecasts of each mod
 ## Discussion
 
 We used one foundation model, Chronos-2, because it forecasts a group of related series in one block and takes known-future covariates, which the reporting triangle laid out as ragged series needs.
-In the SI we compare fine-tuning on simulations with fine-tuning on real data, on the German held-out half and on the scored BDBV rounds.
-BDBV is scored from the 21 November 2026 round onward, from data released before each round closed.
+In the SI we compare fine-tuning on simulations with fine-tuning on real data, on the German held-out half and on the held-out Ebola rounds after the real-data model's last training release.
+Those Ebola scores are retrospective, from data released before each round closed.
 The fine-tuned model is trained on simulations only, so it never sees the BDBV truth it is scored against.
 
 ::: {.callout-note title="Plan"}
