@@ -180,9 +180,11 @@ rule train_segment:
 
 rule checkpoint_check:
     # A report, never a gate: does checkpoint `check_at` beat zero-shot on
-    # the held-out simulations?
+    # the held-out simulations? An offloaded run's losses are in the
+    # checkpoint's sidecar (rules/evaluate.smk).
     input:
         f"{TRAIN}/n{CHECK}/settings.json",
+        offloaded(CHECK),
     output:
         f"{RUN}/reports/n{CHECK}-check.txt",
     log:
@@ -195,6 +197,8 @@ rule checkpoint_check:
 rule finetune:
     input:
         lambda wc: expand(f"{TRAIN}/n{{n}}/settings.json", n=to_train()),
+        # An offloaded run's held-out losses, scored after each segment.
+        lambda wc: [offloaded(n) for n in to_train() if offloaded(n)],
         # A machine that publishes as it trains (PUBLISH in local.env).
         lambda wc: (
             expand(f"{TRAIN}/n{{n}}/published.json", n=to_train())
