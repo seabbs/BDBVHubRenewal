@@ -29,6 +29,13 @@ grid_rounds:
     topup_round: 32
     sources: [daily, weekly, 3day, daily+weekly, daily+rolling7, daily+3day,
       daily+rolling3]
+  r7:
+    rounds: [34, 35, 36, 37]
+    validation_round: 33
+    test_round: 38
+    topup_round: null
+    sources: [daily, weekly, 3day, daily+weekly, daily+rolling7, daily+3day,
+      daily+rolling3]
 
 # Whether `finetune` trains only the next segment, not every one in
 # reach. A scheduled tick sets it (flowlib.schedule), so each run ends
@@ -89,7 +96,7 @@ finetune:
   # Chronos-2's recipe: one draw of each simulation cut at `cuts`
   # cut-offs, the learning rate falling linearly to zero over the
   # `outbreaks` simulations, and the series bias at its own rate `bias_lr`.
-  grid: r6
+  grid: r7
   draws: 1
   cuts: 32
   subset_seed: 1
@@ -116,7 +123,7 @@ finetune:
   # rules score them after each segment, on whichever machine
   # WORKER_GROUPS gives `evaluate`; rules/evaluate.smk). Training is the
   # same either way.
-  eval: local
+  eval: offload
   series_bias: true
   # The live r6 run's checkpoints carry this note, and the note is part of
   # the settings hash, so it stays as written to reproduce them.

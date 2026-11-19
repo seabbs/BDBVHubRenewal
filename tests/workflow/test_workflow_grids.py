@@ -46,8 +46,8 @@ def test_a_run_takes_its_grid_s_rounds_unless_set():
         TABLE,
     )
     assert (ft["rounds"], ft["validation_round"]) == ([1], 2)
-    with pytest.raises(ValueError, match="r7"):
-        grids.resolve({"grid": "r7", **unset}, TABLE)
+    with pytest.raises(ValueError, match="r99"):
+        grids.resolve({"grid": "r99", **unset}, TABLE)
 
 
 def test_a_grid_may_not_release_another_grid_s_round():

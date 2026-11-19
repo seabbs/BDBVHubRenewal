@@ -128,8 +128,13 @@ SOURCES = tuple(SOURCE_SHARES)
 """Sources blocks are cut from, drawn at `SOURCE_SHARES`."""
 
 
-GRID_DESIGNS = {**{f"r{i}": "r5" for i in range(1, 6)}, "r6": "r6"}
-"""Each training grid's block design: grids before r6 keep r5's."""
+GRID_DESIGNS = {
+    **{f"r{i}": "r5" for i in range(1, 6)},
+    "r6": "r6",
+    "r7": "r6",
+}
+"""Each training grid's block design: grids before r6 keep r5's, and r7
+trains on r6's layouts and cadences."""
 
 
 def use_design(grid: str) -> str:

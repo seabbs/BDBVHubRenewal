@@ -17,7 +17,7 @@ DESIGN = {
     "prefixes": [100, 200, 400, 800, 1600, 3200],
     "loss_horizon_days": 7,
     "quiet_min_cases": 10,
-    "grid": "r6",
+    "grid": "r7",
     "draws": 1,
     "cuts": 32,
     "learning_rate": 1e-5,
@@ -75,12 +75,12 @@ def test_a_round_is_one_grid_block_of_840():
 
 
 def _trainer_args(tmp_path, finetune=None):
-    """The trainer's arguments in the dry run of segment n250."""
+    """The trainer's arguments in the dry run of segment n100."""
     pytest.importorskip("snakemake")
     snakemake = Path(sys.executable).parent / "snakemake"
     local = tmp_path / "local.env"
     local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
-    target = tmp_path / "checkpoints" / "slots" / "train" / "n250"
+    target = tmp_path / "checkpoints" / "slots" / "train" / "n100"
     # The real validation blocks are made from data a test run lacks.
     real = tmp_path / "real-validation.pkl"
     real.write_text("")
@@ -131,11 +131,11 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     import finetune_stream as fs
 
     args = fs.build_parser().parse_args(_trainer_args(tmp_path))
-    assert args.until == 250
-    # Main's default is the live r6 run: held-out round 20, seeds 32000
-    # to 32039 (grid_rounds).
-    assert args.grid == "r6"
-    assert args.held_out_seeds == [32000, 32039]
+    assert args.until == 100
+    # Main's default is the r7 run: held-out round 33, seeds 33300 to
+    # 33339 (grid_rounds).
+    assert args.grid == "r7"
+    assert args.held_out_seeds == [33300, 33339]
     assert args.holdout == 90
     assert args.outbreaks == 3200
     assert args.prefixes == [100, 200, 400, 800, 1600, 3200]
@@ -148,13 +148,14 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     assert args.learning_rate == 1e-5
     assert args.series_bias
     assert args.bias_lr == 1e-3
-    assert args.sources == CONFIG["grid_rounds"]["r6"]["sources"]
+    assert args.sources == CONFIG["grid_rounds"]["r7"]["sources"]
     assert args.univariate_share == 0.2
     assert args.chunk == 100
     # The held-out evaluations' cadence comes from the config.
     assert args.eval_every == CONFIG["finetune"]["eval_every"]
     assert args.by_source_every == CONFIG["finetune"]["by_source_every"]
-    assert args.eval == CONFIG["finetune"]["eval"] == "local"
+    # Evaluation runs off the trainer, on the evaluate rules' machine.
+    assert args.eval == CONFIG["finetune"]["eval"] == "offload"
 
 
 def test_the_loss_horizon_comes_from_the_config(tmp_path):
@@ -200,7 +201,8 @@ def test_each_grid_s_sources_are_its_block_design():
     import finetune_chronos as ft
 
     for grid, entry in CONFIG["grid_rounds"].items():
-        assert entry["sources"] == list(ft.DESIGNS[grid]["source_shares"])
+        design = ft.DESIGNS[ft.GRID_DESIGNS[grid]]
+        assert entry["sources"] == list(design["source_shares"])
 
 
 def test_development_scores_no_bdbv_blocks(tmp_path):
