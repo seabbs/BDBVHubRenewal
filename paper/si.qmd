@@ -109,7 +109,7 @@ Chronos-2's group attention has no notion of which series is which, so on its ow
 
 - We add three learned biases to Chronos-2's group-attention scores (@tbl-attention-biases).
 - They start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
-- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero over the 8,400 simulations.
+- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero over the 3,200 simulations.
 - We identify places by name within each block, with no limit on the number of places.
 - A place's parent is the nearest prefix of its name in the block, else the country.
 - Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.
@@ -200,7 +200,7 @@ where $m_{n,t}$ is 1 for a target step to forecast and 0 for a missing target or
 
 - The learning rate falls linearly from $\eta_0$ to zero over the simulations [@Devlin2019]:
 $$
-\eta_t = \eta_0 \left(1 - \frac{s_t}{8{,}400}\right),
+\eta_t = \eta_0 \left(1 - \frac{s_t}{3{,}200}\right),
 $$
 where $s_t$ is the number of simulations trained by step $t$, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.
 - $\eta_0 = 10^{-5}$ for the LoRA adapter, the rate Chronos-2's fine-tuning recommends for LoRA and AutoGluon's default [@chronos_forecasting; @autogluon], and $\eta_0 = 10^{-3}$ for the attention biases.
@@ -220,7 +220,7 @@ In those blocks each release but the last is missed with chance 0.2.
 Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives up to 32 blocks.
 Each block has up to 364 steps of context, and its prediction length is its nowcast steps and one week ahead, rounded up to whole steps.
 A block with no case reported across its places in the 28 days up to its cut-off is dropped, from what is known at the cut-off.
-We train on 8,400 simulations, 10 balanced blocks of 840, with checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400.
+We train on 3,200 simulations drawn from the grid, with checkpoints at 100, 200, 400, 800, 1,600 and 3,200.
 
 ::: {#tbl-block-layouts}
 | Layout | Share of blocks |
@@ -261,11 +261,10 @@ The realised shares of the combinations of layout and options in the training bl
 :::
 
 **Order of the training data.**
-The grid is balanced in blocks of 840 simulations, with each factor's levels shuffled independently within a block, as in a Latin hypercube.
-Training takes the simulations in order, in chunks of 250, so a chunk holds under a third of a block.
-A chunk gives up to 8,000 training blocks, 32 a simulation, which are shuffled and packed into about 1,500 steps, roughly 6 a simulation.
+Each simulation draws its settings, the grid's factors among them, independently from their sampling distributions, seeded per simulation.
+Training takes the simulations in order, in chunks.
+Each simulation gives up to 32 training blocks, which are shuffled within a chunk and packed into roughly 6 steps a simulation.
 Each step is filled until it holds 256 series or more, so one large block can make a step of up to 2,000 series.
-So the checkpoints at 250, 500 and 750 simulations have seen only part of the grid, whole blocks are seen at each 840, and the 8,400 checkpoint has seen ten.
 
 Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
 A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations.
@@ -363,11 +362,11 @@ Simulated summaries (centiles over 1,000 drawn settings) against the range over 
 ![Six contrasting simulations of the grid, from pilot simulations: the final daily counts (black) and the counts known at releases 40%, 65% and 90% of the way through each outbreak (dashed), summed over strata.](build/figures/si/sim-examples.png){#fig-sim-examples}
 
 Outbreaks run 16 to 52 weeks.
-A simulation that fails, has fewer than 10 cases in the outbreak or has more than $10^6$ cases per stratum is redrawn up to five times, and its grid cell is skipped if every draw fails.
+A simulation that fails, has fewer than 10 cases in the outbreak or has more than $10^6$ cases per stratum is redrawn up to five times, and replaced by a simulation with a new seed if every draw fails.
 Before training, each round's simulations are checked against fixed thresholds, and the trainer skips those that fail.
 A simulation fails if its cases per stratum pass 500,000, the upper bound of the simulated size, if its weekly cases by reference date rise more than 1,000-fold in one week, or if its mean reporting delay passes 35 days.
 No simulation is deleted.
-Grid cells left missing by the redraws or the check are simulated again with fresh seeds, up to five times, so that training uses ten whole blocks.
+Simulations the check excludes are replaced by simulations with new seeds.
 
 The grid has two limitations.
 Simulated strata are less sparse than BDBV's provinces: the share of stratum-weeks with no cases reaches {{< meta evidence.realism.zero_share.sim_q95 >}} at the 95% point of the simulations, against {{< meta evidence.realism.zero_share.BDBV >}} for BDBV.
@@ -390,7 +389,7 @@ The simulated outbreaks' ranges against published values for several diseases, t
 {{< include build/tables/si/heldout-set.md >}}
 
 We cut the held-out simulations into blocks as in training, with the same layouts and non-summing parents (@tbl-block-layouts), using a fixed seed.
-We keep two sets of simulations out of training, each one whole block of 840 separate from the ten training blocks.
+We keep two rounds of simulations out of training, separate from the training rounds.
 The validation set is the round on which the trainer monitors its loss, on the first 90 of its simulations by seed.
 The test set is a further round simulated with fresh seeds, and no model is scored on it until the final model is fixed.
 The test set is the paper's held-out synthetic data.
@@ -509,13 +508,13 @@ On the German development half, level by level is competitive for the daily zero
 
 ### Checkpoint curve
 
-- We compare the final run's checkpoints, fine-tuned on 250, 500, 750, 1,000, 2,000, 4,000 and 8,400 simulations.
+- We compare the final run's checkpoints, fine-tuned on 100, 200, 400, 800, 1,600 and 3,200 simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
 - @fig-finetune-heldout gives the trainer's held-out loss by level, for transparency, not to select a checkpoint.
 - @fig-checkpoint-curve gives German first-half relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
 - @tbl-checkpoints gives the headline scores of each checkpoint.
 - A later checkpoint has also trained for more steps.
-- The learning rate falls linearly to zero over the 8,400 simulations, so the earlier checkpoints are taken at 97% (250) to 52% (4,000) of the starting rate, and only the 8,400 checkpoint is annealed.
+- The learning rate falls linearly to zero over the 3,200 simulations, so the earlier checkpoints are taken at 97% (100) to 50% (1,600) of the starting rate, and only the 3,200 checkpoint is annealed.
 
 ![The trainer's held-out loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
