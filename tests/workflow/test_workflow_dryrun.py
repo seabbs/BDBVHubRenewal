@@ -86,6 +86,28 @@ def test_batches_already_simulated_are_kept(tmp_path):
     assert jobs["simulate_batch"] == 38
 
 
+def _enw_lib(tmp_path):
+    """The pinned epinowcast's library under the machine's ROOT."""
+    script = (ROOT / "scripts" / "finetune_simulate.R").read_text()
+    sha = re.search(r'epinowcast_sha <- "([0-9a-f]+)"', script)[1]
+    return tmp_path / "rlib" / f"epinowcast-{sha}"
+
+
+def test_simulate_installs_the_pinned_epinowcast_first(tmp_path):
+    # Without it the simulator would load whatever epinowcast R finds.
+    jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
+    assert jobs["epinowcast_lib"] == 1
+
+
+def test_the_pinned_epinowcast_is_installed_once_a_machine(tmp_path):
+    lib = _enw_lib(tmp_path)
+    lib.mkdir(parents=True)
+    (lib / ".installed").write_text("")
+    jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
+    assert "epinowcast_lib" not in jobs
+    assert jobs["simulate_batch"] == 40
+
+
 SPLIT = {"rounds": [10]}
 
 
