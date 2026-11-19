@@ -791,6 +791,19 @@ def test_reported_cases_count_each_case_once_at_the_busiest_level():
     assert reported_cases(alone, 1, 28) == 10
 
 
+def test_reported_cases_refuse_a_block_whose_lags_do_not_fit():
+    from finetune_chronos import reported_cases
+
+    block = _raw([0, 0, 0], [0, 0, 0, 0], [[0] * 7] * 2)
+    # Lag series that do not divide over the places would be read across
+    # places.
+    with pytest.raises(ValueError, match="lag series"):
+        reported_cases({**block, "n_covariates": 3}, 1, 28)
+    # A nowcast longer than the lags reads past a place's rows.
+    with pytest.raises(ValueError, match="nowcast"):
+        reported_cases({**block, "nowcast": 3}, 1, 28)
+
+
 def test_a_block_is_quiet_below_the_threshold_whatever_follows():
     from finetune_chronos import quiet
 
