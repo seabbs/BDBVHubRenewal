@@ -4,7 +4,7 @@ import csv
 import gzip
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -406,3 +406,36 @@ def test_every_configured_dataset_is_in_the_selector(tmp_path):
     assert ("held_out", "Held-out simulations", True) in got
     held = next(d for d in data["datasets"] if d["key"] == "held_out")
     assert "the scoring workflow writes none yet" in held["missing"]
+
+
+def test_speed_and_etas_come_from_the_status_file_when_steps_are_sparse(
+    tmp_path,
+):
+    # One logged step in the last 30 minutes (evaluations every 400 steps)
+    # and the trainer's status: a rate, simulations a minute and ETAs.
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    now = datetime.now().replace(microsecond=0)
+    (folder / "train.log").write_text(
+        LINE.format(m=0, s=800, l=0.5, h=0.45).replace(
+            "2026-11-16 16:00:00",
+            f"{now - timedelta(minutes=40):%Y-%m-%d %H:%M:%S}",
+        )
+        + "\n"
+    )
+    (folder / "train" / "stream-status.json").write_text(
+        json.dumps(
+            {
+                "stage": "training",
+                "step": 1200,
+                "outbreaks": 250,
+                "time": f"{now - timedelta(minutes=1):%Y-%m-%d %H:%M:%S}",
+            }
+        )
+    )
+    out = page.build(ctx)
+    tile = out.split("Steps / s", 1)[1].split("</div></div>", 1)[0]
+    assert "n/a" not in tile
+    assert "simulations/min" in tile
+    eta = out.split("ETA n8000", 1)[1].split("</div></div>", 1)[0]
+    assert "n/a" not in eta
