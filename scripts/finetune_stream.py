@@ -209,6 +209,18 @@ def horizon_settings(loss_days: int | None) -> dict:
     }
 
 
+def quiet_settings(days: int | None) -> dict:
+    """Return the quiet cut-off rule's entry of a checkpoint's settings."""
+    if days is None:
+        return {}
+    return {
+        "drop_quiet": (
+            "blocks with no case reported across their places in the "
+            f"{days} days up to the cut-off, from what is known at it"
+        )
+    }
+
+
 def param_groups(model, lr: float, bias_lr: float = 0.0) -> list[dict]:
     """Return the optimiser's groups: the adapter at `lr`, the bias at its own.
 
@@ -523,6 +535,7 @@ def init_worker(
     subset_seed: int = 0,
     grid: str = ft.DESIGN,
     loss_days: int | None = None,
+    quiet_days: int | None = None,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     global DRAWS_PER_PASS, SUBSET_SEED
@@ -530,6 +543,7 @@ def init_worker(
     ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
     ft.UNIVARIATE_SHARE = univariate
     ft.LOSS_HORIZON_DAYS = loss_days
+    ft.QUIET_DAYS = quiet_days
     DRAWS_PER_PASS, SUBSET_SEED = draws, subset_seed
 
 
@@ -1339,6 +1353,9 @@ def build_parser() -> argparse.ArgumentParser:
     # Days after the cut-off the training loss covers (and the held-out
     # loss, cut the same way); none: the whole horizon.
     parser.add_argument("--loss-horizon-days", type=int)
+    # Days up to the cut-off with no case reported that make a block
+    # quiet, and not trained on (nor held out); none: every block.
+    parser.add_argument("--quiet-days", type=int)
     # Real validation blocks (`load_blocks`), scored at each checkpoint;
     # not trained on. The workflow passes none: BDBV is held out.
     parser.add_argument("--real-validation", type=Path)
@@ -1444,6 +1461,7 @@ def main() -> None:
     ft.check_package(Path(__file__).parents[1])
     ft.UNIVARIATE_SHARE = args.univariate_share
     ft.LOSS_HORIZON_DAYS = args.loss_horizon_days
+    ft.QUIET_DAYS = args.quiet_days
     global EXCLUDE_FILE, DRAWS_PER_PASS, SUBSET_SEED
     EXCLUDE_FILE = args.exclude
     DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
@@ -1517,6 +1535,7 @@ def main() -> None:
             SUBSET_SEED,
             args.grid,
             ft.LOSS_HORIZON_DAYS,
+            ft.QUIET_DAYS,
         ),
     )
     held_pairs, empty = cut_in_workers(
@@ -1623,6 +1642,7 @@ def main() -> None:
         "batch_size": args.batch_size,
         "context": ft.CONTEXT,
         **horizon_settings(ft.LOSS_HORIZON_DAYS),
+        **quiet_settings(ft.QUIET_DAYS),
         "seed": args.seed,
         "note": args.note,
     }

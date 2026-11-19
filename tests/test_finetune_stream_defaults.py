@@ -37,3 +37,12 @@ def test_the_loss_horizon_defaults_to_the_full_horizon():
     assert fs.build_parser().parse_args(argv).loss_horizon_days is None
     args = fs.build_parser().parse_args([*argv, "--loss-horizon-days", "7"])
     assert args.loss_horizon_days == 7
+
+
+def test_dropping_quiet_cut_offs_is_off_until_set():
+    argv = ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r6"]
+    assert fs.build_parser().parse_args(argv).quiet_days is None
+    args = fs.build_parser().parse_args([*argv, "--quiet-days", "28"])
+    assert args.quiet_days == 28
+    assert fs.quiet_settings(None) == {}
+    assert "28 days" in fs.quiet_settings(28)["drop_quiet"]
