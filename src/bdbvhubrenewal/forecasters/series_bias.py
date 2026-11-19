@@ -42,6 +42,7 @@ __all__ = [
     "adapter_pairs",
     "assigned",
     "attach",
+    "attach_for",
     "batch_rows",
     "block_rows",
     "has_bias",
@@ -151,21 +152,6 @@ def batch_rows(blocks: Sequence[np.ndarray]) -> np.ndarray:
     return np.concatenate(out, axis=1)
 
 
-def pair_masks(place: Any, parent: Any) -> dict[str, Any]:
-    """Return each kind of row pair, `[rows, rows]`, query first, by name.
-
-    `same`, a row and another row of its place (its count and lag
-    series); `up`, a child's row and its parent's; and `down`, a parent's
-    row and its child's. A parent of -1 links nothing.
-    """
-    import torch
-
-    me = torch.eye(len(place), dtype=torch.bool, device=place.device)
-    same = (place[:, None] == place[None, :]) & ~me
-    up = (parent[:, None] == place[None, :]) & (parent[:, None] >= 0)
-    return {"same": same, "up": up, "down": up.T}
-
-
 PAIRS: Final = ("same", "up", "down")
 """The biases, one per kind of pair (`pair_masks`), in its order."""
 
@@ -173,6 +159,24 @@ _SAVED_ONLY: Final = "self_"
 """A row and itself: loaded with an adapter that holds it, never made."""
 
 _KNOWN: Final = (_SAVED_ONLY, *PAIRS)
+
+
+def pair_masks(
+    place: Any, parent: Any, pairs: Sequence[str] = PAIRS
+) -> dict[str, Any]:
+    """Return each kind of row pair in `pairs`, `[rows, rows]`, by name.
+
+    Query first. `same`, a row and another row of its place (its count
+    and lag series); `up`, a child's row and its parent's; and `down`, a
+    parent's row and its child's. A parent of -1 links nothing.
+    """
+    import torch
+
+    me = torch.eye(len(place), dtype=torch.bool, device=place.device)
+    same = (place[:, None] == place[None, :]) & ~me
+    up = (parent[:, None] == place[None, :]) & (parent[:, None] >= 0)
+    masks = {"same": same, "up": up, "down": up.T, _SAVED_ONLY: me}
+    return {k: masks[k] for k in pairs}
 
 
 def _bias_module(n_layers: int, n_heads: int, pairs: Sequence[str]) -> Any:
@@ -226,7 +230,6 @@ def attach(model: Any, pairs: Sequence[str] = PAIRS) -> None:
     rows, so they must stay assigned until backward is done; the bias is
     then never held per layer between forward and backward.
     """
-    import torch
     from chronos.chronos2.layers import GroupSelfAttention
 
     if has_bias(model):
@@ -259,12 +262,8 @@ def attach(model: Any, pairs: Sequence[str] = PAIRS) -> None:
             if n_rows % n:
                 raise ValueError(f"{n_rows} rows but places for {n}")
             rows = rows.to(hidden.device).repeat_interleave(n_rows // n, dim=-1)
-            masks = pair_masks(rows[0], rows[1])
             module = getattr(model, BIAS_MODULE)
-            if _SAVED_ONLY in module.pairs:
-                masks[_SAVED_ONLY] = torch.eye(
-                    len(rows[0]), dtype=torch.bool, device=hidden.device
-                )
+            masks = pair_masks(rows[0], rows[1], module.pairs)
             bias = module(layer, masks)
             return args, {
                 **kwargs,
@@ -345,6 +344,18 @@ def pairs_in(names: Iterable[str]) -> tuple[str, ...]:
     return tuple(p for p in _KNOWN if p in found)
 
 
+def attach_for(model: Any, adapter: Path | str) -> bool:
+    """Attach the bias an adapter holds, with its pairs; return whether.
+
+    So PEFT then loads the adapter's trained values (`load_adapter`, or
+    an unmerged `PeftModel.from_pretrained`).
+    """
+    if not adapter_has_bias(adapter):
+        return False
+    attach(model, adapter_pairs(adapter))
+    return True
+
+
 def model_pairs(model: Any) -> tuple[str, ...]:
     """Return the kinds of pair a model's series bias holds, or none."""
     base = _base(model)
@@ -363,8 +374,7 @@ def load_adapter(model: Any, adapter: Path | str) -> Any:
 
     from peft import PeftModel
 
-    if adapter_has_bias(adapter):
-        attach(model, adapter_pairs(adapter))
+    attach_for(model, adapter)
     with warnings.catch_warnings():
         # PEFT only warns when an adapter weight has no file entry.
         warnings.filterwarnings("error", message="Found missing adapter keys")

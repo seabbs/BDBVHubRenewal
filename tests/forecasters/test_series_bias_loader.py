@@ -276,3 +276,23 @@ def test_an_unknown_kind_of_pair_is_refused():
         series_bias.pairs_in([f"m.{series_bias.BIAS_MODULE}.sideways"])
     with pytest.raises(ValueError, match="unknown series bias pairs"):
         series_bias.attach(tiny_model(), ("sideways",))
+
+
+def test_attach_for_gives_a_model_its_adapter_s_pairs(tmp_path):
+    trained_bias(1).save_pretrained(tmp_path / "bias")
+    model = tiny_model()
+    assert series_bias.attach_for(model, tmp_path / "bias")
+    assert series_bias.model_pairs(model) == series_bias.PAIRS
+
+
+def test_masks_are_made_only_for_the_pairs_asked():
+    place = torch.as_tensor([0, 0, 1])
+    parent = torch.as_tensor([-1, -1, 0])
+    assert list(series_bias.pair_masks(place, parent)) == list(
+        series_bias.PAIRS
+    )
+    pairs = (series_bias._SAVED_ONLY, *series_bias.PAIRS)
+    got = series_bias.pair_masks(place, parent, pairs)
+    assert torch.equal(
+        got[series_bias._SAVED_ONLY], torch.eye(3, dtype=torch.bool)
+    )

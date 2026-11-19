@@ -2,7 +2,8 @@
 
 A run with series attention bias holds one [layers, heads] tensor per
 relation: `same` (a place's counts, lags and totals), `up` (a place to
-its country) and `down` (a country to its places). The values come
+its country) and `down` (a country to its places). Each run shows the
+relations it holds. The values come
 from the run's history (`train/history.json` entries with `bias`), its
 logged steps' means and ranges, its checkpoints' adapters
 (`train/n<N>/finetuned-ckpt/*.safetensors`, read with the standard
@@ -28,7 +29,8 @@ PAIRS = (
     ("up", "up (child to parent)"),
     ("down", "down (parent to child)"),
 )
-"""The relations and their labels, in the trainer's order."""
+"""The trainer's relations and their labels, in its order. A run shows
+the relations it logged or saved, these first."""
 
 COLOURS = {
     "same": "#2563eb",
@@ -36,8 +38,18 @@ COLOURS = {
     "down": "#ea580c",
 }
 
-NAME = re.compile(r"(?:^|[._/])(same|up|down)$")
-"""A relation's tensor, by the end of its name."""
+OTHER = "#6b7280"
+"""The colour of a relation a run holds beyond `PAIRS`."""
+
+NAME = re.compile(r"series_bias(?:\.\w+)*?\.([a-z]+)_?$")
+"""A relation's tensor of the bias module, by the end of its name."""
+
+
+def relation(name: str) -> str | None:
+    """Return the relation a tensor or logged key names, if any."""
+    found = NAME.search(name) or re.fullmatch(r"([a-z]+)_?", name)
+    return found.group(1) if found else None
+
 
 _SEEN: dict[tuple[str, int], dict[str, list[list[float]]]] = {}
 
@@ -134,18 +146,15 @@ def read_bias(path: Path | str) -> dict[str, list[list[float]]]:
         except Exception:
             tensors = {}
         got = {}
-        for rel, _ in PAIRS:
-            names = sorted(
-                (
-                    n
-                    for n in tensors
-                    if NAME.search(n).group(1).rstrip("_") == rel
-                    and "bias" in n.lower()
-                ),
-                key=lambda n: ("modules_to_save" not in n, "original" in n, n),
+        by: dict[str, list[str]] = {}
+        for n in tensors:
+            if NAME.search(n):
+                by.setdefault(NAME.search(n).group(1), []).append(n)
+        for rel, names in by.items():
+            names.sort(
+                key=lambda n: ("modules_to_save" not in n, "original" in n, n)
             )
-            if names:
-                got[rel] = tensors[names[0]]
+            got[rel] = tensors[names[0]]
         _SEEN[key] = got
     return _SEEN[key]
 
@@ -175,7 +184,7 @@ def run_bias(
     if run.folder is None:
         return None
     sims = sims or float
-    pts: dict[str, dict[float, dict[str, float]]] = {k: {} for k, _ in PAIRS}
+    pts: dict[str, dict[float, dict[str, float]]] = {}
     latest: dict[str, Any] | None = None
     seen: set[int] = set()
     hist = CACHE.get(run.folder / "train" / "history.json")
@@ -186,8 +195,8 @@ def run_bias(
             continue
         at = round(sims(h["step"]), 2)
         for key, v in h["bias"].items():
-            rel = key.rstrip("_")
-            if rel not in pts:
+            rel = relation(key)
+            if rel is None:
                 continue
             values = v.get("values") if isinstance(v, dict) else v
             if not (
@@ -198,7 +207,7 @@ def run_bias(
                 continue
             seen.add(h["step"])
             given = isinstance(v, dict) and {"mean", "min", "max"} <= set(v)
-            pts[rel][at] = (
+            pts.setdefault(rel, {})[at] = (
                 {x: v[x] for x in ("mean", "min", "max")}
                 if given
                 else summary(values)
@@ -211,9 +220,10 @@ def run_bias(
         if r.get("step") in seen or not r.get("bias"):
             continue
         at = round(sims(r["step"]), 2)
-        for rel, v in r["bias"].items():
-            if rel in pts:
-                pts[rel].setdefault(at, dict(v))
+        for key, v in r["bias"].items():
+            rel = relation(key)
+            if rel is not None:
+                pts.setdefault(rel, {}).setdefault(at, dict(v))
     files = []
     for name, s, _ in checkpoints(run.folder):
         n = s.get("n_outbreaks") or _size(name)
@@ -233,7 +243,7 @@ def run_bias(
         if not got:
             continue
         for rel, values in got.items():
-            pts[rel].setdefault(at, summary(values))
+            pts.setdefault(rel, {}).setdefault(at, summary(values))
         if not latest or at >= latest.get("n", -1):
             latest = {"n": at, **got}
     if not any(pts.values()) and not latest:
@@ -278,13 +288,17 @@ def payload(
                 },
                 "latest": {
                     "n": last.get("n"),
-                    **{k: last[k] for k, _ in PAIRS if k in last},
+                    **{k: v for k, v in last.items() if k != "n"},
                 },
             }
         )
+    # The trainer's relations first, then any other a run holds.
+    held = {k for r in out for k, v in r["pts"].items() if v}
+    labels = dict(PAIRS)
+    keys = [k for k, _ in PAIRS if k in held] + sorted(held - set(labels))
     return {
         "runs": out,
         "missing": missing,
-        "col": COLOURS,
-        "pairs": [{"key": k, "label": n} for k, n in PAIRS],
+        "col": {k: COLOURS.get(k, OTHER) for k in keys},
+        "pairs": [{"key": k, "label": labels.get(k, k)} for k in keys],
     }

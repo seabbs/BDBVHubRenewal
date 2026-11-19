@@ -138,8 +138,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     real = fs.load_blocks(args.real_validation) if args.real_validation else []
     device = torch_device(args.device)
     base = load_base(device)
-    if series_bias.adapter_has_bias(adapter):
-        series_bias.attach(base, series_bias.adapter_pairs(adapter))
+    series_bias.attach_for(base, adapter)
     tick = time.perf_counter()
     losses = evaluate(adapter, base, blocks, kinds, batch_size, real)
     result = {

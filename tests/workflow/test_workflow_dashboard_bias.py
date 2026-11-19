@@ -110,7 +110,8 @@ def test_the_page_payload_lists_each_run_with_bias(tmp_path):
     rs = runs.load_runs([], f"r={folder},live;x=x-", [])
     got = bias.payload(rs, live_step=None)
     assert [r["key"] for r in got["runs"]] == ["r"]
-    assert [p["key"] for p in got["pairs"]] == ["same", "up", "down"]
+    # Only the relations a run holds are listed.
+    assert [p["key"] for p in got["pairs"]] == ["down"]
     assert got["runs"][0]["pts"]["down"] == [[250, 1.0, 1.0, 1.0]]
 
 
@@ -187,3 +188,28 @@ def test_each_run_s_bias_is_its_own_logged_values_over_simulations(tmp_path):
             assert [p[2] for p in by[key][rel]] == pytest.approx(
                 [m - 0.1 for _, m in pts]
             )
+
+
+def test_each_run_shows_the_relations_it_logged(tmp_path):
+    # One run logs a relation beyond the trainer's three; it is shown for
+    # that run, with its own name, and the other run shows the three.
+    for key, extra in (("a", True), ("b", False)):
+        (tmp_path / key / "train").mkdir(parents=True)
+        values = [[0.1, 0.2], [0.3, 0.4]]
+        rels = {k: {"values": values} for k in ("same", "up", "down")}
+        if extra:
+            rels["self_"] = {"values": values}
+        (tmp_path / key / "train" / "history.json").write_text(
+            json.dumps([{"step": 100, "bias": rels}])
+        )
+    rs = runs.load_runs([], f"a={tmp_path / 'a'},live;b={tmp_path / 'b'}", [])
+    got = bias.payload(rs, None)
+    held = {
+        r["key"]: {k for k, v in r["pts"].items() if v} for r in got["runs"]
+    }
+    assert held == {
+        "a": {"same", "up", "down", "self"},
+        "b": {"same", "up", "down"},
+    }
+    assert [p["key"] for p in got["pairs"]] == ["same", "up", "down", "self"]
+    assert got["col"]["self"] == bias.OTHER
