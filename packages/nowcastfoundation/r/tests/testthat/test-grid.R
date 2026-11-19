@@ -76,3 +76,25 @@ test_that("a draw is redrawn if it reports fewer than the grid's minimum", {
   expect_equal(redraw_reason(0, grid), "fewer than 10 cases")
   expect_true(is.na(redraw_reason(10, grid)))
 })
+
+test_that("every simulated system fits the trainer's block budget whole", {
+  grid <- r7()
+  set.seed(11)
+  locs <- leaves <- numeric(0)
+  for (i in 1:5000) {
+    d <- draw_design(grid)
+    locs <- c(locs, system_locations(d$n_places, d$n_ages))
+    leaves <- c(leaves, d$n_places * d$n_ages)
+    expect_lte(d$n_places * d$n_ages, max_strata(grid, d$weeks))
+  }
+  expect_lte(max(locs), grid$max_locations)
+  # Sizes still vary: single series, small systems and large ones.
+  expect_true(any(leaves == 1) && any(leaves >= 20))
+})
+
+test_that("a system's locations are the country, group totals and leaves", {
+  expect_equal(system_locations(1, 1), 1)
+  expect_equal(system_locations(5, 1), 1 + 5 + 6)
+  expect_equal(system_locations(1, 4), 1 + 4)
+  expect_equal(system_locations(3, 4), 1 + 3 + 4 + 12)
+})
