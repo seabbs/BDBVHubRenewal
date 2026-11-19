@@ -78,10 +78,11 @@ Each machine reruns its task as releases land, in its coordinator run (`task now
 
 ## 1. Simulate (`rules/simulate.smk`)
 
-Round r is 40 batches of 21 outbreaks, seeds from 30000 + 100 r, each with exactly one observation draw.
-A round is grid block r, 840 simulations, and is used whole for training or as the held-out block.
+Round r is 40 batches of 20 outbreaks, seeds from 30000 + 100 r, each with exactly one observation draw.
+Each outbreak draws its settings independently from the grid (`simulate.grid_file`, `config/finetune/grids/r7.yaml`), and a round of 800 is used whole for training or as the held-out round.
+The engine is the R package `packages/nowcastfoundation/r`, run by `workflow/scripts/simulate.R`.
 
-- `epinowcast_lib`: installs the epinowcast the simulator is pinned to (`epinowcast_sha` in `scripts/finetune_simulate.R`) from GitHub into `ROOT/rlib/epinowcast-<sha>`, once a machine, at nice 19 under `JOB_PREFIX`. Its dependencies must already be in R's libraries.
+- `epinowcast_lib`: installs the epinowcast the simulator is pinned to (`epinowcast_sha` in the grid config) from GitHub into `ROOT/rlib/epinowcast-<sha>`, once a machine, at nice 19 under `JOB_PREFIX`. Its dependencies must already be in R's libraries.
 - `simulate_batch`: one batch of `scripts/finetune_simulate.R`, under `JOB_PREFIX` at nice 19, once there is memory, disk and load to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one, and its whole command runs with that library and the system's tools ahead of PATH (R puts the system libraries on `LD_LIBRARY_PATH`, under which a bash from another prefix fails).
 - `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
