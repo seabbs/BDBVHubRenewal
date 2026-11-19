@@ -208,6 +208,8 @@ class Status:
     nxt: int | None
     trained: float | None = None
     steps: Callable[[int], tuple[int, bool]] | None = None
+    sims_rate: float | None = None
+    span: float | None = None
 
     @property
     def target(self) -> int:
@@ -223,8 +225,18 @@ class Status:
         return bool(self.steps and self.steps(n)[1])
 
     def eta(self, n: int | None) -> str:
-        """Return the time until checkpoint `n` at the recent speed."""
-        if not (self.rate and self.step is not None and n):
+        """Return the time until checkpoint `n` at the recent speed.
+
+        From simulations a minute where known (the checkpoints are
+        simulation counts), else from steps a second.
+        """
+        if not n or self.step is None:
+            return "n/a"
+        if self.sims_rate and self.trained is not None:
+            if self.trained >= n:
+                return "due now"
+            return _dur((n - self.trained) / self.sims_rate)
+        if not self.rate:
             return "n/a"
         if self.at(n) <= self.step:
             return "due now"
@@ -256,13 +268,23 @@ def live_status(
     """
     step = rows[-1]["step"] if rows else None
     last_t = rows[-1]["t"] if rows else None
-    recent = [r for r in rows if r["t"] >= (last_t or 0) - 1800]
-    rate = None
-    if len(recent) >= 2 and recent[-1]["t"] > recent[0]["t"]:
-        rate = (recent[-1]["step"] - recent[0]["step"]) / (
-            recent[-1]["t"] - recent[0]["t"]
-        )
     folder = live.folder
+    # Timestamped steps: every logged step, and the trainer's status file
+    # (written every few steps), as evaluations log a step only every few
+    # hundred (`training.recent_rate`).
+    points = [(r["t"], r["step"]) for r in rows]
+    status = training.status_point(folder) if folder else None
+    if status:
+        points.append(status)
+        if step is None or status[1] > step:
+            step = int(status[1])
+    rate, span = training.recent_rate(points)
+    sims_rate = None
+    if rate and span and sims:
+        newest = max(points)
+        first_s = newest[1] - rate * span
+        done = sims(newest[1]) - sims(first_s)
+        sims_rate = done / span if done > 0 else None
     args = logs.trainer_args(folder) if folder else ""
     trained = sims(step) if sims and step is not None else None
     params = (
@@ -313,6 +335,8 @@ def live_status(
         nxt,
         trained,
         None if params["lr_steps"] else steps,
+        sims_rate,
+        span,
     )
 
 
@@ -368,10 +392,19 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             "",
         ),
         (
-            "Steps / s (30 min)",
+            "Steps / s",
             "t_rate",
             f"{st.rate:.3f}" if st.rate else "n/a",
-            f"{st.rate * 60:.1f} steps/min" if st.rate else "",
+            "; ".join(
+                x
+                for x in (
+                    f"{st.sims_rate * 60:.2f} simulations/min"
+                    if st.sims_rate
+                    else "",
+                    f"over the last {_dur(st.span)}" if st.span else "",
+                )
+                if x
+            ),
             "",
         ),
         ("Next checkpoint", "t_next", next_v, next_s, ""),

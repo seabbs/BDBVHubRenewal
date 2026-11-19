@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, Sequence
+from datetime import datetime
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,22 @@ from .runs import Run
 def _size(name: str) -> int:
     digits = re.sub(r"\D", "", name)
     return int(digits) if digits else 0
+
+
+def _falls(hist: Any) -> bool:
+    """Return whether any optimiser group's logged rate fell over steps."""
+    seen: dict[str, float] = {}
+    for h in hist if isinstance(hist, list) else []:
+        v = h.get("lr") if isinstance(h, dict) else None
+        if isinstance(v, list):
+            v = {str(i): x for i, x in enumerate(v)}
+        elif not isinstance(v, dict):
+            v = {"lr": v} if v is not None else {}
+        for g, x in v.items():
+            if g in seen and float(x) < seen[g]:
+                return True
+            seen[g] = float(x)
+    return False
 
 
 def run_params(
@@ -66,7 +83,8 @@ def run_params(
     # A trainer the workflow starts leaves no command line: its run's
     # simulations are the last of `default`.
     m = re.search(r"--outbreaks\s+(\d+)", args)
-    decays = last.get("lr_decay") or not settings
+    # A rate the history logs falling is a decay whatever the settings say.
+    decays = last.get("lr_decay") or not settings or _falls(hist)
     total = int(m.group(1)) if m else max(default, default=0)
     lr_outbreaks = total if decays and not lr_steps else 0
     groups: dict[str, float] = {}
@@ -170,6 +188,48 @@ def anchors(
         if before in known and last not in known:
             known[last] = known[before] + steps
     return sorted((st, n) for n, st in known.items())
+
+
+RATE_WINDOW = 3600.0
+"""Seconds of timestamped steps the speed is taken over."""
+
+
+def recent_rate(
+    points: Sequence[tuple[float, float]], window: float = RATE_WINDOW
+) -> tuple[float | None, float | None]:
+    """Return the steps a second and the seconds they span, or Nones.
+
+    `points` are (time, step), from every logged step and the trainer's
+    status file. The rate is over the last `window` seconds; with fewer
+    than two points there (evaluations logged only every few hundred
+    steps), over the last two points, however far apart.
+    """
+    pts = sorted(set(points))
+    if len(pts) < 2:
+        return None, None
+    last_t, last_s = pts[-1]
+    inside = [p for p in pts if p[0] >= last_t - window]
+    first_t, first_s = inside[0] if len(inside) >= 2 else pts[-2]
+    span = last_t - first_t
+    if span <= 0 or last_s <= first_s:
+        return None, None
+    return (last_s - first_s) / span, span
+
+
+def status_point(folder: Path | str) -> tuple[float, float] | None:
+    """Return the trainer's status time and step while it trains, or None.
+
+    `train/stream-status.json` holds the step every few steps with the
+    local time it was written.
+    """
+    s = CACHE.get(Path(folder) / "train" / "stream-status.json")
+    if not isinstance(s, dict) or s.get("stage") != "training":
+        return None
+    try:
+        t = datetime.strptime(str(s["time"]), "%Y-%m-%d %H:%M:%S").timestamp()
+        return t, float(s["step"])
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def step_at(
