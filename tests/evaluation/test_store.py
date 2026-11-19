@@ -4,6 +4,7 @@ import base64
 import dataclasses
 import json
 import shutil
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -1259,3 +1260,20 @@ def test_the_archive_s_store_task_keys_zone_models_as_the_store(
     assert store.current_keys({latest: task}, reads, sampler, "c") == (
         store.current_keys({latest: stored}, reads, sampler, "c")
     )
+
+
+def test_the_dependency_export_names_no_workspace_package(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # `# via <package>` lines would change every key when the package
+    # moves into the workspace packages (WP2b).
+    seen: list[list[str]] = []
+
+    def run(args, **_):
+        seen.append(list(args))
+        return subprocess.CompletedProcess(args, 0, stdout="")
+
+    monkeypatch.setattr(store.subprocess, "run", run)
+    store._export.cache_clear()
+    store._export(".", "lock-for-this-test")
+    assert "--no-annotate" in seen[0]
