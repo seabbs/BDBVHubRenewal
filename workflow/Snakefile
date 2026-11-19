@@ -23,6 +23,7 @@ configfile: str(Path(workflow.basedir) / "config.yaml")
 
 include: "rules/common.smk"
 include: "rules/simulate.smk"
+include: "rules/topup.smk"
 include: "rules/finetune.smk"
 include: "rules/publish.smk"
 include: "rules/score.smk"

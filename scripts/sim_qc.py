@@ -1,29 +1,34 @@
-"""Review one round of simulations with the fixed sim-QC prompt (A).
+"""Check one round of simulations against fixed plausibility thresholds.
 
-Summarises each simulation of `ROUND_DIR/sims` (`summaries`), gives the
-table to Claude with `config/finetune/sim-qc-prompt-a.md` through the
-`claude` CLI, and records the prompt and its sha256, the input table, the
-raw output, the exclusions (`excluded.csv`: simulation, reason,
-evidence) and a one-line summary in `ROUND_DIR/qc/`. Exclusion is
-reluctant: the prompt defaults to keeping, and an exclusion naming a
-simulation not in the round is dropped and noted. Simulations are never
-deleted; the trainer skips the excluded ones. Run from the repo root:
+Summarises each simulation of `ROUND_DIR/sims` (`summaries`) and excludes
+those past a threshold (`check`), each with its reason and evidence: cases
+per stratum (the median total over draws, over the strata with cases),
+the largest week-on-week rise in weekly cases by reference date, and the
+mean reporting delay. The thresholds and why they are set as they are
+live in workflow/config.yaml (`simulate.qc`); the workflow passes them.
 
-    uv run python scripts/sim_qc.py ROUND_DIR
+Records the input table, the exclusions (`excluded.csv`: simulation,
+reason, evidence), the thresholds (`decisions.json`) and a one-line
+summary in `ROUND_DIR/qc/`. Simulations are never deleted; the trainer
+skips the excluded ones. Run from the repo root:
+
+    uv run python scripts/sim_qc.py ROUND_DIR --max-cases-per-stratum N
+        --max-weekly-jump N --max-mean-delay-days N
 """
 
 from __future__ import annotations
 
-import hashlib
+import argparse
 import json
-import subprocess
-import sys
+import math
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-PROMPT = Path("config/finetune/sim-qc-prompt-a.md")
+LIMITS = ("max_cases_per_stratum", "max_weekly_jump", "max_mean_delay_days")
+"""The thresholds `check` takes, each a required option."""
+
 CELL = [
     "strata",
     "n_places",
@@ -97,60 +102,86 @@ def summaries(sim_dir: Path) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def review(table: pd.DataFrame, prompt: str) -> dict:
-    """Return Claude's review of the table, as the prompt's JSON."""
-    text = (
-        prompt + "\n\n## Simulations\n\n" + table.round(3).to_csv(index=False)
+def check(table: pd.DataFrame, limits: dict[str, float]) -> pd.DataFrame:
+    """Return the simulations past a threshold, with reason and evidence.
+
+    `table` is `summaries`' output; `limits` holds `max_cases_per_stratum`,
+    `max_weekly_jump` and `max_mean_delay_days`. A simulation past several
+    thresholds is listed once per threshold.
+    """
+    table = table.reset_index(drop=True)
+    per_stratum = table["cases_median"] / table["strata_with_cases"].clip(
+        lower=1
     )
-    run = subprocess.run(
-        ["claude", "-p", "--output-format", "json"],
-        input=text,
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=1800,
-    )
-    raw = json.loads(run.stdout)
-    body = raw.get("result", "")
-    start, end = body.find("{"), body.rfind("}")
-    return {"raw": raw, "review": json.loads(body[start : end + 1])}
+    jump = math.log(limits["max_weekly_jump"])
+    rules = [
+        (
+            per_stratum > limits["max_cases_per_stratum"],
+            f"cases per stratum above {limits['max_cases_per_stratum']:,.0f}",
+            lambda i: (
+                f"cases_per_stratum={per_stratum[i]:.0f}, "
+                f"strata_with_cases={table['strata_with_cases'][i]}"
+            ),
+        ),
+        (
+            table["max_weekly_log_growth"] > jump,
+            f"weekly cases rise more than {limits['max_weekly_jump']:,.0f}-"
+            "fold in one week",
+            lambda i: (
+                "max_weekly_fold="
+                f"{math.exp(table['max_weekly_log_growth'][i]):.0f}"
+            ),
+        ),
+        (
+            table["delay_mean_days"] > limits["max_mean_delay_days"],
+            "mean reporting delay over "
+            f"{limits['max_mean_delay_days']:,.0f} days",
+            lambda i: f"delay_mean_days={table['delay_mean_days'][i]:.1f}",
+        ),
+    ]
+    out = []
+    for mask, reason, evidence in rules:
+        for i in mask[mask].index:
+            out.append(
+                {
+                    "simulation": table["simulation"][i],
+                    "reason": reason,
+                    "evidence": evidence(i),
+                }
+            )
+    return pd.DataFrame(out, columns=["simulation", "reason", "evidence"])
 
 
 def main() -> None:
-    """Review the round and record everything in its qc/ directory."""
-    round_dir = Path(sys.argv[1])
-    qc = round_dir / "qc"
+    """Check the round and record everything in its qc/ directory."""
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("round_dir", type=Path)
+    for key in LIMITS:
+        parser.add_argument(
+            "--" + key.replace("_", "-"), type=float, required=True
+        )
+    args = parser.parse_args()
+    limits = {k: getattr(args, k) for k in LIMITS}
+    qc = args.round_dir / "qc"
     qc.mkdir(parents=True, exist_ok=True)
-    prompt = PROMPT.read_text()
-    (qc / "prompt-a.md").write_text(prompt)
-    digest = hashlib.sha256(prompt.encode()).hexdigest()
-    table = summaries(round_dir / "sims")
+    table = summaries(args.round_dir / "sims")
     table.to_csv(qc / "input.csv", index=False)
-    result = review(table, prompt)
-    (qc / "output.json").write_text(json.dumps(result["raw"], indent=1))
-    excluded = pd.DataFrame(
-        result["review"].get("excluded", []),
-        columns=["simulation", "reason", "evidence"],
-    )
-    unknown = excluded.loc[~excluded["simulation"].isin(table["simulation"])]
-    excluded = excluded.loc[excluded["simulation"].isin(table["simulation"])]
+    excluded = check(table, limits)
     excluded.to_csv(qc / "excluded.csv", index=False)
-    notes = result["review"].get("notes", "")
+    n_out = excluded["simulation"].nunique()
     (qc / "decisions.json").write_text(
         json.dumps(
             {
-                "prompt_sha256": digest,
+                "check": "fixed thresholds (scripts/sim_qc.py)",
+                "limits": limits,
                 "n_simulations": len(table),
                 "excluded": excluded.to_dict("records"),
-                "dropped_unknown_ids": unknown["simulation"].tolist(),
-                "notes": notes,
             },
             indent=1,
         )
     )
     (qc / "summary.txt").write_text(
-        f"sim QC excluded {len(excluded)} of {len(table)} simulations"
-        + (f" ({len(unknown)} unknown ids dropped)" if len(unknown) else "")
+        f"sim QC excluded {n_out} of {len(table)} simulations"
     )
     print((qc / "summary.txt").read_text())
 

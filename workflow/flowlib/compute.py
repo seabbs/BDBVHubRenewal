@@ -27,6 +27,7 @@ coordinator's run settings (`job_env`) and its own machine settings.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shlex
@@ -107,8 +108,16 @@ MACHINE_KEYS = frozenset(
 
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
 # A job's ssh gives up after 10 minutes without an answer (a laptop
-# asleep), so the job fails and its retry resumes it.
-SSH_JOB = [*SSH, "-o", "ServerAliveInterval=60", "-o", "ServerAliveCountMax=10"]
+# asleep), so the job fails and its retry resumes it. Its terminal (-tt)
+# makes the worker hang up the job when the session drops.
+SSH_JOB = [
+    *SSH,
+    "-tt",
+    "-o",
+    "ServerAliveInterval=60",
+    "-o",
+    "ServerAliveCountMax=10",
+]
 
 
 @dataclass(frozen=True)
@@ -260,6 +269,17 @@ def on(worker: Worker, command: str, ssh: Sequence[str] = SSH) -> list[str]:
     if worker.local:
         return ["bash", "-c", command]
     return [*ssh, worker.host, command]
+
+
+def remote_pid_file(worker: Worker, job: Mapping) -> str:
+    """Return where `worker` records the pid of `job`'s Snakemake.
+
+    Keyed by the job's rule and wildcards, so a retry finds the run
+    before it.
+    """
+    key = json.dumps([job["rule"], job.get("wildcards", {})], sort_keys=True)
+    name = hashlib.sha256(key.encode()).hexdigest()[:16]
+    return str(Path(worker.root) / ".remote-jobs" / f"{name}.pid")
 
 
 def reachable(worker: Worker) -> bool:

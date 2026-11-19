@@ -3,9 +3,9 @@
 A run with series attention bias holds one [layers, heads] tensor per
 relation: `same` (a place's counts, lags and totals), `up` (a place to
 its country) and `down` (a country to its places). Each run shows the
-relations it holds. The values come
-from the run's history (`train/history.json` entries with `bias`), its
-logged steps' means and ranges, its checkpoints' adapters
+relations it holds. The values come from the run's history
+(`train/history.json` entries with `bias`), its logged steps' means and
+ranges, its checkpoints' adapters
 (`train/n<N>/finetuned-ckpt/*.safetensors`, read with the standard
 library, or `*.pt`, read with torch when installed) and, for the live
 run, its current state (`train/state/`).
@@ -21,6 +21,8 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from bdbvhubrenewal.evaluation import labels
+
 from .logs import CACHE, _size, checkpoints
 from .runs import Run
 
@@ -32,14 +34,11 @@ PAIRS = (
 """The trainer's relations and their labels, in its order. A run shows
 the relations it logged or saved, these first."""
 
-COLOURS = {
-    "same": "#2563eb",
-    "up": "#16a34a",
-    "down": "#ea580c",
-}
+COLOURS = dict(labels.RELATION_COLOURS)
+"""Each relation's colour, from the shared map."""
 
-OTHER = "#6b7280"
-"""The colour of a relation a run holds beyond `PAIRS`."""
+OTHER = labels.NEUTRAL
+"""The colour of a relation a run holds with no colour in the map."""
 
 NAME = re.compile(r"series_bias(?:\.\w+)*?\.([a-z]+)_?$")
 """A relation's tensor of the bias module, by the end of its name."""

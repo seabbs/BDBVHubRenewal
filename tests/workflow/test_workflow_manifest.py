@@ -1,4 +1,4 @@
-"""Manifest rows in scripts/sim_rounds.sh's format."""
+"""Manifest rows of a round's simulated batches."""
 
 import gzip
 import hashlib

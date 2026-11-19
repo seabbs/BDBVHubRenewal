@@ -50,7 +50,9 @@ import pandas as pd
 import yaml
 
 from bdbvhubrenewal.data.dates import as_date, reference_date_for_vintage
-from bdbvhubrenewal.data.zones import ZoneData, is_zone, weekly_zone_counts
+from bdbvhubrenewal.data.hierarchy import is_zone
+from bdbvhubrenewal.data.snapshots import weekly_counts
+from bdbvhubrenewal.data.zones import ZoneData
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     make_tasks,
@@ -551,7 +553,7 @@ def our_forecasts(
             continue
         rows = real.loc[real["vintage"] == vintage]
         tasks = make_tasks(rows, delays, config, daily=daily, zones=zones)
-        counts = weekly_zone_counts(zones.daily, vintage)
+        counts = weekly_counts(zones.daily, vintage)
         here = tuple(z for z in zones.codes if z in set(counts["location"]))
         history = pd.concat([daily, zones.daily])
         walks = [m for m in built if not getattr(m, "reads_zones", False)]

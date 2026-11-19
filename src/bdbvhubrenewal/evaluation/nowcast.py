@@ -62,8 +62,8 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date, epiweek_end
+from bdbvhubrenewal.data.hierarchy import province_of
 from bdbvhubrenewal.data.releases import release_cutoff
-from bdbvhubrenewal.data.zones import province_of
 from bdbvhubrenewal.evaluation.scoring import (
     SCORE_COLUMNS,
     energy_scores,

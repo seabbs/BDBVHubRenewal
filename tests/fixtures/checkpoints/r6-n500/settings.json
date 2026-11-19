@@ -1,0 +1,184 @@
+{
+ "grid": "r6",
+ "chronos_revision": "29ec3766d36d6f73f0696f85560a422f50e8498c",
+ "code_sha256": {
+  "scripts/finetune_simulate.R": "76b353bec952ac9b87beda74e455fb5d5912a44d5c673a54183dd74231ff6520",
+  "scripts/finetune_chronos.py": "5545edf0259e06d0fd74067f70f61a870a84daa38e70830a4899de4933b91825",
+  "src/bdbvhubrenewal/forecasters/finetune.py": "e30616f572ed984b969d386d0e3f448e88c86145c9904479d895f7beaced81f2",
+  "scripts/finetune_stream.py": "272ed3a831c3a011f6d116a4338bc87b01bf5e9f6e107812029cd467bba4c497",
+  "src/bdbvhubrenewal/forecasters/series_bias.py": "6c2aea4fef20c67f2689a53c33ba60d918fae05a4ad675a74676298687b252fe",
+  "foundation.hub_triangle": "1e2fc206ea8b40e0bff1488136b24c1484792cbfb11897e37629816696234a85",
+  "foundation.layout_block": "8da558d172d5cf0926cd74a547d4a245ff083ac062c82a97895eca4e12f1cb0a"
+ },
+ "max_lags": {
+  "weekly": [
+   2,
+   7
+  ],
+  "daily": [
+   14,
+   49
+  ],
+  "3day": [
+   5,
+   16
+  ],
+  "daily+weekly": [
+   14,
+   49
+  ],
+  "daily+rolling7": [
+   14,
+   49
+  ],
+  "daily+3day": [
+   14,
+   49
+  ],
+  "daily+rolling3": [
+   14,
+   49
+  ]
+ },
+ "held_out_sha256": "6fdffdf652b5840b2a38d3b5f639952c38d46b25b5b9e90e15d75656dbc4d6b5",
+ "n_validation": 2524,
+ "chunk": 250,
+ "blocks_per_simulation": 32,
+ "univariate_share": 0.2,
+ "parent_mix": [
+  "exact",
+  "unallocated",
+  "late_parent"
+ ],
+ "source_shares": {
+  "daily": 0.25,
+  "weekly": 0.25,
+  "3day": 0.15,
+  "daily+weekly": 0.125,
+  "daily+rolling7": 0.125,
+  "daily+3day": 0.05,
+  "daily+rolling3": 0.05
+ },
+ "release_cadences": {
+  "daily": {
+   "daily": 0.6,
+   "weekly": 0.2,
+   "daily_gaps": 0.1,
+   "weekdays": 0.1
+  },
+  "3day": {
+   "3day": 0.8,
+   "3day_gaps": 0.2
+  },
+  "weekly": {
+   "weekly": 0.8,
+   "weekly_gaps": 0.2
+  }
+ },
+ "aggregate_end": "a random weekday, or 3-day offset, per block",
+ "draws_per_simulation": 1,
+ "subset_seed": 1,
+ "block_sampling": "32 of each simulation's draws x 32 cut-off slots x 2 sources, seeded by the simulation",
+ "lora": {
+  "r": 8,
+  "alpha": 16,
+  "modules_to_save": [
+   "series_bias"
+  ]
+ },
+ "series_bias": {
+  "pairs": "same place (count and lag series); parent and child either way round",
+  "per": "encoder layer and head, added to the group attention scores",
+  "init": "zero",
+  "learning_rate": 0.001,
+  "parent_rule": "nearest '-' prefix in the block, else the country (CD, DE)",
+  "module": "series_bias"
+ },
+ "learning_rate": 1e-05,
+ "seed_list_sha256": "d763e5fd9232a8ac02c3999a8fc68101e30105bdc892ffe6d0a976740784923c",
+ "lr_decay": "linear to zero over the outbreaks",
+ "sources": [
+  "daily",
+  "weekly",
+  "3day",
+  "daily+weekly",
+  "daily+rolling7",
+  "daily+3day",
+  "daily+rolling3"
+ ],
+ "batch_size": 256,
+ "context": 364,
+ "prediction_length": "each block's horizon in whole patches of 16 steps",
+ "seed": 1,
+ "note": "continuous r5",
+ "n_outbreaks": 500,
+ "outbreaks_sha256": "8aa5d1b0bff54a8912dd78046a04f4075590d1559478b3a5e25547357b390f24",
+ "consumed_sha256": "847b057266674da7cef1f1fcc42ef9e2079e424331a8dc2bafe7d7961bdf36e7",
+ "steps": 3100,
+ "sims_done": 500,
+ "blocks": 14118,
+ "series": 1109405,
+ "level_mix": {
+  "leaves_national": 3493,
+  "national": 5326,
+  "leaves": 2728,
+  "single": 669,
+  "all_levels": 1902,
+  "empty": 1179
+ },
+ "cadence_mix": {
+  "daily:daily": 2094,
+  "daily:weekly": 709,
+  "daily:daily_gaps": 335,
+  "daily:weekdays": 347,
+  "weekly:weekly": 2881,
+  "weekly:weekly_gaps": 705,
+  "3day:3day_gaps": 415,
+  "3day:3day": 1748,
+  "daily+weekly:weekly": 357,
+  "daily+rolling7:weekdays": 165,
+  "daily+rolling7:weekly": 346,
+  "daily+rolling7:daily": 1057,
+  "daily+3day:daily": 400,
+  "daily+rolling3:daily_gaps": 79,
+  "daily+weekly:daily": 1067,
+  "daily+3day:weekdays": 74,
+  "daily+weekly:weekdays": 160,
+  "daily+weekly:daily_gaps": 172,
+  "daily+rolling3:daily": 405,
+  "daily+rolling7:daily_gaps": 164,
+  "daily+rolling3:weekly": 157,
+  "daily+3day:weekly": 148,
+  "daily+rolling3:weekdays": 71,
+  "daily+3day:daily_gaps": 62
+ },
+ "tokens": 29508972,
+ "skipped_blocks": [],
+ "memory_gb": 36.0,
+ "hash": "6bb954c7ffe7",
+ "code_commit": "667e60b5bd593721f255b848ddd75aee22bad6ab",
+ "device": "mps",
+ "held_out_loss_start": 0.46492196703834865,
+ "held_out_loss": 0.34836099307039814,
+ "held_out_loss_nowcast": 0.11122319080200889,
+ "held_out_loss_forecast": 0.237137805010694,
+ "real_validation_sha256": "ffd589b60db6c01ce2970d40157d0f00413647d21274fb6fe24a42ab709c5667",
+ "real_validation_loss": 3.565789222717285,
+ "real_validation_loss_nowcast": 1.1132843494415283,
+ "real_validation_loss_forecast": 2.452504873275757,
+ "held_out_loss_by_level": {
+  "national": 0.3825201249765545,
+  "intermediate": 0.03370431065793257,
+  "leaf": 0.5528771827459381
+ },
+ "held_out_loss_by_source": {
+  "3day": 0.6041416862296143,
+  "daily": 0.17268522466981456,
+  "daily+3day": 0.21609159190887334,
+  "daily+rolling3": 0.5107513501776689,
+  "daily+rolling7": 0.3963988520752761,
+  "daily+weekly": 0.21052027207981344,
+  "weekly": 0.8146884302800529
+ },
+ "seconds": 4796.477866415982
+}

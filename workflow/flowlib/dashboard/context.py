@@ -16,6 +16,8 @@ from typing import Any
 
 import yaml
 
+from bdbvhubrenewal.evaluation import labels
+
 from . import logs, paperstyle
 from . import runs as spec
 from .mirror import Source
@@ -51,9 +53,24 @@ def build(
             if k not in ("runs", "exclude", "datasets")
         },
     }
-    dash["datasets"] = merge_datasets(
-        config["dashboard"].get("datasets") or [], extra.get("datasets") or []
-    )
+    # Held out of model development (BDBV): never shown, even
+    # if a machine's local file adds it back.
+    held = dict(config["dashboard"].get("held_out") or {})
+    hidden = set(held.get("datasets") or ())
+    dash["datasets"] = [
+        d
+        for d in merge_datasets(
+            config["dashboard"].get("datasets") or [],
+            extra.get("datasets") or [],
+        )
+        if d["key"] not in hidden
+    ]
+    hidden_studies = set(held.get("studies") or ())
+    dash["studies"] = {
+        k: v
+        for k, v in (dash.get("studies") or {}).items()
+        if k not in hidden_studies
+    }
     run_list = spec.load_runs(
         [*(dash.get("runs") or []), *(extra.get("runs") or [])],
         local.get("DASHBOARD_RUNS", ""),
@@ -72,6 +89,7 @@ def build(
             "label": e.get("label") or paperstyle.model_label(e["paper_model"]),
             "colour": e.get("colour")
             or paperstyle.model_colour(e["paper_model"]),
+            "dash": e.get("dash") or paperstyle.model_dash(e["paper_model"]),
         }
         if e.get("paper_model")
         else e
@@ -104,6 +122,8 @@ def build(
         datasets=dash.get("datasets") or [],
         mailbox=source.mailbox,
         mail_filter=dash.get("mail_filter", ""),
+        mail_hide=held.get("mail", ""),
+        hidden_studies=hidden_studies,
         mail_lines=source.mailbox_lines,
         once=once,
         view={
@@ -123,9 +143,8 @@ def build(
     )
 
 
-RUN_SHADES = ("#174a85", "#7fb0ec", "#0b2a4f", "#a9c9f2")
-"""Colours of earlier runs: shades of the fine-tuned model's blue, so every
-run reads as that model and the live run stands out in its own colour."""
+RUN_SHADES = labels.RUN_SHADES
+"""Colours of earlier runs, from the shared map (`labels.RUN_SHADES`)."""
 
 
 def _identifier(run: spec.Run) -> str:
@@ -141,7 +160,7 @@ def named_runs(run_list: Sequence[spec.Run]) -> list[spec.Run]:
     """Name and colour every run as the fine-tuned model.
 
     The live run is the model's display name in its colour; earlier runs
-    are `<name> - <identifier>` (their grid, else their key, Sam 19 Nov)
+    are `<name> - <identifier>` (their grid, else their key)
     in shades of it (`RUN_SHADES`). A configured label or colour is not
     shown, so the toggles and every panel name runs alike.
     """

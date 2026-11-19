@@ -21,7 +21,8 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.files import write_csv
-from bdbvhubrenewal.data.zones import is_zone, weekly_zone_counts
+from bdbvhubrenewal.data.hierarchy import is_zone
+from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.forecasters import ForecastTask
 from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
 from bdbvhubrenewal.forecasters.zones import zones_for_model
@@ -121,7 +122,7 @@ def hub_tables(
     dict
         Hub sample table by model.
     """
-    counts = weekly_zone_counts(daily_zones, task.vintage)
+    counts = weekly_counts(daily_zones, task.vintage)
     rows = forecasts.loc[forecasts["vintage"] == task.vintage]
     if "as_of" in rows:
         rows = rows.loc[rows["as_of"].isna()]
