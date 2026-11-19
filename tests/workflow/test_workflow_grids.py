@@ -14,26 +14,38 @@ TABLE = CONFIG["grid_rounds"]
 
 def test_r6_has_new_rounds_20_to_30():
     assert TABLE["r6"]["rounds"] == list(range(21, 31))
-    assert TABLE["r6"]["held_round"] == 20
+    assert TABLE["r6"]["validation_round"] == 20
     assert TABLE["r5"]["rounds"] == list(range(10, 20))
-    assert TABLE["r5"]["held_round"] == 9
+    assert TABLE["r5"]["validation_round"] == 9
+
+
+def test_r6_has_a_test_round_of_fresh_seeds():
+    # Never trained on or monitored, and scored only for the final model.
+    assert TABLE["r6"]["test_round"] == 31
+    assert TABLE["r5"]["test_round"] is None
+    assert grids.owner(31, TABLE) == "r6"
 
 
 def test_no_two_grids_share_a_round():
-    seen = [r for g in TABLE.values() for r in (*g["rounds"], g["held_round"])]
+    seen = [
+        r
+        for g in TABLE.values()
+        for r in (*g["rounds"], g["validation_round"], g["test_round"])
+        if r is not None
+    ]
     assert len(seen) == len(set(seen))
 
 
 def test_a_run_takes_its_grid_s_rounds_unless_set():
-    unset = {"rounds": None, "held_round": None, "sources": None}
+    unset = {"rounds": None, "validation_round": None, "sources": None}
     ft = grids.resolve({"grid": "r6", **unset}, TABLE)
     assert ft["rounds"] == list(range(21, 31))
-    assert ft["held_round"] == 20
+    assert ft["validation_round"] == 20
     ft = grids.resolve(
-        {"grid": "r6", "rounds": [1], "held_round": 2, "sources": ["a"]},
+        {"grid": "r6", "rounds": [1], "validation_round": 2, "sources": ["a"]},
         TABLE,
     )
-    assert (ft["rounds"], ft["held_round"]) == ([1], 2)
+    assert (ft["rounds"], ft["validation_round"]) == ([1], 2)
     with pytest.raises(ValueError, match="r7"):
         grids.resolve({"grid": "r7", **unset}, TABLE)
 
