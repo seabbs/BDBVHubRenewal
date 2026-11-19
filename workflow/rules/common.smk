@@ -149,6 +149,7 @@ def evaluate_inputs_from(n):
         f"{TRAIN}/{HELD_OUT_BLOCKS}",
         f"{TRAIN}/evals/step-0000000.json",
         *(f"{TRAIN}/n{p}/settings.json" for p in FT["prefixes"]),
+        *(f"{TRAIN}/n{p}/{SIDECAR}" for p in FT["prefixes"] if p < int(n)),
         *([FT["real_validation"]] if FT["real_validation"] else []),
     ]
 
