@@ -17,7 +17,7 @@ test_that("every distribution is named, has a layer and a reason", {
   known <- c("lognormal", "normal", "halfnormal", "gamma", "beta", "uniform")
   d <- grid$distributions
   expect_true(all(vapply(d, function(x) x$dist %in% known, TRUE)))
-  layers <- c("infections", "observation", "delays", "reporting")
+  layers <- c("strata", "infections", "observation", "delays", "reporting")
   expect_true(all(vapply(d, function(x) x$layer %in% layers, TRUE)))
   expect_true(all(vapply(d, function(x) nzchar(x$why), TRUE)))
   # Only the cyclic phase is uniform.
@@ -97,4 +97,15 @@ test_that("a system's locations are the country, group totals and leaves", {
   expect_equal(system_locations(5, 1), 1 + 5 + 6)
   expect_equal(system_locations(1, 4), 1 + 4)
   expect_equal(system_locations(3, 4), 1 + 3 + 4 + 12)
+})
+
+test_that("every factor has a layer and aggregates are drawn from the grid", {
+  grid <- r7()
+  expect_setequal(names(grid$factor_layers), names(grid$factors))
+  layers <- c("strata", "infections", "observation", "delays", "reporting")
+  expect_true(all(unlist(grid$factor_layers) %in% layers))
+  a <- grid$aggregation
+  expect_setequal(names(a$parents), c("exact", "unallocated", "late_parent"))
+  expect_equal(grid$distributions[[a$unallocated_share]]$dist, "beta")
+  expect_equal(grid$distributions[[a$parent_lag_days]]$dist, "lognormal")
 })

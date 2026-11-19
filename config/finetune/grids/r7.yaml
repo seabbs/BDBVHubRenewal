@@ -68,6 +68,41 @@ counts:
   ages: {base: 2, mean: 2}
   ages_by_places: {base: 3, mean: 1}
   report_days: {base: 1, mean: 0.5}
+# How aggregates relate to their strata in training blocks (the trainer's
+# parents, finetune.country_counts): the exact sum, the sum less an
+# unallocated share reported only at the parent (cases of unknown place or
+# age), or a parent reported later than its children. Weights as factors.
+aggregation:
+  parents: {exact: 1, unallocated: 1, late_parent: 1}
+  unallocated_share: unallocated_share
+  parent_lag_days: parent_lag_days
+# Each factor's layer: strata (how many, how they nest and interact, and
+# how settings vary across them), infections, observation, delays or
+# reporting.
+factor_layers:
+  window: infections
+  trajectory: infections
+  gt_family: infections
+  strata: strata
+  spread: strata
+  place_rt: strata
+  seeding: strata
+  mixing: strata
+  imports: infections
+  strata_link: strata
+  observation_strata: strata
+  reporting_strata: strata
+  delay_places: strata
+  obs_strata: strata
+  observation: observation
+  delay_family: delays
+  delay_form: delays
+  delay_change: delays
+  reference_dow: reporting
+  reporting: reporting
+  bunching: reporting
+  shocks: reporting
+  revisions: reporting
 constants:
   walk_ar: 0.7         # pull of the weekly log R walk back to R = 1
   incubation_cv: 0.5   # infection-to-reference delay, gamma CV
@@ -175,7 +210,7 @@ distributions:
     b: 2.0
     lower: 0.0
     upper: 0.9
-    layer: infections
+    layer: strata
     why: even outbreaks reach most places; a few leave many quiet
   coupling:
     dist: beta
@@ -183,7 +218,7 @@ distributions:
     b: 2.0
     lower: 0.5
     upper: 1.0
-    layer: infections
+    layer: strata
     why: strata follow the shared trajectory more than their own
   place_rho:
     dist: beta
@@ -191,19 +226,19 @@ distributions:
     b: 2.0
     lower: 0.3
     upper: 0.9
-    layer: infections
+    layer: strata
     why: correlated places share most but not all of their deviations
   place_sd:
     dist: lognormal
     median: 0.017
     sdlog: 0.35
-    layer: infections
+    layer: strata
     why: daily growth deviations of 0.01 to 0.03 between places
   mixing_range:
     dist: lognormal
     median: 0.16
     sdlog: 0.7
-    layer: infections
+    layer: strata
     why: kernel range of a twentieth to half the square
   import_rate:
     dist: lognormal
@@ -221,13 +256,13 @@ distributions:
     dist: lognormal
     median: 3.2
     sdlog: 0.15
-    layer: infections
+    layer: strata
     why: a few strata hold nearly all cases, as BDBV's provinces
   stratum_sd_even:
     dist: lognormal
     median: 1.0
     sdlog: 0.42
-    layer: infections
+    layer: strata
     why: strata sizes within about a factor of 10 to 50
   phase:
     dist: uniform
@@ -387,7 +422,7 @@ distributions:
     b: 4.0
     lower: 0.0
     upper: 1.0
-    layer: infections
+    layer: strata
     why: a place imported mostly in the outbreak's first half
   mixing_eps:
     dist: beta
@@ -395,7 +430,7 @@ distributions:
     b: 8.0
     lower: 0.0
     upper: 1.0
-    layer: infections
+    layer: strata
     why: mostly a few percent of pressure from other places
   mixing_xy:
     dist: beta
@@ -403,7 +438,7 @@ distributions:
     b: 2.0
     lower: 0.0
     upper: 1.0
-    layer: infections
+    layer: strata
     why: places' positions on a unit square, fewer at its edges
   mixing_switch_at:
     dist: beta
@@ -411,7 +446,7 @@ distributions:
     b: 2.0
     lower: 0.0
     upper: 1.0
-    layer: infections
+    layer: strata
     why: mixing switches away from the ends
   import_at:
     dist: beta
@@ -430,7 +465,7 @@ distributions:
     dist: lognormal
     median: 0.55
     sdlog: 0.37
-    layer: observation
+    layer: strata
     why: strata's dispersion within about x2 to x3 of the outbreak's
   incubation_mean:
     dist: lognormal
@@ -442,12 +477,12 @@ distributions:
     dist: normal
     mean: 0.0
     sd: 1.0
-    layer: observation
+    layer: strata
     why: a stratum's deviation from the shared value, scaled by tau
   pool_tau:
     dist: halfnormal
     scale: 0.3
-    layer: observation
+    layer: strata
     why: pooled strata within about x0.5 to x2 of the shared value
   ascertainment:
     dist: beta
@@ -460,7 +495,7 @@ distributions:
   delay_age_sd:
     dist: halfnormal
     scale: 0.13
-    layer: delays
+    layer: strata
     why: ages' delays differ little
   hazard_walk_sd:
     dist: lognormal
@@ -545,7 +580,7 @@ distributions:
     dist: lognormal
     median: 0.28
     sdlog: 0.45
-    layer: delays
+    layer: strata
     why: places' delays differ by up to about x2
   walk_step:
     dist: normal
@@ -643,3 +678,17 @@ distributions:
     sdlog: 0.5
     layer: reporting
     why: errors corrected after about one to five weeks
+  unallocated_share:
+    dist: beta
+    a: 3
+    b: 14
+    lower: 0
+    upper: 1
+    layer: strata
+    why: about 5% to 35% of a parent's cases with no place or age
+  parent_lag_days:
+    dist: lognormal
+    median: 7
+    sdlog: 0.4
+    layer: strata
+    why: a parent reported about 3 to 15 days after its children

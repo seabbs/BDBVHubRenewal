@@ -254,8 +254,32 @@ def max_series(budget_gb: float) -> int:
     return _most_within(budget_gb, checkpointed=True)
 
 
+ENGINE = "packages/nowcastfoundation/r"
+"""The simulator engine, whose R files and description are hashed."""
+
+SIMULATOR = (
+    "config/finetune/grids/r7.yaml",
+    "workflow/scripts/simulate.R",
+    f"{ENGINE}/DESCRIPTION",
+    *(
+        f"{ENGINE}/R/{name}.R"
+        for name in (
+            "delays",
+            "design",
+            "grid",
+            "infections",
+            "nowcastfoundation-package",
+            "observation",
+            "reporting",
+            "simulate",
+            "utils",
+        )
+    ),
+)
+"""The simulator's files: the grid, the rule's wrapper and the engine."""
+
 CODE = {
-    "scripts/finetune_simulate.R": "scripts/finetune_simulate.R",
+    **{path: path for path in SIMULATOR},
     "scripts/finetune_chronos.py": "scripts/finetune_chronos.py",
     "src/bdbvhubrenewal/forecasters/finetune.py": (
         "src/bdbvhubrenewal/forecasters/finetune.py"

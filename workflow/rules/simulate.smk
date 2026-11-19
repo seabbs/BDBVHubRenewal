@@ -2,8 +2,8 @@
 #
 # Round r is the batches of `flowlib.segments.round_seeds`, each
 # `batch` simulations of the grid (`simulate.grid_file`, engine
-# packages/nowcastfoundation/r) with exactly `draws` observation draws:
-# 40 batches of 20, 800 simulations. Into
+# packages/nowcastfoundation/r) with exactly `draws` observation draws.
+# Into
 # <ROOT>/rounds/r<r>/sims/. Each batch gets a manifest row, the round's
 # manifest joins them, the sim QC (scripts/sim_qc.py) checks the round
 # against fixed thresholds (simulate.qc),
@@ -86,11 +86,8 @@ rule simulate_batch:
         sim_slots=1,
     params:
         sims=lambda wc, output: Path(output.counts).parent,
-        # A top-up batch: its planned cells and their number (topup.smk).
-        batch=batch_size,
-        cells=batch_cells,
+        batch=SIM["batch"],
         draws=SIM["draws"],
-        seed_base=SIM["seed_base"],
         lib=ENW_LIB,
         grid=GRID_FILE,
         engine=" ".join(simulator.ENGINE),
@@ -121,8 +118,7 @@ rule simulate_batch:
         rm -rf "$tmp" && mkdir -p "$tmp"
         trap 'rm -rf "$tmp"' EXIT
         rscript=$(command -v Rscript)
-        TMPDIR="$tmp" ENW_DRAWS={params.draws} ENW_CELLS="{params.cells}" \
-            ENW_SEED_BASE={params.seed_base} ENW_LIB={params.lib} \
+        TMPDIR="$tmp" ENW_DRAWS={params.draws} ENW_LIB={params.lib} \
             PATH="$(getconf PATH):$PATH" {params.prefix} \
             workflow/scripts/timed.sh \
             nice -n 19 "$rscript" workflow/scripts/simulate.R {params.grid} \

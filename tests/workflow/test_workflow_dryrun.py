@@ -265,7 +265,7 @@ def _records(tmp_path, r, seeds):
     records.mkdir(parents=True)
     for s in seeds:
         (records / f"record-{s}.csv").write_text(
-            f"{r},{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n"
+            f"{r},{s},block,r7,c,1,21,a,b,,1,2.0,h,t\n"
         )
     return records.parent
 
@@ -280,7 +280,7 @@ def test_from_the_rounds_host_a_round_is_listed_once_its_qc_ran(tmp_path):
     (r2 / "manifest.csv").write_text(
         "header\n"
         + "".join(
-            f"2,{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n"
+            f"2,{s},block,r7,c,1,21,a,b,,1,2.0,h,t\n"
             for s in range(30200, 30213)
         )
     )
@@ -826,7 +826,7 @@ def _rounds_host(tmp_path, rounds):
         where = host / "rounds" / f"r{r}"
         (where / "qc").mkdir(parents=True)
         rows = "".join(
-            f"{r},{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n" for s in seeds
+            f"{r},{s},block,r7,c,1,21,a,b,,1,2.0,h,t\n" for s in seeds
         )
         (where / "manifest.csv").write_text("header\n" + rows)
         (where / "qc" / "excluded.csv").write_text(
@@ -1002,48 +1002,9 @@ def _done_round(root, r, batches=40):
     return 1_000_000 + 10 * len(stages)
 
 
-TOPUP = {"grid_rounds": {"r6": {"rounds": [4], "topup_round": 32}}}
-
-
-def test_the_top_up_plans_its_first_try_from_the_rounds_qc(tmp_path):
-    _done_round(tmp_path, 4)
-    jobs = dry(tmp_path, "topup", config=TOPUP)
-    assert jobs["topup_plan"] == 1
-    assert "simulate_batch" not in jobs
-
-
-def test_the_top_up_waits_for_every_training_round(tmp_path):
-    # Round 5 is not simulated yet: it is simulated and QC'd first.
-    _done_round(tmp_path, 4)
-    config = {"grid_rounds": {"r6": {"rounds": [4, 5], "topup_round": 32}}}
-    jobs = dry(tmp_path, "topup", config=config)
-    assert jobs["simulate_batch"] == 40
-    assert jobs["sim_qc"] == 1
-    assert jobs["topup_plan"] == 1
-
-
-def test_a_top_up_batch_simulates_its_planned_cells(tmp_path):
-    import os
-
-    after = _done_round(tmp_path, 4)
-    plan = tmp_path / "rounds" / "r32" / "topup" / "plan-0.txt"
-    plan.parent.mkdir(parents=True)
-    plan.write_text("33200 3364 3365\n")
-    os.utime(plan, (after, after))
-    blocks = score_jobs(tmp_path, TOPUP, target="topup")
-    sims = [b for b in blocks if re.match(r"rule simulate_batch:", b)]
-    assert len(sims) == 1
-    shell = " ".join(sims[0].replace("\\\n", " ").split())
-    assert 'ENW_CELLS="3364,3365"' in shell
-    assert "simulate.R config/finetune/grids/r7.yaml 2 33200" in shell
-    qc = [b for b in blocks if re.match(r"rule topup_qc:", b)]
-    assert len(qc) == 1
-    assert "--max-weekly-jump 1000" in qc[0]
-
-
-def test_a_round_s_batch_names_no_cells(tmp_path):
+def test_a_round_s_batch_runs_the_grid(tmp_path):
     blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
     text = " ".join("".join(blocks).replace("\\\n", " ").split())
     shell = text[text.index("workflow/scripts/simulate.R") - 400 :]
-    assert 'ENW_CELLS=""' in shell
-    assert "simulate.R config/finetune/grids/r7.yaml 20 " in shell
+    assert "ENW_CELLS" not in shell
+    assert "simulate.R config/finetune/grids/r7.yaml 21 " in shell
