@@ -47,6 +47,7 @@ from paperpipe.outputs import to_markdown
 
 __all__ = [
     "EVIDENCE",
+    "HELD_OUT_EVIDENCE",
     "aggregation_figure",
     "aggregation_numbers",
     "branch_head",
@@ -56,6 +57,7 @@ __all__ = [
     "comparison_figure",
     "copula_figure",
     "diseases_table",
+    "drop_bdbv",
     "drop_finetuned",
     "heldout_figure",
     "heldout_rows",
@@ -195,14 +197,17 @@ def aggregation_numbers(
 
 
 def lag_numbers(
-    germany: pd.DataFrame, before: pd.DataFrame, after: pd.DataFrame
+    germany: pd.DataFrame,
+    before: pd.DataFrame | None = None,
+    after: pd.DataFrame | None = None,
 ) -> dict:
     """Return each model's relative WIS with the capped and longer lags.
 
     Germany's national rows name the longer horizon `<model>_fix`; the
     BDBV release backtest gives each horizon its own table, of which the
     `all` nowcast rows of the complete target are compared. Values are
-    WIS relative to `randomwalknowcast`.
+    WIS relative to `randomwalknowcast`. Without the BDBV tables, only
+    Germany's.
     """
     nat = germany.loc[germany["pool"] == "national"].set_index("model")
     rel = nat["rel_wis_randomwalknowcast"]
@@ -223,6 +228,8 @@ def lag_numbers(
         )
         return t.loc[keep].set_index("model")["rel_wis"]
 
+    if before is None or after is None:
+        return {"germany": de}
     b, a = pick(before), pick(after)
     bdbv = {
         m: {"capped": round(float(b[m]), 2), "longer": round(float(a[m]), 2)}
@@ -236,6 +243,27 @@ CHECKPOINT_RULE: Final = "own-quantile-wis_crps-1000-common"
 """The scoring rule of the checkpoint rows the paper shows: WIS on each
 model's own quantiles for Germany, and CRPS on 1,000 draws with common
 random numbers for BDBV."""
+
+
+HELD_OUT_EVIDENCE: Final = ("lag_bdbv_before", "lag_bdbv_after")
+"""Evidence inputs that are BDBV scores only, which the paper never reads."""
+
+
+def drop_bdbv(frame: pd.DataFrame) -> pd.DataFrame:
+    """Drop BDBV (Ebola) score rows, as the Ebola study is held out.
+
+    Rows whose `study` is `ebola` or `bdbv`, whose `set` names BDBV (the
+    `compare_*` layout), or the scale-floor test's BDBV rows (those with
+    a `source`). Data summaries (`sim_realism`) are not scores and stay.
+    """
+    keep = pd.Series(True, index=frame.index)
+    if "study" in frame:
+        keep &= ~frame["study"].astype(str).str.lower().isin(["ebola", "bdbv"])
+    if "set" in frame:
+        keep &= ~frame["set"].astype(str).str.startswith("BDBV")
+    if {"source", "relative_wis"} <= set(frame.columns):
+        keep &= frame["source"].isna()
+    return frame.loc[keep].reset_index(drop=True)
 
 
 def _case_study_rows(scores: pd.DataFrame) -> pd.DataFrame:
@@ -949,6 +977,13 @@ def write_evidence(
     si_dir.mkdir(parents=True, exist_ok=True)
     fig_dir.mkdir(parents=True, exist_ok=True)
     data = {name: _read(paths, name) for name in EVIDENCE}
+    # The Ebola study is held out: no BDBV scores from development.
+    for name in HELD_OUT_EVIDENCE:
+        data[name] = None
+    for name, frame in data.items():
+        if frame is not None and name != "sim_realism":
+            kept = drop_bdbv(frame)
+            data[name] = None if kept.empty else kept
     for name in FINETUNED_EVIDENCE:
         if data.get(name) is not None and "model" in data[name]:
             data[name] = drop_finetuned(data[name])
@@ -1050,19 +1085,8 @@ def write_evidence(
             "rho": QUOTED["rho"] if rho is None else rho_medians(rho),
             "lag": (
                 None
-                if any(
-                    data[n] is None
-                    for n in (
-                        "lag_germany",
-                        "lag_bdbv_before",
-                        "lag_bdbv_after",
-                    )
-                )
-                else lag_numbers(
-                    data["lag_germany"],
-                    data["lag_bdbv_before"],
-                    data["lag_bdbv_after"],
-                )
+                if data["lag_germany"] is None
+                else lag_numbers(data["lag_germany"])
             ),
             "scale_floor": (
                 None
@@ -1075,7 +1099,11 @@ def write_evidence(
             "realism": (
                 QUOTED["realism"] if ref is None else realism_numbers(ref)
             ),
-            "waiting": [EVIDENCE[n] for n, d in data.items() if d is None],
+            "waiting": [
+                EVIDENCE[n]
+                for n, d in data.items()
+                if d is None and n not in HELD_OUT_EVIDENCE
+            ],
         }
     }
     out_yml.write_text(yaml.safe_dump(numbers, sort_keys=False))

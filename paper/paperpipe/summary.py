@@ -75,6 +75,8 @@ def study_summary(
         return round(float(best[col]), 2)
 
     return {
+        # The paper shows a study's results only when its run has it.
+        "shown": True,
         "source": meta["source"],
         "label": DUMMY_LABEL if meta["source"] == "dummy" else "",
         "note": meta.get("note", ""),

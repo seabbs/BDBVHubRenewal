@@ -97,3 +97,9 @@ def test_summary_records_the_fine_tuned_checkpoint(tmp_path) -> None:
     assert doc["finetuned"] == "e8a1f5ae338b"
     write_summary(path, "paper", {})
     assert yaml.safe_load(path.read_text())["results"]["finetuned"] == "pending"
+
+
+def test_summary_marks_each_study_it_has_as_shown() -> None:
+    # The paper hides a study's results when its run has no entry for it.
+    out = study_summary({"study": "germany", "source": "real"}, _scores())
+    assert out["shown"] is True

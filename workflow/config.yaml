@@ -77,11 +77,11 @@ finetune:
   # Steps between the trainer's held-out evaluations: the monitor on the
   # first 100 held-out blocks, and by source (100 blocks a source) on a
   # multiple of it. They only score: the steps trained are the same.
-  eval_every: 100
+  eval_every: 200
   by_source_every: 200
-  # Where the trainer's held-out evaluation runs: `local` (in the trainer,
-  # as before) or `offload` (the trainer saves adapter snapshots for
-  # scripts/finetune_evaluate.py and carries on). Training is the same.
+  # Where the trainer's held-out evaluation runs: `local` (in the trainer)
+  # or `offload` (adapter snapshots for scripts/finetune_evaluate.py; no
+  # rule runs it yet, so offloaded checkpoints have no held-out losses).
   eval: local
   series_bias: true
   note: continuous r5
@@ -105,13 +105,8 @@ score:
   # Labels scored beside every checkpoint: randomwalknowcast and zero-shot
   # Chronos-2.
   reference: [reference]
-  # The BDBV data the units read; newer data reruns them.
-  data: data/target.csv
   # A unit's memory cap (MB), at its measured 5 GB peak.
   mem_mb: 6144
-  # A zone unit's memory cap (MB): Chronos-2 on the CPU with the zones in
-  # its block, at its measured 15.4 GB peak (daily ragged, 2026-11-08).
-  zones_mem_mb: 18432
   # The evidence tables the scores merge into, kept rows of other rules.
   evidence: evidence/checkpoint-scores.csv
   checkpoints: evidence/checkpoints.csv

@@ -1,25 +1,14 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 r"""Score an adapter snapshot of `scripts/finetune_stream.py --eval offload`.
 
-The trainer leaves each evaluation to this script: at step 0 and every
-`--eval-every` steps it saves the adapter and a request
-(`<train>/evals/step-<k>/`), and at each checkpoint its adapter
-(`<train>/n<N>/finetuned-ckpt`). This script loads base Chronos-2 with
-that adapter and scores the held-out blocks the trainer saved
-(`<train>/held-out-blocks.pkl`) with the trainer's own functions, so
-the losses are the ones the trainer would have logged, on whatever
-device runs it.
+Scores the trainer's saved held-out blocks with its own loss functions,
+so the losses are those the trainer would have logged.
 
     uv run --group chronos python scripts/finetune_evaluate.py \
         TRAIN/evals/step-0000100 --train TRAIN --out result.json
 
-Kinds, from the request or `--kinds`:
-
-- `start`: all held-out blocks, by level and by source (step 0);
-- `monitor`: the first `ft.EVAL_BLOCKS` blocks (`eval_loss`);
-- `by_source`: each source's first `ft.EVAL_BLOCKS` blocks;
-- `checkpoint`: all blocks, by level, by source and the real validation
-  blocks, as the trainer adds them to a checkpoint's settings.
+Kinds: `start` (step 0), `monitor` (the logged held-out loss),
+`by_source` and `checkpoint` (a checkpoint's held-out settings).
 """
 
 from __future__ import annotations
@@ -113,18 +102,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("snapshot", type=Path)
     p.add_argument("--train", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--kinds", nargs="+", choices=KINDS)
+    # Checked against KINDS by `evaluate`.
+    p.add_argument("--kinds", nargs="+")
     p.add_argument("--real-validation", type=Path)
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--device", default="auto")
     return p
 
 
-def main() -> None:
-    """Score a snapshot and write its losses as JSON."""
+def load_base(device: str):
+    """Return base Chronos-2 on `device`."""
     from chronos import Chronos2Pipeline
 
-    args = build_parser().parse_args()
+    return Chronos2Pipeline.from_pretrained(
+        fs.CHRONOS_MODEL, revision=fs.CHRONOS_REVISION, device_map=device
+    ).model
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    """Score a snapshot and write its losses as JSON."""
+    args = build_parser().parse_args(argv)
     snapshot = args.snapshot
     request_file = snapshot / "request.json"
     request = (
@@ -140,13 +137,11 @@ def main() -> None:
     )
     real = fs.load_blocks(args.real_validation) if args.real_validation else []
     device = torch_device(args.device)
-    pipeline = Chronos2Pipeline.from_pretrained(
-        fs.CHRONOS_MODEL, revision=fs.CHRONOS_REVISION, device_map=device
-    )
+    base = load_base(device)
     if series_bias.adapter_has_bias(adapter):
-        series_bias.attach(pipeline.model, series_bias.adapter_pairs(adapter))
+        series_bias.attach(base, series_bias.adapter_pairs(adapter))
     tick = time.perf_counter()
-    losses = evaluate(adapter, pipeline.model, blocks, kinds, batch_size, real)
+    losses = evaluate(adapter, base, blocks, kinds, batch_size, real)
     result = {
         **{k: request[k] for k in ("step", "n_outbreaks") if k in request},
         **losses,
