@@ -17,7 +17,7 @@ def test_german_dates_forecast_together_come_from_the_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("SCORE_DATES", raising=False)
-    assert ck.score_dates() == 20
+    assert ck.score_dates() == 5
     monkeypatch.setenv("SCORE_DATES", "40")
     assert ck.score_dates() == 40
 

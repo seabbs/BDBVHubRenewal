@@ -5,12 +5,12 @@ Chronos-2's group attention has no series identity, so in the ragged
 layout's joint block it cannot tell which place a lag series belongs to.
 This adds learned biases to the group attention scores of every encoder
 layer, per head, one for each kind of row pair (`pair_masks`): a row and
-itself, $b_\text{self}$; a row and another of its place (its count series
-and all its lag series), $b_\text{same}$; a child's row and its parent's
-(`parents_of`), $b_\text{up}$; and a parent's row and its child's,
-$b_\text{down}$. The biases start at zero, so a model with them starts
-exactly as base Chronos-2, are kept in fp32, and need no codes, no table
-and no scale, for any number of places.
+another of its place (its count series and all its lag series),
+$b_\text{same}$; a child's row and its parent's (`parents_of`),
+$b_\text{up}$; and a parent's row and its child's, $b_\text{down}$. The
+biases start at zero, so a model with them starts exactly as base
+Chronos-2, are kept in fp32, and need no codes, no table and no scale,
+for any number of places.
 
 Chronos-2's encoder builds one additive group mask, `(time, 1, q, k)`
 over the batch axis (`Chronos2Encoder._construct_and_invert_group_time_mask`),
@@ -27,7 +27,7 @@ adapter's files.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Final
@@ -39,13 +39,17 @@ __all__ = [
     "COUNTRIES",
     "PAIRS",
     "adapter_has_bias",
+    "adapter_pairs",
     "assigned",
     "attach",
+    "attach_for",
     "batch_rows",
     "block_rows",
     "has_bias",
     "load_adapter",
+    "model_pairs",
     "pair_masks",
+    "pairs_in",
     "parents_of",
     "row_places",
 ]
@@ -148,26 +152,34 @@ def batch_rows(blocks: Sequence[np.ndarray]) -> np.ndarray:
     return np.concatenate(out, axis=1)
 
 
-def pair_masks(place: Any, parent: Any) -> tuple[Any, Any, Any, Any]:
-    """Return the four kinds of row pair, each `[rows, rows]`, query first.
+PAIRS: Final = ("same", "up", "down")
+"""The biases, one per kind of pair (`pair_masks`), in its order."""
 
-    A row and itself; a row and another row of its place (its count and
-    lag series); a child's row and its parent's (up); and a parent's row
-    and its child's (down). A parent of -1 links nothing.
+_SAVED_ONLY: Final = "self_"
+"""A row and itself: loaded with an adapter that holds it, never made."""
+
+_KNOWN: Final = (_SAVED_ONLY, *PAIRS)
+
+
+def pair_masks(
+    place: Any, parent: Any, pairs: Sequence[str] = PAIRS
+) -> dict[str, Any]:
+    """Return each kind of row pair in `pairs`, `[rows, rows]`, by name.
+
+    Query first. `same`, a row and another row of its place (its count
+    and lag series); `up`, a child's row and its parent's; and `down`, a
+    parent's row and its child's. A parent of -1 links nothing.
     """
     import torch
 
     me = torch.eye(len(place), dtype=torch.bool, device=place.device)
     same = (place[:, None] == place[None, :]) & ~me
     up = (parent[:, None] == place[None, :]) & (parent[:, None] >= 0)
-    return me, same, up, up.T
+    masks = {"same": same, "up": up, "down": up.T, _SAVED_ONLY: me}
+    return {k: masks[k] for k in pairs}
 
 
-PAIRS: Final = ("self_", "same", "up", "down")
-"""The biases, one per kind of pair (`pair_masks`), in its order."""
-
-
-def _bias_module(n_layers: int, n_heads: int) -> Any:
+def _bias_module(n_layers: int, n_heads: int, pairs: Sequence[str]) -> Any:
     import torch
     from torch import nn
 
@@ -176,15 +188,19 @@ def _bias_module(n_layers: int, n_heads: int) -> Any:
 
         def __init__(self) -> None:
             super().__init__()
-            for name in PAIRS:
+            self.pairs = tuple(pairs)
+            for name in self.pairs:
                 zero = torch.zeros(n_layers, n_heads, dtype=torch.float32)
                 setattr(self, name, nn.Parameter(zero))
 
-        def forward(self, layer: int, masks: Sequence[Any]) -> Any:
+        def forward(self, layer: int, masks: dict[str, Any]) -> Any:
             """Return layer `layer`'s bias, `[heads, rows, rows]`, fp32."""
             out = 0
-            for name, mask in zip(PAIRS, masks, strict=True):
-                out = out + getattr(self, name)[layer][:, None, None] * mask
+            for name in self.pairs:
+                out = (
+                    out
+                    + getattr(self, name)[layer][:, None, None] * masks[name]
+                )
             return out
 
     return SeriesBias()
@@ -202,8 +218,11 @@ def has_bias(model: Any) -> bool:
     return _base(model) is not None
 
 
-def attach(model: Any) -> None:
+def attach(model: Any, pairs: Sequence[str] = PAIRS) -> None:
     """Add a zero bias to a Chronos-2 model and hook its group attention.
+
+    One bias per kind of pair in `pairs` (`PAIRS`, or those an adapter
+    holds, `adapter_pairs`).
 
     Each `GroupSelfAttention`'s forward pre-hook adds its layer's bias to
     the group mask, from the rows set by `assigned`. A block recomputed in
@@ -217,7 +236,10 @@ def attach(model: Any) -> None:
         raise ValueError("the model already has the series bias")
     config = model.config
     weight = next(model.input_patch_embedding.parameters())
-    module = _bias_module(config.num_layers, config.num_heads)
+    unknown = set(pairs) - set(_KNOWN)
+    if unknown:
+        raise ValueError(f"unknown series bias pairs: {sorted(unknown)}")
+    module = _bias_module(config.num_layers, config.num_heads, pairs)
     # Kept in fp32 whatever the model's dtype; cast where it is added.
     setattr(model, BIAS_MODULE, module.to(weight.device))
     setattr(model, _STATE, {"rows": None})
@@ -240,8 +262,9 @@ def attach(model: Any) -> None:
             if n_rows % n:
                 raise ValueError(f"{n_rows} rows but places for {n}")
             rows = rows.to(hidden.device).repeat_interleave(n_rows // n, dim=-1)
-            masks = pair_masks(rows[0], rows[1])
-            bias = getattr(model, BIAS_MODULE)(layer, masks)
+            module = getattr(model, BIAS_MODULE)
+            masks = pair_masks(rows[0], rows[1], module.pairs)
+            bias = module(layer, masks)
             return args, {
                 **kwargs,
                 "attention_mask": mask + bias[None].to(mask.dtype),
@@ -282,19 +305,76 @@ def adapter_has_bias(adapter: Path | str) -> bool:
     return BIAS_MODULE in (config.get("modules_to_save") or [])
 
 
+def adapter_pairs(adapter: Path | str) -> tuple[str, ...]:
+    """Return the kinds of pair an adapter's series bias holds.
+
+    Read from the names in its weights file (`adapter_model.safetensors`),
+    so an adapter loads with the biases it was trained with.
+
+    Raises
+    ------
+    ValueError
+        If it holds a bias of a kind this module does not know.
+    """
+    path = Path(adapter) / "adapter_model.safetensors"
+    with path.open("rb") as f:
+        head = json.loads(f.read(int.from_bytes(f.read(8), "little")))
+    try:
+        return pairs_in(head)
+    except ValueError as error:
+        raise ValueError(f"{adapter}: {error}") from None
+
+
+def pairs_in(names: Iterable[str]) -> tuple[str, ...]:
+    """Return the kinds of pair whose bias weights `names` name.
+
+    Raises
+    ------
+    ValueError
+        If a name is a bias of a kind this module does not know.
+    """
+    found = {
+        name.rsplit(".", 1)[-1]
+        for name in names
+        if f".{BIAS_MODULE}." in f".{name}"
+    }
+    unknown = found - set(_KNOWN)
+    if unknown:
+        raise ValueError(f"unknown series bias pairs {sorted(unknown)}")
+    return tuple(p for p in _KNOWN if p in found)
+
+
+def attach_for(model: Any, adapter: Path | str) -> bool:
+    """Attach the bias an adapter holds, with its pairs; return whether.
+
+    So PEFT then loads the adapter's trained values (`load_adapter`, or
+    an unmerged `PeftModel.from_pretrained`).
+    """
+    if not adapter_has_bias(adapter):
+        return False
+    attach(model, adapter_pairs(adapter))
+    return True
+
+
+def model_pairs(model: Any) -> tuple[str, ...]:
+    """Return the kinds of pair a model's series bias holds, or none."""
+    base = _base(model)
+    return getattr(base, BIAS_MODULE).pairs if base is not None else ()
+
+
 def load_adapter(model: Any, adapter: Path | str) -> Any:
     """Return Chronos-2 `model` with an adapter merged, its bias included.
 
-    The bias is attached first when the adapter holds it, so PEFT loads
-    its trained values; an adapter without it loads as before. Every
+    The bias is attached first when the adapter holds it, with the kinds
+    of pair it holds (`adapter_pairs`), so PEFT loads its trained values;
+    an adapter without it loads as before. Every
     weight in the adapter's file must reach the model (`_check_loaded`).
     """
     import warnings
 
     from peft import PeftModel
 
-    if adapter_has_bias(adapter):
-        attach(model)
+    attach_for(model, adapter)
     with warnings.catch_warnings():
         # PEFT only warns when an adapter weight has no file entry.
         warnings.filterwarnings("error", message="Found missing adapter keys")
