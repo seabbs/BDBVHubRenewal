@@ -397,3 +397,35 @@ def test_retrospective_nowcasts_reach_back_as_far_as_baselinenowcasts(
 def test_start_weeks_are_the_origin_start(snap24, origin24) -> None:
     # The delay alone gives the walk's start weeks.
     assert np.array_equal(start_weeks(snap24, Settings()), origin24.start)
+
+
+def test_a_gap_past_the_window_recovers_the_daily_delay() -> None:
+    # A day of age a at the first release is final at the second, so the
+    # pair gives the growth to final at every age, which identifies g.
+    d, gap = 42, 50
+    g = np.linspace(0.3, 0.0, d)
+    to_final = np.exp(np.cumsum(g[::-1])[::-1])
+    den = np.full((1, 1, d), 200.0)
+    num = den * to_final
+    np.testing.assert_allclose(log_factors(num, den, [gap])[0], g, atol=1e-8)
+
+
+def test_with_no_pair_in_window_the_delay_uses_the_longer_pairs(
+    daily: pd.DataFrame,
+) -> None:
+    # At 10-09 the only pair is 08-18 to 10-09, 50 days apart (#365).
+    provinces = tuple(sorted(set(daily["location"]) - {"CD"}))
+    snap = snapshot_arrays(daily, "2026-10-09", provinces)
+    assert np.diff(snap.cut).tolist() == [50]
+    origin = build_origin(snap, Settings(), errors=True)
+    assert origin.fit.pairs.tolist() == [[0, 1]]
+    assert (origin.fit.g >= 0).all()
+    assert np.isfinite(origin.point).all()
+
+
+def test_a_pair_in_window_is_used_alone(snap24) -> None:
+    # The longer pairs are a fallback: with a pair in the window they are
+    # left out, as before.
+    fit = fit_delay(snap24, len(snap24.releases) - 1, Settings())
+    assert fit is not None
+    assert fit.pairs.tolist() == [[1, 2], [2, 3]]
