@@ -8,6 +8,7 @@ export(draw_share)
 export(draw_values)
 export(max_strata)
 export(read_grid)
+export(redraw_reason)
 export(simulate_batch)
 import(data.table)
 importFrom(stats,

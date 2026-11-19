@@ -14,7 +14,8 @@
 #   cyclic phase), none truncated, with its layer and reason.
 # - `shares`: Bernoulli chances; `counts`: counts at least `base` by
 #   definition, base plus a Poisson with `mean`; `rates`: Poisson means.
-# - `floors`: the only floors on drawn values.
+# - `floors`: the only floors on drawn values, and the fewest reported
+#   cases a simulation may have before it is drawn again.
 name: r7
 epinowcast_sha: e084b080
 # Linked strata cap and independent strata (as r6).
@@ -24,6 +25,9 @@ floors:
   seed: 1
   weeks: 4
   period_days: 30
+  # A draw reporting fewer cases than this (over its draws' mean) is drawn
+  # again, as are draws that error.
+  min_cases: 10
 shares:
   controlled: 0.5      # early outbreaks brought towards R = 1
   drift: 0.3           # non-endemic settings with a slow drift in R

@@ -280,8 +280,8 @@ simulate_outbreak <- function(grid, design, v, ctx) {
 }
 
 # Simulate one design: up to five draws of its values, each kept if it
-# runs and its size per draw is in range. Returns the outbreak (or NULL)
-# and a failure row per failed try.
+# runs and reports at least `min_cases` (`redraw_reason`). Returns the
+# outbreak (or NULL) and a failure row per failed try.
 simulate_cell <- function(grid, design, ctx, id = NA_character_) {
   if (design$strata_link == "independent" &&
       design$n_places * design$n_ages > 1) {
@@ -294,8 +294,7 @@ simulate_cell <- function(grid, design, ctx, id = NA_character_) {
     reason <- if (inherits(res, "error")) {
       conditionMessage(res)
     } else {
-      # Only broken draws are redrawn: an outbreak with no case.
-      if (sum(res$counts$count) <= 0) "no case" else NA_character_
+      redraw_reason(sum(res$counts$count) / ctx$draws, grid)
     }
     if (is.na(reason)) {
       return(list(out = res, failures = failures))
@@ -448,4 +447,21 @@ simulate_batch <- function(grid, seed, n, model, draws = 1L, weeks = NULL,
     failures = data.table::rbindlist(failures, fill = TRUE),
     latent = data.table::rbindlist(latent, use.names = TRUE)
   )
+}
+
+#' Why a simulation is drawn again, if it is
+#'
+#' A simulation reporting fewer than `grid$floors$min_cases` cases (its
+#' draws' mean) is drawn again; so are draws that error (`simulate_cell`).
+#'
+#' @param size Reported cases, the draws' mean.
+#' @param grid A grid (`read_grid`).
+#' @return The reason, or `NA` if the simulation is kept.
+#' @export
+redraw_reason <- function(size, grid) {
+  if (size < grid$floors$min_cases) {
+    sprintf("fewer than %s cases", grid$floors$min_cases)
+  } else {
+    NA_character_
+  }
 }
