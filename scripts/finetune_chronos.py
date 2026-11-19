@@ -426,6 +426,25 @@ their sum, more than their sum (cases with no place), or reported through
 a later stream (`finetune.country_counts`). A block of some of the
 places is also not their sum. Parent means belongs to, not sums to."""
 
+PARENT_DRAWS = {
+    "r7": {
+        "shares": {"exact": 1 / 3, "unallocated": 1 / 3, "late_parent": 1 / 3},
+        # Mean 18%, most between 5% and 34%: r6 drew 5-30% uniformly.
+        "unallocated_share": {"dist": "beta", "a": 3.0, "b": 14.0},
+        # Median 7 days, most between 4 and 14: r6 drew 3-14 uniformly.
+        "parent_lag_days": {
+            "dist": "lognormal",
+            "meanlog": float(np.log(7)),
+            "sdlog": 0.4,
+        },
+    },
+}
+"""Each block design's parents (a design not listed draws `PARENT_MIX`
+evenly with `finetune.PARENT_DRAWS`): the share of blocks with places
+whose country is their exact sum, has unallocated cases, or is reported
+later, and the named distributions of the unallocated share and the lag
+(`finetune.country_counts`)."""
+
 UNIVARIATE_SHARE = 0.2
 """Share of blocks that are one series, the country or one leaf; the rest
 are multivariate, shared evenly among their mixes."""
@@ -595,8 +614,14 @@ def outbreak_blocks(
             # generator, so the other draws are as without it.
             parent_rng, option_rng = rng.spawn(2)
             parent = "exact"
+            parents = PARENT_DRAWS.get(DESIGN)
             if len(places) > 1 and places[0] == NATIONAL:
-                parent = str(parent_rng.choice(PARENT_MIX))
+                if parents is None:
+                    parent = str(parent_rng.choice(PARENT_MIX))
+                else:
+                    kinds = list(parents["shares"])
+                    shares = list(parents["shares"].values())
+                    parent = str(parent_rng.choice(kinds, p=shares))
             options = block_options(source, option_rng)
             # The releases follow the source's cadence (`CADENCES`), up to
             # the slot's cut.
@@ -610,6 +635,7 @@ def outbreak_blocks(
                 totals=any("-" in p for p in provinces),
                 parent=parent,
                 rng=parent_rng,
+                parent_draws=parents,
                 **options,
             )
             if block is None:

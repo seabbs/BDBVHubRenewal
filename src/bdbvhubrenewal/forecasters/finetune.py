@@ -399,31 +399,68 @@ PARENTS: Final = ("exact", "unallocated", "late_parent")
 """How a block's country relates to its places (`country_counts`)."""
 
 
+PARENT_DRAWS: Final = {
+    "unallocated_share": {"dist": "uniform", "low": 0.05, "high": 0.3},
+    "parent_lag_days": {"dist": "uniform", "low": 3, "high": 15},
+}
+"""The draws of a parent that does not sum (`country_counts`): the share
+of cases with no place, and the days the parent is reported after its
+places, rounded down to whole days. These are r6's; a block design may
+give its own (`finetune_chronos.PARENT_DRAWS`)."""
+
+
+def draw_named(spec: dict[str, Any], rng: np.random.Generator) -> float:
+    """Draw one value from a named distribution.
+
+    `spec` is `{"dist": ..., <parameters>}`: `uniform` (`low`, `high`),
+    `beta` (`a`, `b`) or `lognormal` (`meanlog`, `sdlog`).
+
+    Raises
+    ------
+    ValueError
+        For any other distribution.
+    """
+    dist = spec["dist"]
+    if dist == "uniform":
+        return float(rng.uniform(spec["low"], spec["high"]))
+    if dist == "beta":
+        return float(rng.beta(spec["a"], spec["b"]))
+    if dist == "lognormal":
+        return float(rng.lognormal(spec["meanlog"], spec["sdlog"]))
+    raise ValueError(f"no named distribution {dist!r}")
+
+
 def country_counts(
-    counts: pd.DataFrame, parent: str, rng: np.random.Generator
+    counts: pd.DataFrame,
+    parent: str,
+    rng: np.random.Generator,
+    draws: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return the counts the places and the country are made from.
 
     `exact`: both the outbreak's, so the country is the sum of its places.
-    `unallocated`: a share of 5% to 30% of cases has no place, so it is
-    in the country's count only, as cases of unknown province or age.
-    `late_parent`: the country is reported through its own stream, 3 to
-    14 days after its places.
+    `unallocated`: a share of cases (`draws["unallocated_share"]`) has no
+    place, so it is in the country's count only, as cases of unknown
+    province or age.
+    `late_parent`: the country is reported through its own stream, a
+    drawn number of whole days (`draws["parent_lag_days"]`, at least one)
+    after its places. `draws` defaults to `PARENT_DRAWS`.
 
     Raises
     ------
     ValueError
         If `parent` is none of `PARENTS`.
     """
+    draws = PARENT_DRAWS if draws is None else draws
     if parent == "exact":
         return counts, counts
     if parent == "unallocated":
-        keep = 1 - rng.uniform(0.05, 0.3)
+        keep = 1 - draw_named(draws["unallocated_share"], rng)
         kept = rng.binomial(counts["count"].to_numpy(dtype=int), keep)
         return counts.assign(count=kept), counts
     if parent == "late_parent":
-        days = pd.Timedelta(days=int(rng.integers(3, 15)))
-        later = pd.to_datetime(counts["report_date"]) + days
+        lag = max(1, int(draw_named(draws["parent_lag_days"], rng)))
+        later = pd.to_datetime(counts["report_date"]) + pd.Timedelta(days=lag)
         return counts, counts.assign(report_date=later)
     raise ValueError(f"parent {parent!r} is none of {PARENTS}")
 
@@ -439,6 +476,7 @@ def training_block(
     parent: str = "exact",
     rng: np.random.Generator | None = None,
     period_end: int | None = None,
+    parent_draws: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     """Return one training block, cut at the last of `cutoffs`.
 
@@ -469,6 +507,8 @@ def training_block(
         with `rng`.
     rng : numpy.random.Generator, optional
         Draws the `parent` cases; a fixed seed by default.
+    parent_draws : dict, optional
+        The non-summing parent's draws (`country_counts`).
     period_end : int, optional
         For a source with period totals (`MIXED`), the day its periods
         end on (`period_totals`). Sources with rolling sums (`ROLLING`)
@@ -489,7 +529,7 @@ def training_block(
     cut = cutoffs[-1]
     end = epiweek_end(cut) + dt.timedelta(weeks=ahead_weeks)
     counts, country = country_counts(
-        counts, parent, rng or np.random.default_rng(0)
+        counts, parent, rng or np.random.default_rng(0), parent_draws
     )
     period = MIXED.get(source)
     window = ROLLING.get(source)
