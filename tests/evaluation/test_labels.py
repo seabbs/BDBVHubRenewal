@@ -27,6 +27,12 @@ def test_every_named_model_has_a_style_and_names_are_unique() -> None:
     assert len(set(MODEL_LABELS.values())) == len(MODEL_LABELS)
 
 
+def test_main_models_have_distinct_colours() -> None:
+    # Bars have no dashes, so colour alone tells the main models apart.
+    colours = [MODEL_STYLES[m][0] for m in MAIN]
+    assert len(set(colours)) == len(colours)
+
+
 def test_checkpoints_real_data_and_hub_teams() -> None:
     assert (
         model_label("fm_chronos_daily_ragged_ft@2000")
