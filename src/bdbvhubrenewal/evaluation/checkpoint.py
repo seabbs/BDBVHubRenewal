@@ -519,6 +519,28 @@ def bdbv_unit(
     print(f"{root.parent.name} {label} done", flush=True)
 
 
+def german_tasks_dir(
+    cache: Path, triangle: Path, n_samples: int, seed: int
+) -> Path:
+    """Return the store of the German tasks every checkpoint scores.
+
+    Keyed on what the tasks are built from: the triangle file's bytes,
+    the task-building code (`data.germany`), and the draws and seed.
+    """
+    import hashlib
+    import inspect
+
+    from bdbvhubrenewal.data import germany as dg
+
+    h = hashlib.sha256()
+    with Path(triangle).open("rb") as f:
+        for part in iter(lambda: f.read(1 << 24), b""):
+            h.update(part)
+    h.update(inspect.getsource(dg).encode())
+    h.update(f"{n_samples}-{seed}".encode())
+    return Path(cache) / "germany" / f"tasks-{h.hexdigest()[:12]}"
+
+
 def germany_unit(cache: Path, label: str) -> None:
     """Nowcast each German development date, own quantiles with truth."""
     from bdbvhubrenewal.data.germany import hub_triangle
@@ -526,9 +548,10 @@ def germany_unit(cache: Path, label: str) -> None:
 
     _pin(label)
     config = de.load_germany_config("config/germany.toml")
-    triangle = hub_triangle(
-        Path("data/raw/germany") / Path(config.triangle).name
-    )
+    path = Path("data/raw/germany") / Path(config.triangle).name
+    triangle = hub_triangle(path)
+    # Built once for every checkpoint, then read back.
+    tasks_dir = german_tasks_dir(cache, path, config.n_samples, config.seed)
     root = cache / "germany" / label
     root.mkdir(parents=True, exist_ok=True)
     dates = de.nowcast_dates(config, held_out=False)
@@ -542,7 +565,7 @@ def germany_unit(cache: Path, label: str) -> None:
         chunk = todo[i : i + step]
         start = time.monotonic()
         fc = de.germany_forecasts(
-            models, triangle, chunk, config.n_samples, config.seed
+            models, triangle, chunk, config.n_samples, config.seed, tasks_dir
         )
         fc = de.with_truth(fc, triangle, config.truth_delay)
         for date in chunk:
