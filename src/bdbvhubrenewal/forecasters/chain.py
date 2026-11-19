@@ -294,7 +294,7 @@ def delay_sums(
         Settings.
     longer : bool
         With no in-window pair, use the pairs with a longer step, on the
-        onset days of every age at their first release (#365).
+        onset days of every age at their first release.
 
     Returns
     -------
@@ -310,8 +310,8 @@ def delay_sums(
     first = int(snap.cut[r]) - settings.history_delay
     gaps = snap.cut[pairs[:, 1]] - snap.cut[pairs[:, 0]]
     if (gaps > settings.max_delay).all():
-        # A day of every age at a longer pair's first release is final at
-        # its second, so the onset days reach back over all those ages.
+        # Every age is final at the second release, so reach back
+        # `max_delay` days before the first.
         oldest = int(snap.cut[pairs[:, 0]].min()) - settings.max_delay
         first = min(first, oldest)
     window = day > first
@@ -672,7 +672,7 @@ def _latest_fit(
     """Return the latest release and its delay fit.
 
     With no pair in the delay window, the delay is fitted to the pairs
-    with a longer step (#365). Nowcasts made at earlier releases, whose
+    with a longer step. Nowcasts made at earlier releases, whose
     errors set the observation model, keep the window.
 
     Raises
