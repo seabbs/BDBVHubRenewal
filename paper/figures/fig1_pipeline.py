@@ -588,6 +588,7 @@ RELATIONS = (
     ("same", "same place", SLOTS[0]),
     ("up", "up (child \u2192 parent)", PARENT_SLOT),
     ("down", "down (parent \u2192 child)", COV),
+    ("itself", "a series and itself (no bias)", "white"),
     ("none", "unrelated (no bias)", CELL),
 )
 
@@ -595,12 +596,12 @@ RELATIONS = (
 def _relation(row: tuple[str, int], col: tuple[str, int]) -> str:
     """Return the relation of a query row to a key column of the toy block.
 
-    Places A and B are children of the country C. A row and itself are
-    in no relation.
+    Places A and B are children of the country C. A row and itself have
+    no bias, drawn apart from the same-place pairs around them.
     """
     (p, i), (q, j) = row, col
     if p == q:
-        return "same" if i != j else "none"
+        return "same" if i != j else "itself"
     if q == "C":
         return "up"
     if p == "C":
@@ -633,6 +634,8 @@ def panel_b_bias(g: Svg, oy: float) -> float:
                 cs - 0.8,
                 fill=colour[_relation(row, col)],
                 rx=1,
+                stroke=LINE if _relation(row, col) == "itself" else "none",
+                sw=0.6,
             )
     # Places over the columns, and places and series beside the rows.
     for k, p in enumerate(places):
@@ -654,9 +657,10 @@ def panel_b_bias(g: Svg, oy: float) -> float:
     bottom = gy + len(rows) * cs
     # The relations, one a line, beside the grid.
     lx = gx + len(rows) * cs + 24
-    for k, (_, name, c) in enumerate(RELATIONS):
+    for k, (key, name, c) in enumerate(RELATIONS):
         y = gy + 4 + k * 12
-        g.rect(lx, y - 7, 9, 7.5, fill=c, rx=1)
+        edge = LINE if key == "itself" else "none"
+        g.rect(lx, y - 7, 9, 7.5, fill=c, rx=1, stroke=edge, sw=0.6)
         g.text(lx + 13, y, name, size=SMALL)
     for k, line in enumerate(
         (
