@@ -1,12 +1,15 @@
 """One figure for the width and conditioning check.
 
-    python scripts/ftpractice/width_figure.py GERMAN_WIDTHS.csv COND_DIR OUT.png
+    python scripts/ftpractice/width_figure.py GERMAN_WIDTHS.csv COND_DIR \
+        QUANTILES_DIR OUT.png
 
-(A) German development half: median 95% interval width over the final
+(A) German development half: median 80% interval width over the final
 count by horizon, daily ragged model. (B) Held-out sims: median nowcast
-90% width over the final count by sqrt_phi quintile, with the sims' own
-realised spread. (C) The same by delay_change level, with Germany's
-realised spread.
+90% width over the final count by sqrt_phi quintile. (C) Like for like,
+the 7-day count at the cut-off, from QUANTILES_DIR/../like-for-like.csv:
+80% width on held-out sims (weekly blocks and the daily model's rolling
+7-day rows, last step) against Germany (horizon 0), with Germany's 80%
+coverage.
 """
 
 from __future__ import annotations
@@ -35,7 +38,7 @@ GERMAN = {
     ("r6", 500): "r6-n500",
     ("r6", 750): "r6-n750",
 }
-INK, MUTED, GRID = "#1f1f1e", "#6b6a64", "#e4e3de"
+INK, MUTED, GRID, SURFACE = "#1f1f1e", "#6b6a64", "#e4e3de", "#fcfcfb"
 
 
 def style(ax, title: str, xlabel: str, ylabel: str) -> None:
@@ -52,121 +55,118 @@ def style(ax, title: str, xlabel: str, ylabel: str) -> None:
     ax.tick_params(colors=MUTED, labelsize=8)
 
 
-def label_end(ax, x, y, text: str, colour: str) -> None:
-    """Direct-label a line at its last point."""
-    ax.plot(x[-1], y[-1], "o", ms=6, color=colour, mec="white", mew=1.5)
-    ax.annotate(
-        text,
-        (x[-1], y[-1]),
-        xytext=(6, 0),
-        textcoords="offset points",
-        va="center",
-        fontsize=8,
-        color=INK,
-    )
+def end_labels(ax, ends: dict[str, tuple[float, float]], gap: float) -> None:
+    """Direct-label line ends, nudged apart by at least `gap`."""
+    placed: list[float] = []
+    for name, (x, y) in sorted(ends.items(), key=lambda kv: kv[1][1]):
+        ty = max(y, placed[-1] + gap) if placed else y
+        placed.append(ty)
+        ax.plot(x, y, "o", ms=6, color=COLOURS[name], mec="white", mew=1.5)
+        ax.annotate(
+            name,
+            (x, ty),
+            xytext=(8, 0),
+            textcoords="offset points",
+            va="center",
+            fontsize=8,
+            color=INK,
+        )
 
 
 def main() -> None:
     """Draw the three panels."""
-    german, cond, out = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
+    german, cond = Path(sys.argv[1]), Path(sys.argv[2])
+    quantiles, out = Path(sys.argv[3]), Path(sys.argv[4])
     g = pd.read_csv(german)
-    g = g[(g["model"] == "fm_chronos_daily_ragged") & (g["horizon"] > -28)]
     per = pd.read_csv(cond / "per-sim.csv")
-    per = per[per["part"] == "nowcast"]
-    ratios = pd.read_csv(cond / "sim-ratios.csv")
-    summary = (cond / "summary.md").read_text().splitlines()
-    german_spread = float(summary[1].split("spread ")[1].split(",")[0])
+    per = per[per["part"] == "nowcast"].copy()
+    names = [n for n in COLOURS if (quantiles / f"{n}.csv.gz").exists()]
 
-    fig, axes = plt.subplots(1, 3, figsize=(13, 4.2), constrained_layout=True)
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.4), constrained_layout=True)
     ax = axes[0]
+    daily = g[(g["model"] == "fm_chronos_daily_ragged") & (g["horizon"] > -28)]
+    ends = {}
     for (run, n), name in GERMAN.items():
-        s = g[(g["run"] == run) & (g["n"] == n)].sort_values("horizon")
+        s = daily[(daily["run"] == run) & (daily["n"] == n)]
+        s = s.sort_values("horizon")
         if s.empty:
             continue
-        x, y = s["horizon"].to_numpy(), s["rel_width95_median"].to_numpy()
+        x, y = s["horizon"].to_numpy(), s["rel_width80_median"].to_numpy()
         ax.plot(x, y, color=COLOURS[name], lw=2)
-        label_end(ax, x, y, name, COLOURS[name])
+        ends[name] = (x[-1], y[-1])
+    end_labels(ax, ends, 0.06)
     style(
         ax,
-        "A  Germany, dev half (daily model)",
+        "A  Germany dev half: 80% width (daily model)",
         "horizon (days)",
-        "95% width / final count",
+        "80% width / final count",
     )
     ax.set_xticks([-21, -14, -7, 0])
-    ax.set_xlim(-22, 4)
+    ax.set_xlim(-22, 5)
 
     ax = axes[1]
     per["phi_bin"] = pd.qcut(per["sqrt_phi"], 5, labels=False)
     mids = per.groupby("phi_bin")["sqrt_phi"].median()
-    for name, colour in COLOURS.items():
+    ends = {}
+    for name in names:
         s = per[per["checkpoint"] == name]
-        if s.empty:
-            continue
         y = s.groupby("phi_bin")["width90"].median().reindex(mids.index)
-        ax.plot(mids.to_numpy(), y.to_numpy(), color=colour, lw=2)
-        label_end(ax, mids.to_numpy(), y.to_numpy(), name, colour)
-    sims = per.drop_duplicates("simulation")
-    own = sims.groupby("phi_bin")["own_spread"].median().reindex(mids.index)
-    ax.plot(mids.to_numpy(), own.to_numpy(), color=MUTED, lw=2, ls="--")
-    label_end(ax, mids.to_numpy(), own.to_numpy(), "sims' own spread", MUTED)
+        ax.plot(mids.to_numpy(), y.to_numpy(), color=COLOURS[name], lw=2)
+        ends[name] = (mids.to_numpy()[-1], y.to_numpy()[-1])
+    end_labels(ax, ends, 0.05)
     style(
         ax,
-        "B  Held-out sims: nowcast width vs sqrt_phi",
+        "B  Held-out sims: nowcast 90% width vs sqrt_phi",
         "sqrt_phi (quintile medians)",
         "90% width / final count",
     )
+    ax.set_xlim(right=mids.max() * 1.25)
+    ax.set_ylim(bottom=0)
 
     ax = axes[2]
-    levels = sorted(per["delay_change"].unique())
-    x = np.arange(len(levels))
-    names = [n for n in COLOURS if (per["checkpoint"] == n).any()]
-    for j, name in enumerate(names):
-        s = per[per["checkpoint"] == name]
-        y = s.groupby("delay_change")["width90"].median().reindex(levels)
-        off = (j - (len(names) - 1) / 2) * 0.12
-        ax.plot(
-            x + off,
-            y.to_numpy(),
-            "o",
-            ms=7,
-            color=COLOURS[name],
-            mec="white",
-            mew=1.5,
-            label=name,
-        )
-    sims_by = sims.set_index("simulation")["delay_change"]
-    ratios["delay_change"] = ratios["simulation"].map(sims_by)
-    real = (
-        ratios.groupby("delay_change")["ratio"]
-        .apply(
-            lambda r: (
-                (np.quantile(r, 0.95) - np.quantile(r, 0.05)) / np.median(r)
+    table = pd.read_csv(quantiles.parent / "like-for-like.csv")
+    table = table[table["checkpoint"].isin(names)].reset_index(drop=True)
+    for i, row in table.iterrows():
+        colour = COLOURS[row["checkpoint"]]
+        for off, kind in ((-0.17, "weekly"), (0.17, "roll7")):
+            de = "de_weekly" if kind == "weekly" else "de_daily"
+            sw = row[f"sims_{kind}_w80"]
+            gw, gc = row[f"{de}_w80"], row[f"{de}_cov80"]
+            x = i + off
+            ax.plot([x, x], [sw, gw], color=GRID, lw=2, zorder=1)
+            marker = "o" if kind == "weekly" else "s"
+            ax.plot(x, sw, marker, ms=8, mfc=SURFACE, mec=colour, mew=2)
+            ax.plot(x, gw, marker, ms=8, color=colour, mec="white", mew=1.5)
+            ax.annotate(
+                f"{gc:.0%}",
+                (x, gw),
+                xytext=(0, -12 if gw < sw else 8),
+                textcoords="offset points",
+                ha="center",
+                fontsize=7,
+                color=MUTED,
             )
-        )
-        .reindex(levels)
+    for marker, text in (
+        ("o", "weekly model"),
+        ("s", "daily model, 7-day rows"),
+    ):
+        ax.plot([], [], marker, color=MUTED, label=text)
+    ax.plot(
+        [], [], "o", mfc=SURFACE, mec=MUTED, mew=2, label="open: held-out sims"
     )
-    ax.bar(
-        x,
-        real.to_numpy(),
-        width=0.7,
-        color=GRID,
-        zorder=0,
-        label="sims' realised spread",
+    ax.plot(
+        [], [], "o", color=MUTED, label="filled: Germany (label = 80% cover)"
     )
-    ax.axhline(german_spread, color=INK, lw=1, ls=":")
-    ax.annotate(
-        "Germany realised spread",
-        (len(levels) - 0.5, german_spread),
-        xytext=(0, 4),
-        textcoords="offset points",
-        ha="right",
-        fontsize=8,
-        color=INK,
+    ax.legend(fontsize=7, frameon=False, loc="upper left", ncol=2)
+    ax.set_xticks(np.arange(len(table)), table["checkpoint"])
+    ax.set_ylim(0, 2.0)
+    style(
+        ax,
+        "C  7-day count at the cut-off: sims vs Germany",
+        "",
+        "80% width / final count",
     )
-    ax.set_xticks(x, levels, rotation=30)
-    style(ax, "C  Held-out sims by delay_change", "", "90% width / final count")
-    ax.legend(fontsize=7, frameon=False, loc="upper left")
-    fig.savefig(out, dpi=160, facecolor="#fcfcfb")
+    fig.savefig(out, dpi=160, facecolor=SURFACE)
 
 
 if __name__ == "__main__":

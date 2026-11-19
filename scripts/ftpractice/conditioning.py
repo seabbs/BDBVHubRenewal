@@ -16,6 +16,7 @@ Writes OUT_DIR/per-sim.csv, OUT_DIR/summary.md and prints the summary.
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import numpy as np
@@ -69,13 +70,13 @@ def sim_ratios(sim_dir: Path, seeds: range) -> pd.DataFrame:
     return pd.DataFrame(out, columns=["simulation", "location", "ratio"])
 
 
-def german_ratios(path: Path, first: str, last: str) -> np.ndarray:
+def german_ratios(path: Path, first: str, last: str) -> pd.DataFrame:
     """Return the German final/reported 7-day ratios at horizon 0."""
     wide = pd.read_csv(path)
     vals = [c for c in wide.columns if c.startswith("value_")]
     wide["date"] = pd.to_datetime(wide["date"])
     out = []
-    for _, g in wide.groupby(["location", "age_group"]):
+    for key, g in wide.groupby(["location", "age_group"]):
         g = g.set_index("date").sort_index()
         m = g[vals].fillna(0).to_numpy()
         dates = g.index
@@ -93,8 +94,8 @@ def german_ratios(path: Path, first: str, last: str) -> np.ndarray:
                 m[i, : lag_i + 1].sum()
                 for i, lag_i in zip(idx, lag, strict=True)
             )
-            out.append(final / max(seen, 1))
-    return np.asarray(out)
+            out.append(("/".join(key), final / max(seen, 1)))
+    return pd.DataFrame(out, columns=["series", "ratio"])
 
 
 def widths(q: pd.DataFrame, steps: dict[str, range]) -> pd.DataFrame:
@@ -137,9 +138,12 @@ def main() -> None:
     else:
         ratios = sim_ratios(args.sim_dir, seeds)
         ratios.to_csv(ratios_path, index=False)
-    own = ratios.groupby("simulation")["ratio"].apply(
+    # Own spread: each place's spread over its cut-offs, the median over
+    # a simulation's places, so it is what one series' context can show.
+    by_place = ratios.groupby(["simulation", "location"])["ratio"].apply(
         lambda r: spread(r.to_numpy())
     )
+    own = by_place.groupby("simulation").median()
     factors = factors.merge(
         own.rename("own_spread"), on="simulation", how="left"
     )
@@ -151,14 +155,21 @@ def main() -> None:
     factors["static_noshock"] = (factors["shocks"] == "none") & (
         factors["delay_change"] == "static"
     )
-    germany = german_ratios(args.triangle, args.german_first, args.german_last)
+    german = german_ratios(args.triangle, args.german_first, args.german_last)
+    germany = german["ratio"].to_numpy()
+    german_own = (
+        german.groupby("series")["ratio"]
+        .apply(lambda r: spread(r.to_numpy()))
+        .median()
+    )
 
     lines = [
         f"Held-out sims: {len(factors)}; realised spread = 90% range of "
         "final/reported for the week to the cut-off, over its median.",
         f"Germany (dev half, horizon 0, {len(germany)} place-age-dates): "
         f"spread {spread(germany):.2f}, median ratio "
-        f"{np.median(germany):.2f}.",
+        f"{np.median(germany):.2f}; own spread (median over series) "
+        f"{german_own:.2f}.",
         f"Sims pooled: spread {spread(ratios['ratio'].to_numpy()):.2f}, "
         f"median ratio {ratios['ratio'].median():.2f}.",
     ]
@@ -244,6 +255,22 @@ def main() -> None:
     table.to_csv(args.out / "summary.csv", index=False)
     rho = factors["own_spread"].corr(factors["sqrt_phi"], "spearman")
     lines.append(f"Own spread vs sqrt_phi (sims themselves): rho {rho:.2f}")
+    own_by = factors.groupby("delay_change")["own_spread"].median()
+    lines.append(
+        "Sims' own spread by delay_change (median): "
+        + ", ".join(f"{k} {v:.2f}" for k, v in own_by.items())
+        + f"; all {factors['own_spread'].median():.2f}"
+    )
+    (args.out / "spreads.json").write_text(
+        json.dumps(
+            {
+                "germany_pooled": spread(germany),
+                "germany_own": float(german_own),
+                "sims_pooled": spread(ratios["ratio"].to_numpy()),
+                "sims_own": float(factors["own_spread"].median()),
+            }
+        )
+    )
     text = "\n".join(lines) + "\n\n" + table.round(3).to_markdown(index=False)
     (args.out / "summary.md").write_text(text + "\n")
     print(text)
