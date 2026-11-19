@@ -5,7 +5,16 @@
 import functools
 import json
 
-from flowlib import grids, hosts, localconfig, manifest, notify, releases, segments
+from flowlib import (
+    grids,
+    hosts,
+    localconfig,
+    manifest,
+    notify,
+    releases,
+    segments,
+    simulator,
+)
 
 LOCAL = localconfig.read()
 HOST = LOCAL["HOST_NAME"]
@@ -53,6 +62,30 @@ MINE = hosts.seeds(LOCAL["SIM_SEEDS"], seeds_of)
 def here(seed):
     """Whether this host simulates batch `seed`."""
     return hosts.simulates(int(seed), MINE)
+
+
+# The epinowcast the simulator is pinned to (finetune_simulate.R's
+# `epinowcast_sha`), installed once a machine under ROOT.
+ENW_SHA = simulator.epinowcast_sha()
+ENW_LIB = f"{LOCAL['ROOT']}/rlib/epinowcast-{ENW_SHA}"
+
+
+def batch_lib(wc):
+    """Already simulated batches take no library input.
+
+    So installing it never reruns them.
+    """
+    sims = Path(f"{ROUNDS_DIR}/r{wc.round}/sims")
+    done = all(
+        (sims / f"{kind}-{wc.seed}.{ext}").exists()
+        for kind, ext in (("counts", "csv.gz"), ("settings", "csv"))
+    )
+    return [] if done else ancient(f"{ENW_LIB}/.installed")
+
+
+def batch_priority(wc):
+    """A batch's priority: 15, earlier seeds a fraction higher."""
+    return segments.batch_priority(int(wc.seed), 15, SIM["seed_base"])
 
 
 def batch_files(wc):

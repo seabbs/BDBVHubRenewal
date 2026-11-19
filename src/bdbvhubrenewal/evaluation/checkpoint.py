@@ -82,7 +82,12 @@ CURRENT_RUNS: Final = frozenset({"one-model"})
 HELD_OUT_LEVELS: Final = ("leaf", "national", "intermediate")
 GERMANY_CELL: Final = ["origin", "location", "target_end_date"]
 BDBV_CELL: Final = ["origin", "truth_vintage", "location", "target_end_date"]
-COVERAGE: Final = (50, 90, 95)
+COVERAGE: Final = (50, 90)
+"""Central intervals scored for coverage: 50% and 90%."""
+GERMANY_COVERAGE: Final = (50, 95)
+"""The German rows' intervals: the hub's quantiles have no 0.05 or 0.95,
+so there is no 90% interval and its rows keep the 95% one the hub
+scored (`evaluation.germany`)."""
 WIS_PARTS: Final = ("dispersion", "overprediction", "underprediction")
 """WIS's components (Bracher et al. 2021), which sum to it."""
 REPO: Final = "seabbs/BDBVHubRenewal"
@@ -362,7 +367,12 @@ def relative(
     With the mean WIS and its components, and coverage, where the rows
     have them.
     """
-    extra = ["wis", *WIS_PARTS, *(f"coverage_{p}" for p in COVERAGE)]
+    widths = (*COVERAGE, *GERMANY_COVERAGE)
+    extra = [
+        "wis",
+        *WIS_PARTS,
+        *(f"coverage_{p}" for p in dict.fromkeys(widths)),
+    ]
     extra = [c for c in extra if c in rows and c not in metrics]
     keys = ["level", "model", "checkpoint"]
     mean = rows.groupby(keys)[[*metrics, *extra]].mean()

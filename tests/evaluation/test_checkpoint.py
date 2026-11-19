@@ -124,7 +124,9 @@ def test_cell_scores_equal_scoring_each_cell():
         assert row["log_crps"] == pytest.approx(
             crps_sample(np.log1p(y), np.log1p(x))
         )
-        assert row["coverage_95"] == float(coverage_sample(y, x, 0.95))
+        assert row["coverage_90"] == float(coverage_sample(y, x, 0.9))
+    # 50% and 90% coverage only (spec): no 95% column for BDBV.
+    assert "coverage_95" not in got
     assert set(got["level"]) == {"national", "provinces", "zones"}
 
 
@@ -210,6 +212,26 @@ def test_relative_divides_by_the_baseline_by_level():
     assert list(mine["rel_crps"]) == [0.5, 0.5]
     assert set(got["rule"]) == {ck.RULE}
     assert list(got.columns) == ck.COLUMNS
+
+
+def test_coverage_is_50_and_90_but_95_for_the_german_hub_levels():
+    # The German hub's quantiles have no 0.05 or 0.95, so its rows keep
+    # the 95% interval the hub scored; BDBV rows have 50% and 90%.
+    assert ck.COVERAGE == (50, 90)
+    assert ck.GERMANY_COVERAGE == (50, 95)
+    rows = _scores(
+        ["randomwalknowcast", "fm_chronos_daily_ragged"],
+        ["zero-shot", "abc"],
+        ["national"],
+    )
+    bdbv = ck.relative(rows.drop(columns="coverage_95"), "ebola", ("crps",))
+    assert bdbv["coverage_90"].notna().all()
+    assert bdbv["coverage_95"].isna().all()
+    german = rows.drop(columns="coverage_90").assign(coverage_80=1.0)
+    de = ck.relative(german, "germany", ("crps",))
+    assert de["coverage_95"].notna().all()
+    assert de["coverage_90"].isna().all()
+    assert "coverage_80" not in de
 
 
 def test_merge_keeps_other_checkpoints_rule_rows():

@@ -24,9 +24,7 @@ nav:
   - Fine-tuned foundation:
       - foundation/index.md
       - Paper: paper.md
-      - Foundation models: methods/foundation.md
       - Using the fine-tuned Chronos-2: methods/finetuned-chronos.md
-      - Baseline models: methods/baselines.md
       - German nowcast benchmark: germany.md
   - Joint-model-informed renewal:
       - renewal/index.md
@@ -44,6 +42,8 @@ nav:
           - Hub data: data.md
           - Data methods: methods/data.md
       - Methods:
+          - Foundation models: methods/foundation.md
+          - Baseline models: methods/baselines.md
           - Evaluation: methods/evaluation.md
           - Pairing sensitivity: pairing.md
       - Submission:

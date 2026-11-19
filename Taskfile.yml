@@ -1,8 +1,6 @@
 version: "3"
 
-# Machine settings (config/local.env, see config/local.env.example) are
-# read here too, so CORES and MEM_MB are set once for Task and Snakemake.
-dotenv: ["config/local.env"]
+# Machine settings (config/local.env) are read only by flowlib.localconfig.
 
 vars:
   SNAKEMAKE: uv run --group paper snakemake
@@ -222,6 +220,9 @@ tasks:
   # untracked profile SNAKEMAKE_PROFILE names (see config/profile.example).
   wf:
     internal: true
+    vars:
+      SNAKEMAKE_PROFILE:
+        sh: python3 workflow/flowlib/localconfig.py SNAKEMAKE_PROFILE
     cmds:
       - >-
         {{.SNAKEMAKE}} {{.WF_TARGET}}

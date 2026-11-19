@@ -2,6 +2,7 @@
 
 import csv
 import gzip
+import os
 
 import numpy as np
 import pandas as pd
@@ -24,6 +25,7 @@ def _quantiles(
     score=None,
     location="DE",
     week="2022-02-01",
+    outer=None,
 ):
     path.parent.mkdir(parents=True, exist_ok=True)
     cols = [
@@ -37,16 +39,18 @@ def _quantiles(
     ]
     cols += ["target"] if target else []
     cols += ["score"] if score is not None else []
+    values = [(q, base + i) for i, q in enumerate(SEVEN)]
+    values += list(zip(("0.05", "0.95"), outer or (), strict=False))
     with gzip.open(path, "wt") as f:
         w = csv.DictWriter(f, cols)
         w.writeheader()
-        for i, q in enumerate(SEVEN):
+        for q, value in values:
             row = {
                 "model": model,
                 "location": location,
                 "target_end_date": week,
                 "quantile": q,
-                "value": base + i,
+                "value": value,
                 "truth": truth,
                 "truth_vintage": "2022-03-01",
             }
@@ -108,10 +112,15 @@ def test_stats_and_score_from_the_seven_levels(tmp_path):
     )
     rs, refs = _setup()
     built = nowcasts.build(tmp_path, rs, refs, levels=PAGE)
-    cov50, cov95, bias = built["stats"]["DE"]["zero"]["7day"]["daily"][
+    cov50, cov95, bias, band = built["stats"]["DE"]["zero"]["7day"]["daily"][
         "2022-02-09"
     ]
-    assert (cov50, cov95) == (0.0, 1.0)
+    # No 5% and 95% quantiles (the German hub's): the outer band is 95%.
+    assert (cov50, cov95, band) == (0.0, 1.0, 95)
+    assert (
+        built["series"]["DE"]["zero"]["7day"]["daily"]["2022-02-09"]["band"]
+        == 95
+    )
     # CDF at 9.5 between 0.1 (9) and 0.25 (10): 0.175; bias 1 - 0.35.
     assert bias == pytest.approx(0.65)
     assert built["score"]["DE"]["zero"]["7day"]["daily"]["2022-02-09"] == (
@@ -253,7 +262,8 @@ def test_samples_are_scored_against_the_scorer_s_truth(tmp_path):
     ].item()
     with gzip.open(out / "reference" / "2026-08-29.csv.gz", "rt") as f:
         rows = list(csv.DictReader(f))
-    assert {r["quantile"] for r in rows} == set(SEVEN)
+    # The seven levels and the 90% interval's.
+    assert {r["quantile"] for r in rows} == {*SEVEN, "0.05", "0.95"}
     assert float(rows[0]["truth"]) == y
     assert float(rows[0]["score"]) == pytest.approx(
         crps_sample(y, draws), abs=1e-3
@@ -298,3 +308,65 @@ def test_a_file_score_has_no_parts(tmp_path):
     rs, refs = _setup()
     built = nowcasts.build(tmp_path, rs, refs, levels=PAGE)
     assert "zero" not in built["parts"].get("DE", {})
+
+
+def test_with_5_and_95_quantiles_bands_and_coverage_are_90(tmp_path):
+    # 90% interval 9.6 to 12.4: truth 9.5 is outside it, inside 95%.
+    _quantiles(
+        tmp_path / "reference" / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged",
+        truth=9.5,
+        outer=(9.6, 12.4),
+    )
+    rs, refs = _setup()
+    built = nowcasts.build(tmp_path, rs, refs, levels=nowcasts.LEVELS)
+    got = built["stats"]["DE"]["zero"]["7day"]["daily"]["2022-02-09"]
+    assert got[1] == 0.0
+    assert got[3] == 90
+    series = built["series"]["DE"]["zero"]["7day"]["daily"]["2022-02-09"]
+    assert series["band"] == 90
+    # The outermost band drawn is the 90% interval.
+    assert series["q"][0][0] == 9.6
+    assert series["q"][0][-1] == 12.4
+    # The WIS stays on the seven levels.
+    assert built["score"]["DE"]["zero"]["7day"]["daily"]["2022-02-09"] == (
+        pytest.approx(nowcasts.wis([8, 9, 10, 11, 12, 13, 14], 9.5), abs=0.01)
+    )
+
+
+def test_summaries_from_before_the_90_interval_are_written_again(tmp_path):
+    raw = tmp_path / "raw" / "reference" / "2026-08-29.csv.gz"
+    raw.parent.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "sample": range(50),
+            "value": range(50),
+            "model": "m",
+            "origin": "2026-08-29",
+            "location": "CD",
+            "target_end_date": "2026-08-01",
+            "target": "7day",
+        }
+    ).to_csv(raw, index=False)
+    target = tmp_path / "target.csv"
+    pd.DataFrame(
+        {
+            "location": ["CD"],
+            "target_end_date": ["2026-08-01"],
+            "vintage": ["2026-08-29"],
+            "total": [10],
+            "kind": ["real"],
+        }
+    ).to_csv(target, index=False)
+    out = tmp_path / "summary"
+    old = out / "reference" / "2026-08-29.csv.gz"
+    old.parent.mkdir(parents=True)
+    old.write_bytes(gzip.compress(b"model,quantile\n"))
+    future = raw.stat().st_mtime + 100
+    os.utime(old, (future, future))
+    ds = {"key": "bdbv", "national": "CD", "targets": ["7day"]}
+    nowcasts.summarise_samples(tmp_path / "raw", out, target, ds)
+    with gzip.open(old, "rt") as f:
+        levels = {r["quantile"] for r in csv.DictReader(f)}
+    assert {"0.05", "0.95"} <= levels
+    assert (out / ".levels").exists()

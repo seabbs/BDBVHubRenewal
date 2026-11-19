@@ -4,7 +4,8 @@ A run with series attention bias holds one [layers, heads] tensor per
 relation: `self` (a row with itself), `same` (a place's counts, lags and
 totals), `up` (a place to its country) and `down` (a country to its
 places). The values come from the run's history (`train/history.json`
-entries with `bias`), its checkpoints' adapters
+entries with `bias`), its logged steps' means and ranges, its
+checkpoints' adapters
 (`train/n<N>/finetuned-ckpt/*.safetensors`, read with the standard
 library, or `*.pt`, read with torch when installed) and, for the live
 run, its current state (`train/state/`).
@@ -16,11 +17,11 @@ import json
 import re
 import struct
 from array import array
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from .logs import CACHE
+from .logs import CACHE, _size, checkpoints
 from .runs import Run
 
 PAIRS = (
@@ -158,22 +159,35 @@ def summary(rows: Sequence[Sequence[float]]) -> dict[str, float]:
     return {"mean": sum(flat) / len(flat), "min": min(flat), "max": max(flat)}
 
 
-def run_bias(run: Run, step: int | None) -> dict[str, Any] | None:
-    """Return a run's bias statistics by step and its latest matrices.
+def run_bias(
+    run: Run,
+    step: int | None,
+    rows: Sequence[Mapping[str, Any]] = (),
+    sims: Callable[[float], float] | None = None,
+) -> dict[str, Any] | None:
+    """Return a run's bias statistics over simulations and its latest matrices.
 
-    `step` is the live run's current step, so its current state counts;
-    None for other runs. Returns None if the run has no bias.
+    Only the run's own files count, in this order: its history's
+    evaluations, its logged steps' means and ranges (`rows`, from
+    `logs.RunLog`, for steps the history lacks), its checkpoints'
+    adapters (at their own simulations) and, for the live run, its
+    current state at `step` (None for other runs). `sims` gives the
+    simulations trained by a step (`page.Context.sims`); without it, x
+    is the step. Returns None if the run has no bias anywhere.
     """
     if run.folder is None:
         return None
-    pts: dict[str, dict[int, dict[str, float]]] = {k: {} for k, _ in PAIRS}
+    sims = sims or float
+    pts: dict[str, dict[float, dict[str, float]]] = {k: {} for k, _ in PAIRS}
     latest: dict[str, Any] | None = None
+    seen: set[int] = set()
     hist = CACHE.get(run.folder / "train" / "history.json")
     for h in hist if isinstance(hist, list) else []:
         if not isinstance(h, dict) or "step" not in h:
             continue
         if not isinstance(h.get("bias"), dict):
             continue
+        at = round(sims(h["step"]), 2)
         for key, v in h["bias"].items():
             rel = key.rstrip("_")
             if rel not in pts:
@@ -185,25 +199,30 @@ def run_bias(run: Run, step: int | None) -> dict[str, Any] | None:
                 and isinstance(values[0], list)
             ):
                 continue
+            seen.add(h["step"])
             given = isinstance(v, dict) and {"mean", "min", "max"} <= set(v)
-            pts[rel][h["step"]] = (
+            pts[rel][at] = (
                 {x: v[x] for x in ("mean", "min", "max")}
                 if given
                 else summary(values)
             )
-            if not latest or h["step"] > latest["step"]:
-                latest = {"step": h["step"]}
-            if latest["step"] == h["step"]:
+            if not latest or at > latest["n"]:
+                latest = {"n": at}
+            if latest["n"] == at:
                 latest[rel] = values
-    files = []
-    for d in run.folder.glob("train/n*"):
-        s = CACHE.get(d / "settings.json")
-        at = (s or {}).get("steps") if isinstance(s, dict) else None
-        if at is None:
+    for r in rows:
+        if r.get("step") in seen or not r.get("bias"):
             continue
-        ckpt = d / "finetuned-ckpt"
+        at = round(sims(r["step"]), 2)
+        for rel, v in r["bias"].items():
+            if rel in pts:
+                pts[rel].setdefault(at, dict(v))
+    files = []
+    for name, s, _ in checkpoints(run.folder):
+        n = s.get("n_outbreaks") or _size(name)
+        ckpt = run.folder / "train" / name / "finetuned-ckpt"
         for f in sorted(ckpt.glob("*.safetensors")) + sorted(ckpt.glob("*.pt")):
-            files.append((at, f))
+            files.append((float(n), f))
     state = run.folder / "train" / "state"
     if step is not None:
         current = (
@@ -211,15 +230,15 @@ def run_bias(run: Run, step: int | None) -> dict[str, Any] | None:
             if (state / "adapter.pt").is_file()
             else sorted(state.glob("adapter*.safetensors"))
         )
-        files += [(step, f) for f in current]
+        files += [(round(sims(step), 2), f) for f in current]
     for at, f in sorted(files, key=lambda x: x[0]):
         got = read_bias(f)
         if not got:
             continue
-        for rel, rows in got.items():
-            pts[rel].setdefault(at, summary(rows))
-        if not latest or at >= latest.get("step", -1):
-            latest = {"step": at, **got}
+        for rel, values in got.items():
+            pts[rel].setdefault(at, summary(values))
+        if not latest or at >= latest.get("n", -1):
+            latest = {"n": at, **got}
     if not any(pts.values()) and not latest:
         return None
     return {
@@ -228,12 +247,27 @@ def run_bias(run: Run, step: int | None) -> dict[str, Any] | None:
     }
 
 
-def payload(run_list: Sequence[Run], live_step: int | None) -> dict[str, Any]:
-    """Return the bias row's data for the runs that have bias."""
-    out = []
+def payload(
+    run_list: Sequence[Run],
+    live_step: int | None,
+    rows: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+    sims: Mapping[str, Callable[[float], float]] | None = None,
+) -> dict[str, Any]:
+    """Return the bias row's data for the runs that have bias.
+
+    `rows` and `sims` are each run's logged steps and step-to-simulations
+    map, by run key (`run_bias`).
+    """
+    out, missing = [], []
     for r in run_list:
-        data = run_bias(r, live_step if r.live else None)
+        data = run_bias(
+            r,
+            live_step if r.live else None,
+            (rows or {}).get(r.key, ()),
+            (sims or {}).get(r.key),
+        )
         if not data:
+            missing.append({"key": r.key, "label": r.label})
             continue
         last = data["latest"] or {}
         out.append(
@@ -246,13 +280,14 @@ def payload(run_list: Sequence[Run], live_step: int | None) -> dict[str, Any]:
                     for k, pts in data["pts"].items()
                 },
                 "latest": {
-                    "step": last.get("step"),
+                    "n": last.get("n"),
                     **{k: last[k] for k, _ in PAIRS if k in last},
                 },
             }
         )
     return {
         "runs": out,
+        "missing": missing,
         "col": COLOURS,
         "pairs": [{"key": k, "label": n} for k, n in PAIRS],
     }

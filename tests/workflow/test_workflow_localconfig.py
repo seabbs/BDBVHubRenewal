@@ -127,9 +127,23 @@ def test_the_command_line_prints_one_setting(tmp_path):
 
 def test_paper_cores_come_from_the_local_config():
     taskfile = (ROOT / "paper" / "Taskfile.yml").read_text()
-    assert 'dotenv: ["../config/local.env"]' in taskfile
+    assert "localconfig.py CORES" in taskfile
     script = (ROOT / "scripts" / "paper.sh").read_text()
     assert "localconfig.py CORES" in script
+
+
+@pytest.mark.parametrize("taskfile", ["Taskfile.yml", "paper/Taskfile.yml"])
+def test_task_leaves_the_local_config_to_localconfig(taskfile):
+    # Task's dotenv expands `$HOME` against the file alone, so
+    # ROOT=$HOME/rounds reached every job as /rounds, and the environment
+    # wins over the file.
+    text = (ROOT / taskfile).read_text()
+    assert "dotenv:" not in text
+
+
+def test_the_workflow_s_profile_comes_from_the_local_config():
+    text = (ROOT / "Taskfile.yml").read_text()
+    assert "localconfig.py SNAKEMAKE_PROFILE" in text
 
 
 def test_a_host_s_seeds_profile_and_rounds_host_are_local(tmp_path):
