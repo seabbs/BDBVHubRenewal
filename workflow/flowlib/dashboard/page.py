@@ -87,11 +87,22 @@ class Context:
 
         From its own checkpoints and logged chunks (`training.anchors`).
         """
+        pairs, spo = self._anchors(run)
+        return lambda step: training.sims_at(pairs, step, spo)
+
+    def steps(self, run: Run) -> Callable[[int], tuple[int, bool]]:
+        """Return the step a run trains `n` simulations by, and if planned.
+
+        From its own checkpoints and logged chunks (`training.step_at`).
+        """
+        pairs, spo = self._anchors(run)
+        return lambda n: training.step_at(pairs, n, spo)
+
+    def _anchors(self, run: Run) -> tuple[list[tuple[int, int]], float]:
         cks = _checkpoints(run)
         chunks = self._runlog(run).chunks() if run.folder else {}
         pairs = training.anchors(cks, chunks)
-        spo = training.steps_per_simulation(0, [], cks)
-        return lambda step: training.sims_at(pairs, step, spo)
+        return pairs, training.steps_per_simulation(0, [], cks)
 
     def dataset(self, key: str) -> Mapping[str, Any]:
         """Return a configured dataset by key (a quantiles one if unknown)."""
@@ -195,6 +206,8 @@ class Status:
     saved: set[int]
     pending: list[int]
     nxt: int | None
+    trained: float | None = None
+    steps: Callable[[int], tuple[int, bool]] | None = None
 
     @property
     def target(self) -> int:
@@ -203,7 +216,11 @@ class Status:
 
     def at(self, n: int) -> int:
         """Return the step at which checkpoint `n` is saved."""
-        return round(n * self.spo)
+        return self.steps(n)[0] if self.steps else round(n * self.spo)
+
+    def planned(self, n: int) -> bool:
+        """Return whether checkpoint `n`'s step is planned, not estimated."""
+        return bool(self.steps and self.steps(n)[1])
 
     def eta(self, n: int | None) -> str:
         """Return the time until checkpoint `n` at the recent speed."""
@@ -227,13 +244,15 @@ def live_status(
     rows: list[dict[str, Any]],
     planned: Sequence[int],
     sims: Callable[[float], float] | None = None,
+    steps: Callable[[int], tuple[int, bool]] | None = None,
 ) -> Status:
     """Return the live run's step, speed, schedule and checkpoints.
 
     `planned` are its checkpoints unless the trainer's command line names
     them (`logs.prefixes`). `sims` (`Context.sims`) gives the
     simulations trained by its step, for a run that decays over
-    simulations, not steps.
+    simulations, not steps; `steps` (`Context.steps`) the step a
+    checkpoint is saved at.
     """
     step = rows[-1]["step"] if rows else None
     last_t = rows[-1]["t"] if rows else None
@@ -245,8 +264,11 @@ def live_status(
         )
     folder = live.folder
     args = logs.trainer_args(folder) if folder else ""
+    trained = sims(step) if sims and step is not None else None
     params = (
-        training.run_params(folder, training.history(live), step, args, planned)
+        training.run_params(
+            folder, training.history(live), step, args, planned, trained
+        )
         if folder
         else {
             "lr_steps": 0,
@@ -261,8 +283,8 @@ def live_status(
     spo = training.steps_per_simulation(
         params["lr_steps"], sizes, _checkpoints(live)
     )
-    if sims and step and not params["lr_steps"] and sims(step) > 0:
-        spo = step / sims(step)
+    if trained and step and not params["lr_steps"]:
+        spo = step / trained
     saved = {
         n
         for n in sizes
@@ -278,23 +300,47 @@ def live_status(
         and (folder / f"train/n{n}/{ADAPTER}").exists()
     ]
     nxt = next((n for n in sizes if n not in saved and n not in pending), None)
-    return Status(step, rate, last_t, params, spo, saved, pending, nxt)
+    if trained is None and step is not None:
+        trained = step / spo
+    return Status(
+        step,
+        rate,
+        last_t,
+        params,
+        spo,
+        saved,
+        pending,
+        nxt,
+        trained,
+        None if params["lr_steps"] else steps,
+    )
 
 
 def status_tiles(st: Status, live: Run) -> tuple[str, str]:
     """Return the status tiles and the sticky bar's step and next checkpoint."""
     now = datetime.now().timestamp()
     folder = live.folder
-    trained = st.step / st.spo if st.step is not None else None
+    trained = st.trained
     trainer, alive = logs.trainer_state(folder) if folder else ("n/a", None)
-    age = now - st.last_t if st.last_t else None
+    # The running segment's last line of any kind, not only a step.
+    last = logs.RunLog(folder).last_line() if folder else None
+    last_t, last_text = last or (st.last_t, "")
+    age = now - last_t if last_t else None
     stale = age is not None and age > STALE
-    # The next prefix with the simulations done of it, and when it is due;
-    # a written checkpoint still being scored is named as itself.
-    done = f"n{trained:.0f} / " if trained is not None else ""
-    next_v = f"{done}n{st.nxt}" if st.nxt else "none"
+    # The next prefix, the simulations done of it, and the step it is
+    # saved at: planned once its chunk is, else at the mean rate so far.
+    # A written checkpoint still being scored is named as itself.
+    next_v = f"n{st.nxt}" if st.nxt else "none"
     eta = f"ETA {st.eta(st.nxt)}" if st.nxt else ""
-    next_s = f"step {st.at(st.nxt)}, {eta}" if st.nxt else ""
+    next_s = ""
+    if st.nxt:
+        done = (
+            f"{min(trained, st.nxt):.0f} of {st.nxt} simulations; "
+            if trained is not None
+            else ""
+        )
+        kind = "planned" if st.planned(st.nxt) else "estimated"
+        next_s = f"{done}step {st.at(st.nxt)} ({kind}), {eta}"
     if st.pending:
         since = datetime.fromtimestamp(
             (folder / f"train/n{st.pending[0]}/{ADAPTER}").stat().st_mtime
@@ -347,10 +393,12 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
         (
             "Last log line",
             "t_log",
-            datetime.fromtimestamp(st.last_t).strftime("%H:%M:%S")
-            if st.last_t
+            datetime.fromtimestamp(last_t).strftime("%H:%M:%S")
+            if last_t
             else "n/a",
-            ("STALE " if stale else "") + (_dur(age) + " ago" if age else ""),
+            ("STALE " if stale else "")
+            + (_dur(age) + " ago" if age else "")
+            + (f": {last_text[:80]}" if last_text else ""),
             " bad" if stale else "",
         ),
     ]
@@ -361,9 +409,10 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
         f"<div class=s>{html.escape(s)}</div></div>"
         for k, key, v, s, cls in tiles
     )
+    done = f"n{trained:.0f} / " if trained is not None and st.nxt else ""
     bar = (
         f"<span class=bt><span class=k>step</span> <b>{st.step}</b> "
-        f"<span class=k>next</span> <b>{html.escape(next_v)}</b>"
+        f"<span class=k>next</span> <b>{html.escape(done + next_v)}</b>"
         f"{' ' + html.escape(eta) if eta else ''}</span>"
         if st.step is not None
         else ""
@@ -371,16 +420,32 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
     return out, bar
 
 
-def lr_card(params: Mapping[str, Any], step: int | None, run: str) -> str:
-    """Return a small learning-rate-against-step chart of every group."""
+def lr_card(
+    params: Mapping[str, Any],
+    step: int | None,
+    run: str,
+    sims: Callable[[float], float] | None = None,
+) -> str:
+    """Return a small chart of every group's learning rate.
+
+    Against simulations trained for a run whose rate falls over its
+    simulations (`sims`, `Context.sims`), else against step.
+    """
     if not params["groups"]:
         return ""
+    by_sims = bool(params["lr_outbreaks"] and sims)
     width, height = 190, 150
     left, right, top, bottom = 34, 6, 6, 18
-    xmax = params["lr_steps"] or max([step or 0, 1])
+    decays = params["lr_steps"] or (params["lr_outbreaks"] if by_sims else 0)
+
+    def x_of(s: float) -> float:
+        return sims(s) if by_sims and sims else s
+
+    now = x_of(step) if step is not None else None
+    xmax = decays or max([now or 0, 1])
     vals = [max(b, 1e-12) for b in params["groups"].values()]
     # A linear decay reaches zero, so the log axis stops at 1% of the base.
-    lo = math.log10(min(vals) * (0.01 if params["lr_steps"] else 1)) - 0.1
+    lo = math.log10(min(vals) * (0.01 if decays else 1)) - 0.1
     hi = math.log10(max(vals)) + 0.15
 
     def sx(x: float) -> float:
@@ -403,14 +468,15 @@ def lr_card(params: Mapping[str, Any], step: int | None, run: str) -> str:
     o.append(
         f'<text x="{left}" y="{height - 4}" class=ax>0</text><text '
         f'x="{width - right}" y="{height - 4}" text-anchor=end '
-        f"class=ax>{xmax}</text>"
+        f"class=ax>{xmax:.0f}</text>"
     )
     legend = []
     for i, (g, base) in enumerate(params["groups"].items()):
         col = svg.PALETTE[i % len(svg.PALETTE)]
-        pts = params["logged"].get(g) or (
+        logged = [(x_of(s), v) for s, v in params["logged"].get(g, [])]
+        pts = logged or (
             [(0, base), (0.99 * xmax, base * 0.01)]
-            if params["lr_steps"]
+            if decays
             else [(0, base), (xmax, base)]
         )
         o.append(
@@ -419,11 +485,12 @@ def lr_card(params: Mapping[str, Any], step: int | None, run: str) -> str:
             + f'" fill=none stroke="{col}" stroke-width=1.6 />'
         )
         cur = params["current"].get(g)
-        if cur is not None and step is not None:
+        if cur is not None and now is not None:
+            at = f"{now:.0f} simulations" if by_sims else f"step {step}"
             o.append(
-                f'<circle cx="{sx(step):.1f}" cy="{sy(cur):.1f}" r=3 '
-                f'fill="{col}"><title>{html.escape(g)} {cur:.3e} at step '
-                f"{step}</title></circle>"
+                f'<circle cx="{sx(now):.1f}" cy="{sy(cur):.1f}" r=3 '
+                f'fill="{col}"><title>{html.escape(g)} {cur:.3e} at '
+                f"{at}</title></circle>"
             )
         legend.append(
             f'<span><i style="background:{col}"></i>{html.escape(g)}</span>'
@@ -432,7 +499,8 @@ def lr_card(params: Mapping[str, Any], step: int | None, run: str) -> str:
     return (
         f'<div class=card id=lrcard data-run="{html.escape(run, quote=True)}" '
         f'style="padding:4px;line-height:1.2"><div class=mut '
-        f'style="font-size:11px">learning rate vs step{tip("lr")}</div>'
+        f'style="font-size:11px">learning rate vs '
+        f"{'simulations trained' if by_sims else 'step'}{tip('lr')}</div>"
         f'{"".join(o)}<div class=leg style="font-size:11px">'
         f"{''.join(legend)}</div></div>"
     )
@@ -503,7 +571,7 @@ def bias_section(ctx: Context, live: Run, st: Status) -> str:
     return (
         "<div id=biasrefs class=refnote></div><div class=biasrow>"
         f"<div id=biasdyn class=biasdyn></div>"
-        f"{lr_card(st.params, st.step, live.key)}</div>"
+        f"{lr_card(st.params, st.step, live.key, ctx.sims(live))}</div>"
         f'<script type="application/json" id=bdata>{data}</script>'
         f"<script>{_asset('bias.js')}</script>"
     )
@@ -800,7 +868,11 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     live = next((r for r in ctx.runs if r.live), ctx.runs[0])
     rows = ctx.log(live)
     st = live_status(
-        live, rows, run_sizes(ctx.prefixes, ctx.outbreaks), ctx.sims(live)
+        live,
+        rows,
+        run_sizes(ctx.prefixes, ctx.outbreaks),
+        ctx.sims(live),
+        ctx.steps(live),
     )
     tiles, bar = status_tiles(st, live)
     status = (

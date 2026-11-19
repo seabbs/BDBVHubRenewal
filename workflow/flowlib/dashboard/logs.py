@@ -29,6 +29,9 @@ nowcast and forecast parts if logged, and the held-out loss by source
 (any source names) every few hundred steps. The bias relations' means
 and ranges after it are read with `BIAS`."""
 
+STAMP = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[\w+\] (.*)$")
+"""Any line of the trainer: its time and message."""
+
 SOURCE = re.compile(r"([\w+]+) ([\d.eE+-]+)")
 """One source and its loss in a step's `by source` list."""
 
@@ -154,6 +157,29 @@ class RunLog:
         for log in self._each():
             merged |= log.chunks()
         return merged
+
+    def last_line(self) -> tuple[float, str] | None:
+        """Return the time and text of the newest log's last line.
+
+        The newest log is the one written last, the running segment's
+        `train/n<N>.log`: its last line may be any of the trainer's lines,
+        not only a logged step, so a checkpoint's evaluation or a wait
+        for simulations does not look stale.
+        """
+        paths = [p for p in self._paths() if p.exists()]
+        if not paths:
+            return None
+        newest = max(paths, key=lambda p: (p.stat().st_mtime, _size(p.name)))
+        with newest.open("rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 4096))
+            lines = f.read().decode("utf-8", "replace").splitlines()
+        for line in reversed(lines):
+            m = STAMP.match(line)
+            if m:
+                t = datetime.strptime(m[1], "%Y-%m-%d %H:%M:%S").timestamp()
+                return t, m[2]
+        return None
 
     def rows(self) -> list[dict[str, Any]]:
         """Return the logged steps of every log, in step order."""
