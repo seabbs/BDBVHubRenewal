@@ -560,7 +560,7 @@ Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tune
 ::: {#fig-germany-si-results-daily}
 ![](build/figures/si/germany-si-results-daily.png)
 
-German nowcast hub, daily counts: the panels of the German results figure, with daily nowcasts against the daily truth and WIS on daily counts, without the hub teams. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub, daily counts: the score panels of the German results figure, on daily counts relative to `randomwalknowcast`, without the hub teams or the nowcast panel. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ### Held-out synthetic data
