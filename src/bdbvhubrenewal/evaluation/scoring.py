@@ -9,9 +9,11 @@ epiforecasts/BVDOutbreakSize (`src/scoring.jl`).
   quantile levels $\tau$ with sample quantiles $q_\tau$,
   $$\text{WIS}(F, y) = \frac{1}{K + 1/2}\sum_\tau
   \left(\mathbb{1}\{y < q_\tau\} - \tau\right)(q_\tau - y),$$
-  which equals the usual interval form, scoringrules'
-  `weighted_interval_score`. It splits into dispersion, overprediction
-  and underprediction, our own code as scoringrules has no split.
+  which equals the usual interval form: half the median's absolute error
+  plus scoringrules' `interval_score` of each central interval, weighted
+  by $\alpha / 2$. Our vectorised code computes it with its split into
+  dispersion, overprediction and underprediction, which scoringrules
+  lacks.
   `wis_quantile` gives the same for forecasts made as quantiles, and
   `score_quantiles` scores those by WIS, the absolute error of the median
   and the coverage of each central interval.
@@ -58,6 +60,7 @@ __all__ = [
     "SCORE_COLUMNS",
     "bias_sample",
     "coverage_sample",
+    "crps_ensemble",
     "crps_sample",
     "energy_sample",
     "energy_scores",
@@ -155,31 +158,18 @@ def wis_quantile(
     # Pair each lower level with its upper level.
     lo, hi = q[:, lower], q[:, tau > 0.5][:, ::-1]
     alpha = 2 * tau[lower]
-    med = q[:, np.isclose(tau, 0.5)][:, 0]
-    # scoringrules (0.11, 0.12) adds `w_median * median` where the WIS has
-    # `w_median * |y - median|`, so it is given the median's error
-    # (test_scoringrules_wis_adds_the_median_not_its_error).
-    wis = np.atleast_1d(
-        np.asarray(
-            sr.weighted_interval_score(
-                y[:, 0], np.abs(y[:, 0] - med), lo, hi, alpha,
-                backend="numpy",
-            ),
-            dtype=np.float64,
-        )
-    )  # fmt: skip
-    # The split, which scoringrules lacks: it sums to the WIS.
-    norm = lower.sum() + 0.5
-    disp = np.sum(alpha / 2 * (hi - lo), axis=1) / norm
+    med = q[:, np.isclose(tau, 0.5)]
+    disp = np.sum(alpha / 2 * (hi - lo), axis=1)
     over = np.sum(np.maximum(lo - y, 0), axis=1)
-    over = (over + np.maximum(med - y[:, 0], 0) / 2) / norm
+    over += np.maximum(med - y, 0)[:, 0] / 2
     under = np.sum(np.maximum(y - hi, 0), axis=1)
-    under = (under + np.maximum(y[:, 0] - med, 0) / 2) / norm
+    under += np.maximum(y - med, 0)[:, 0] / 2
+    norm = lower.sum() + 0.5
     return {
-        "wis": wis,
-        "dispersion": disp,
-        "overprediction": over,
-        "underprediction": under,
+        "wis": (disp + over + under) / norm,
+        "dispersion": disp / norm,
+        "overprediction": over / norm,
+        "underprediction": under / norm,
     }
 
 
@@ -213,9 +203,40 @@ def crps_sample(
             f"estimator must be 'fair' or 'nrg', not {estimator!r}."
         )
     x = _as_samples(samples)
+    y = np.array([obs], dtype=np.float64)
+    return float(crps_ensemble(y, x[None, :], estimator)[0])
+
+
+def crps_ensemble(
+    obs: ArrayLike, samples: ArrayLike, estimator: str = "fair"
+) -> NDArray[np.float64]:
+    """Return the CRPS of many sample forecasts at once.
+
+    Parameters
+    ----------
+    obs : array-like
+        The observed values, `[N]`.
+    samples : array-like
+        Each forecast's draws, `[N, m]`.
+    estimator : str
+        `"fair"` or `"nrg"`, as `crps_sample`.
+
+    Returns
+    -------
+    numpy.ndarray
+        The CRPS of each forecast, `[N]`: scoringrules' `crps_ensemble`,
+        the fair form through its `pwm` estimator (`_crps`).
+    """
+    y = np.asarray(obs, dtype=np.float64)
+    x = np.asarray(samples, dtype=np.float64)
+    if estimator == "fair":
+        return _crps(y, x)
     if estimator == "nrg":
-        return float(sr.crps_ensemble(obs, x, estimator="nrg"))
-    return float(_crps(np.array([obs], dtype=np.float64), x[None, :])[0])
+        return np.asarray(
+            sr.crps_ensemble(y, x, m_axis=-1, estimator="nrg"),
+            dtype=np.float64,
+        ).reshape(y.shape)
+    raise ValueError(f"estimator must be 'fair' or 'nrg', not {estimator!r}.")
 
 
 def energy_sample(obs: ArrayLike, samples: ArrayLike) -> float:

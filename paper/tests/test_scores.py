@@ -246,9 +246,8 @@ def test_relative_scores_per_study_baseline() -> None:
 def test_wis_pins_the_hand_value() -> None:
     # Q = (2, 4, 5, 7, 12) at levels (0.05, 0.25, 0.5, 0.75, 0.95), y = 3:
     # (0.5 * |3 - 5| + 0.05 * 10 + 0.25 * (3 + 2 * 1 / 0.5)) / 2.5 = 1.3.
-    # scoringrules' weighted_interval_score (0.11 and 0.12) adds the median
-    # itself rather than |y - median| and gives 1.9, so the WIS is built
-    # from its interval_score instead.
+    # scoringrules' weighted_interval_score (0.11 and 0.12) gives 1.9 here,
+    # as it adds the median rather than |y - median|.
     s = score_forecasts(_rows("m", Q, 3.0))
     assert s["score"].item() == pytest.approx(1.3)
 

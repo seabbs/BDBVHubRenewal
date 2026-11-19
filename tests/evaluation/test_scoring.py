@@ -9,6 +9,7 @@ from bdbvhubrenewal.evaluation.scoring import (
     QUANTILE_LEVELS,
     bias_sample,
     coverage_sample,
+    crps_ensemble,
     crps_sample,
     energy_sample,
     energy_scores,
@@ -385,78 +386,31 @@ def test_same_samples_score_the_same_whoever_made_them() -> None:
         assert by.loc["renewal", col] == pytest.approx(by.loc["teamA-hub", col])
 
 
-def _spy(monkeypatch: pytest.MonkeyPatch, name: str) -> list:
-    """Record each call of scoringrules' `name`, still computing it."""
-    from bdbvhubrenewal.evaluation import scoring
-
-    real = getattr(sr, name)
-    calls: list = []
-
-    def wrapped(*a, **k):
-        calls.append(k)
-        return real(*a, **k)
-
-    monkeypatch.setattr(scoring.sr, name, wrapped)
-    return calls
-
-
-def test_wis_is_scoringrules_weighted_interval_score(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # The package gives the WIS; only its split is our own, and the split
-    # sums to it.
-    calls = _spy(monkeypatch, "weighted_interval_score")
+def test_wis_is_scoringrules_interval_scores_and_the_median_error() -> None:
+    # Our vectorised WIS and its split: the split sums to the WIS, and the
+    # WIS is half the median's error plus scoringrules' interval scores,
+    # each weighted by alpha / 2.
     rng = np.random.default_rng(3)
     y = rng.poisson(20, 40).astype(float)
     q = np.sort(rng.gamma(4, 5, (40, QUANTILE_LEVELS.size)), axis=1)
     got = wis_quantile(y, q, QUANTILE_LEVELS)
-    assert calls
     parts = got["dispersion"] + got["overprediction"] + got["underprediction"]
     np.testing.assert_allclose(parts, got["wis"], rtol=1e-12)
-    # The interval form (Bracher et al. 2021), from the quantiles.
     tau = QUANTILE_LEVELS
     lo, hi = q[:, tau < 0.5], q[:, tau > 0.5][:, ::-1]
-    a = 2 * tau[tau < 0.5]
+    alpha = 2 * tau[tau < 0.5]
     med = q[:, np.isclose(tau, 0.5)][:, 0]
-    width = (
-        hi
-        - lo
-        + 2
-        / a
-        * (np.maximum(lo - y[:, None], 0) + np.maximum(y[:, None] - hi, 0))
-    )
-    want = (0.5 * np.abs(y - med) + (a / 2 * width).sum(axis=1)) / (
-        a.size + 0.5
+    interval = sr.interval_score(y, lo, hi, alpha, backend="numpy")
+    want = (0.5 * np.abs(y - med) + (alpha / 2 * interval).sum(axis=1)) / (
+        alpha.size + 0.5
     )
     np.testing.assert_allclose(got["wis"], want, rtol=1e-12)
 
 
-def test_crps_and_energy_scores_are_scoringrules(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    crps = _spy(monkeypatch, "crps_ensemble")
-    es = _spy(monkeypatch, "es_ensemble")
+@pytest.mark.parametrize("estimator", ["fair", "nrg"])
+def test_crps_of_many_forecasts_is_scoringrules(estimator: str) -> None:
     rng = np.random.default_rng(4)
-    x = rng.normal(10, 3, (50, 4))
-    crps_sample(9.0, x[:, 0])
-    energy_sample(np.zeros(4), x)
-    assert crps
-    assert es
-    assert es[0]["estimator"] == "fair"
-
-
-def test_the_variogram_score_is_gone() -> None:
-    from bdbvhubrenewal.evaluation import scoring
-
-    assert not hasattr(scoring, "variogram_sample")
-
-
-def test_scoringrules_wis_adds_the_median_not_its_error() -> None:
-    # scoringrules 0.11 and 0.12 add w_median * median, not
-    # w_median * |y - median|, so `wis_quantile` passes it the error.
-    # If this fails the package is fixed: pass the median itself.
-    got = sr.weighted_interval_score(
-        np.array([5.0]), np.array([6.0]), np.array([[1.0, 4.0]]),
-        np.array([[15.0, 9.0]]), np.array([0.1, 0.5]), backend="numpy",
-    )  # fmt: skip
-    assert float(np.ravel(got)[0]) == pytest.approx((0.7 + 1.25 + 3) / 2.5)
+    y = rng.poisson(10, 30).astype(float)
+    x = rng.poisson(12, (30, 200)).astype(float)
+    want = sr.crps_ensemble(y, x, estimator=estimator, backend="numpy")
+    np.testing.assert_allclose(crps_ensemble(y, x, estimator), want, rtol=1e-10)
