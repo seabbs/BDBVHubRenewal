@@ -32,6 +32,9 @@ def test_each_cell_keeps_its_marginal(method):
     for i, j in [(0, 0), (2, 9), (1, 4)]:
         got = np.quantile(draws[:, i, j], [0.25, 0.5, 0.75])
         assert got == pytest.approx(q[i, j, 2:5], abs=0.15)
+        # The end quantiles carry the tails: flat beyond them.
+        assert draws[:, i, j].min() == pytest.approx(q[i, j, 0])
+        assert draws[:, i, j].max() == pytest.approx(q[i, j, -1])
 
 
 def test_the_methods_differ_only_in_how_cells_move_together():
@@ -59,6 +62,8 @@ def test_draws_are_reproducible_and_methods_are_checked():
     a = couple(q, LEVELS, "independent", None, n_samples=10, seed=3)
     b = couple(q, LEVELS, "independent", None, n_samples=10, seed=3)
     assert np.array_equal(a, b)
+    c = couple(q, LEVELS, "independent", None, n_samples=10, seed=4)
+    assert not np.array_equal(a, c)
     with pytest.raises(ValueError, match="unknown"):
         couple(q, LEVELS, "nope", None, n_samples=10, seed=3)
     with pytest.raises(ValueError, match="rho"):
@@ -72,3 +77,15 @@ def test_draws_are_reproducible_and_methods_are_checked():
 def test_a_gaussian_fit_outside_its_range_is_an_error(fit):
     with pytest.raises(ValueError, match="-1 < rho < 1"):
         couple(_quantiles(), LEVELS, "gaussian", fit, n_samples=10, seed=1)
+
+
+def test_a_gaussian_coupling_with_no_correlation_is_independent():
+    q = _quantiles(series=2, steps=6)
+    gau = couple(q, LEVELS, "gaussian", {"rho": 0.0, "s": 0.0}, 4000, seed=5)
+    ind = couple(q, LEVELS, "independent", None, n_samples=4000, seed=5)
+    cells = gau.reshape(4000, -1)
+    off = np.corrcoef(cells, rowvar=False)[~np.eye(cells.shape[1], dtype=bool)]
+    assert np.abs(off).max() < 0.06
+    assert gau.sum(axis=2).std() == pytest.approx(
+        ind.sum(axis=2).std(), rel=0.05
+    )

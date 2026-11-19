@@ -7,8 +7,7 @@ cells each follow the cell's quantile function, piecewise linear between
 the levels and flat beyond them (so the end quantiles carry the tail
 mass), and joins the cells by a copula:
 
-- `independent`: every cell draws its own level, as the foundation
-  model's sampler does now;
+- `independent`: every cell draws its own level;
 - `comonotone`: one level per sample and series across its steps, the
   quantile-only analogue of ensemble copula coupling;
 - `gaussian`: levels from a Gaussian copula with AR(1) correlation `rho`
@@ -57,7 +56,13 @@ def read_quantiles(
     numpy.ndarray
         The draws, the shape of `u`.
     """
-    values = np.sort(values, axis=-1)
+    return _read_sorted(levels, np.sort(values, axis=-1), u)
+
+
+def _read_sorted(
+    levels: np.ndarray, values: np.ndarray, u: np.ndarray
+) -> np.ndarray:
+    """Read sorted quantiles `values` at uniform draws `u`."""
     hi = np.clip(np.searchsorted(levels, u), 1, len(levels) - 1)
     lo = hi - 1
     weight = np.clip((u - levels[lo]) / (levels[hi] - levels[lo]), 0.0, 1.0)
@@ -150,5 +155,6 @@ def couple(
         u = _gaussian_levels(n_samples, series, steps, rho, s, rng)
     else:
         raise ValueError(f"unknown method {method!r}; one of {METHODS}")
-    values = np.broadcast_to(quantiles, (n_samples, *quantiles.shape))
-    return read_quantiles(levels, values, u)
+    values = np.sort(quantiles, axis=-1)
+    values = np.broadcast_to(values, (n_samples, *values.shape))
+    return _read_sorted(levels, values, u)
