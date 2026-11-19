@@ -193,13 +193,20 @@ def bias_settings(bias: bool, lr: float = 0.0) -> dict:
 
 
 def horizon_settings(loss_days: int | None) -> dict:
-    """Return the loss horizon's entries of a checkpoint's settings."""
+    """Return the loss horizon's entries of a checkpoint's settings.
+
+    Unset, they are as before the setting existed.
+    """
     length = f"each block's horizon in whole patches of {ft.OUTPUT_PATCH} steps"
-    if loss_days is not None:
-        length += (
-            f", the horizon stopping {loss_days} days after the cut-off's step"
-        )
-    return {"loss_horizon_days": loss_days, "prediction_length": length}
+    if loss_days is None:
+        return {"prediction_length": length}
+    return {
+        "loss_horizon_days": loss_days,
+        "prediction_length": (
+            f"{length}, the horizon stopping {loss_days} days after the "
+            "cut-off's step"
+        ),
+    }
 
 
 def quiet_settings(days: int | None) -> dict:
