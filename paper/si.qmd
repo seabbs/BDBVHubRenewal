@@ -365,8 +365,10 @@ Simulated summaries (centiles over 1,000 drawn settings) against the range over 
 
 Outbreaks run 16 to 52 weeks.
 A simulation that fails, has fewer than 10 cases in the outbreak or has more than $10^6$ cases per stratum is redrawn up to five times, and its grid cell is skipped if every draw fails.
-Before training, a language model reviews each round's simulations for implausible outbreaks with a fixed prompt, and the trainer skips those it flags.
-The prompt defaults to keeping a simulation, and no simulation is deleted.
+Before training, each round's simulations are checked against fixed thresholds, and the trainer skips those that fail.
+A simulation fails if its cases per stratum pass 500,000, the upper bound of the simulated size, if its weekly cases by reference date rise more than 1,000-fold in one week, or if its mean reporting delay passes 35 days.
+No simulation is deleted.
+Grid cells left missing by the redraws or the check are simulated again with fresh seeds, up to five times, so that training uses ten whole blocks.
 
 The grid has two limitations.
 Simulated strata are less sparse than BDBV's provinces: the share of stratum-weeks with no cases reaches {{< meta evidence.realism.zero_share.sim_q95 >}} at the 95% point of the simulations, against {{< meta evidence.realism.zero_share.BDBV >}} for BDBV.
