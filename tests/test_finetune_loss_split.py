@@ -63,3 +63,11 @@ def test_the_nowcast_part_is_the_loss_on_the_steps_to_the_cut_off():
     parts = fs.held_out_parts(model, val, batch_size=100)
     masked = fs.held_out_loss(model, [only_nowcast(b) for b in val], 100)
     assert parts["nowcast"] == pytest.approx(masked, rel=1e-5)
+
+
+def test_the_parts_written_after_the_hash_are_outside_it():
+    import finetune_verify
+
+    for name in ("held_out_loss", "real_validation_loss"):
+        parts = fs.loss_parts(name, {"nowcast": 0.1, "forecast": 0.2})
+        assert set(parts) <= set(finetune_verify.NOT_HASHED)
