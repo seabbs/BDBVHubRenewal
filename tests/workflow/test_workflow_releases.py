@@ -46,3 +46,21 @@ def test_the_newest_checkpoint_has_the_highest_priority_within_its_band():
     assert all(10 < p < 11 for p in got)
     # Labels outside the order (the reference) sit at the band's base.
     assert releases.priority(order, "reference", 10) == 10
+
+
+def test_only_r7_checkpoints_are_scored():
+    # r6 is retired: its last checkpoint was released at 14:12 on 19 Nov,
+    # so the shipped config scores only checkpoints released after it.
+    from pathlib import Path
+
+    import yaml
+
+    config = yaml.safe_load(
+        (Path(__file__).parents[2] / "workflow" / "config.yaml").read_text()
+    )["score"]
+    assert config["labels"] is None
+    last_r6 = {
+        "tagName": "chronos-slots-3ee94e5195e0",
+        "publishedAt": "2026-11-19T14:12:48Z",
+    }
+    assert releases.labels([*LISTING, last_r6], config["published_from"]) == []
