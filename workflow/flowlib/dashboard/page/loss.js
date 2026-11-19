@@ -1,12 +1,14 @@
 (function(){
 var D=JSON.parse(document.getElementById("ldata").textContent);
 var $=function(i){return document.getElementById(i)};
-var STY=["","6 3","8 3 2 3","2 3"],SPAL=["#16a34a","#ea580c","#9333ea","#0891b2","#2563eb","#ca8a04","#db2777"];
+// Layout and level colours come from the shared map (page data); a key it
+// does not name takes the categorical colour at its position.
+var STY=["","6 3","8 3 2 3","2 3"],SPAL=D.categorical||[];
 var PARTS=[["nowcast","nowcast steps","6 3"],["forecast","forecast steps","2 3"]];
 var SRCS=[];D.runs.forEach(function(r){Object.keys(r.bysrc).concat(Object.keys(r.src0||{})).forEach(function(k){if(SRCS.indexOf(k)<0)SRCS.push(k)})});SRCS.sort();
-var SRC={};SRCS.forEach(function(k,i){SRC[k]=SPAL[i%SPAL.length]});
+var SRC={};SRCS.forEach(function(k,i){SRC[k]=(D.layouts||{})[k]||SPAL[i%SPAL.length]});
 var LVLS=[];D.runs.forEach(function(r){Object.keys(r.ck_lvl||{}).concat(Object.keys(r.lvl0||{})).forEach(function(k){if(LVLS.indexOf(k)<0)LVLS.push(k)})});
-var LVL={};LVLS.forEach(function(k,i){LVL[k]=SPAL[(i+3)%SPAL.length]});
+var LVL={};LVLS.forEach(function(k,i){LVL[k]=(D.levels||{})[k]||SPAL[i%SPAL.length]});
 // The held-out loss type shown (Loss type), kept for the session.
 var LT="total";try{LT=sessionStorage.getItem("ftlt")||"total"}catch(e){}
 document.addEventListener("click",function(e){var b=e.target.closest("[data-lt]");if(!b)return;LT=b.dataset.lt;try{sessionStorage.setItem("ftlt",LT)}catch(x){}draw()});

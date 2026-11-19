@@ -53,7 +53,7 @@ function load(loc){var pre=C.preload||{};
  var k=C.key+"/"+loc;if(cache[k])return Promise.resolve(cache[k]);
  return fetch("/data/"+encodeURIComponent(C.key)+"/"+encodeURIComponent(loc)+".json").then(function(r){return r.json()})
   .then(function(j){cache[k]=j;return j})}
-function colour(id){var m=C.meta.find(function(x){return x.id==id});return m?m.color:"#64748b"}
+function colour(id){var m=C.meta.find(function(x){return x.id==id});return m?m.color:"var(--mut)"}
 function id2lab(id){var m=C.meta.find(function(x){return x.id==id});return m?m.label:id}
 function fmt(v){return v>=1000?Math.round(v).toLocaleString("en-GB"):v==0?"0":(+v).toPrecision(3)}
 function dashAttr(rank){var d=DASH[rank%4];return d?' stroke-dasharray="'+d+'"':""}

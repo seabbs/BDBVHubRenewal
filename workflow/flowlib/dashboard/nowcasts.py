@@ -33,6 +33,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from bdbvhubrenewal.evaluation import labels
 from bdbvhubrenewal.evaluation.nowcast import reporting_delay, rolling_truth
 from bdbvhubrenewal.evaluation.scoring import crps_sample, wis_quantile
 
@@ -441,7 +442,7 @@ def meta(
                     "label": s.removeprefix("model:"),
                     "run": "ref",
                     "n": 1,
-                    "color": "#6b7280",
+                    "color": labels.NEUTRAL,
                 }
             )
         else:

@@ -224,3 +224,27 @@ def test_zero_shots_meet_the_palette_validator_against_the_main_models():
         MODEL_STYLES["fm_chronos_daily_complete"][1]
     ]
     assert dashes == ["solid", "dotted", "dashed"]
+
+
+def test_dashboard_colour_maps_are_shared_and_distinct() -> None:
+    import sys
+    from pathlib import Path
+
+    from bdbvhubrenewal.evaluation import labels
+
+    # Relations without self (PR 417); layouts as the trainer's r6 design.
+    assert list(labels.RELATION_COLOURS) == ["same", "up", "down"]
+    sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
+    import finetune_chronos as ft
+
+    assert set(labels.LAYOUT_COLOURS) == set(ft.DESIGNS["r6"]["source_shares"])
+    for colours in (
+        labels.RELATION_COLOURS,
+        labels.LAYOUT_COLOURS,
+        labels.LEVEL_COLOURS,
+    ):
+        assert len(set(colours.values())) == len(colours)
+        assert set(colours.values()) <= set(labels.CATEGORICAL)
+    # Earlier runs' shades are the fine-tuned model's blues, apart from it.
+    ft_blue = labels.MODEL_STYLES["fm_chronos_daily_ragged_ft"][0]
+    assert ft_blue not in labels.RUN_SHADES

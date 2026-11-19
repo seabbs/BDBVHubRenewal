@@ -21,23 +21,22 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from bdbvhubrenewal.evaluation import labels
+
 from .logs import CACHE, _size, checkpoints
 from .runs import Run
 
 PAIRS = (
-    ("self", "self"),
     ("same", "same"),
     ("up", "up (child to parent)"),
     ("down", "down (parent to child)"),
 )
-"""The relations and their labels, in the trainer's order."""
+"""The relations and their labels, in the trainer's order. A row's bias
+with itself (self) is no longer a relation (PR 417); older runs' self
+values are not shown."""
 
-COLOURS = {
-    "self": "#6b7280",
-    "same": "#2563eb",
-    "up": "#16a34a",
-    "down": "#ea580c",
-}
+COLOURS = dict(labels.RELATION_COLOURS)
+"""Each relation's colour, from the shared map."""
 
 NAME = re.compile(r"(?:^|[._/])(self_?|same|up|down)$")
 """A relation's tensor, by the end of its name."""

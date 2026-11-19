@@ -16,6 +16,8 @@ from typing import Any
 
 import yaml
 
+from bdbvhubrenewal.evaluation import labels
+
 from . import logs, paperstyle
 from . import runs as spec
 from .mirror import Source
@@ -141,9 +143,8 @@ def build(
     )
 
 
-RUN_SHADES = ("#174a85", "#7fb0ec", "#0b2a4f", "#a9c9f2")
-"""Colours of earlier runs: shades of the fine-tuned model's blue, so every
-run reads as that model and the live run stands out in its own colour."""
+RUN_SHADES = labels.RUN_SHADES
+"""Colours of earlier runs, from the shared map (`labels.RUN_SHADES`)."""
 
 
 def _identifier(run: spec.Run) -> str:

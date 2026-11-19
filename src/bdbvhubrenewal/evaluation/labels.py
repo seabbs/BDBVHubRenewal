@@ -23,8 +23,15 @@ from __future__ import annotations
 from typing import Final
 
 __all__ = [
+    "CATEGORICAL",
+    "LAYOUT_COLOURS",
+    "LEVEL_COLOURS",
     "MODEL_LABELS",
     "MODEL_STYLES",
+    "NEUTRAL",
+    "RELATION_COLOURS",
+    "RUN_SHADES",
+    "UI_COLOURS",
     "WIS_PART_FILLS",
     "WIS_PART_SHADES",
     "WIS_PART_STACK",
@@ -102,6 +109,81 @@ WIS_PART_FILLS: Final[dict[str, str]] = {
 differ by more than shade (Sam, 19 Nov): dispersion solid,
 overprediction hatched rising to the right, underprediction hatched
 falling to the right."""
+
+NEUTRAL: Final = "#6b7280"
+"""Colour of a series with none of its own (a hub team, an unknown id)."""
+
+# The dataviz reference categorical palette, light theme, in its order
+# (validated for colour-blind separation as adjacent slots); slot 5,
+# magenta, is left out (Sam: pink is hard to see).
+_SLOT_BLUE: Final = "#2a78d6"
+_SLOT_ORANGE: Final = "#eb6834"
+_SLOT_AQUA: Final = "#1baf7a"
+_SLOT_YELLOW: Final = "#eda100"
+_SLOT_GREEN: Final = "#008300"
+_SLOT_VIOLET: Final = "#6250d6"
+_SLOT_RED: Final = "#e34948"
+
+CATEGORICAL: Final[tuple[str, ...]] = (
+    _SLOT_BLUE,
+    _SLOT_ORANGE,
+    _SLOT_AQUA,
+    _SLOT_YELLOW,
+    _SLOT_GREEN,
+    _SLOT_VIOLET,
+    _SLOT_RED,
+)
+"""Colours in order for series with no named colour of their own (such as
+the kinds of attention module), assigned by fixed position, never cycled
+past the end without a legend."""
+
+RELATION_COLOURS: Final[dict[str, str]] = {
+    "same": _SLOT_BLUE,
+    "up": _SLOT_AQUA,
+    "down": _SLOT_ORANGE,
+}
+"""Colour of each series-bias relation: a place's own series (same), a
+place to its parent (up) and a parent to its places (down)."""
+
+LAYOUT_COLOURS: Final[dict[str, str]] = {
+    "daily": _SLOT_BLUE,
+    "weekly": _SLOT_ORANGE,
+    "3day": _SLOT_AQUA,
+    "daily+weekly": _SLOT_YELLOW,
+    "daily+rolling7": _SLOT_GREEN,
+    "daily+3day": _SLOT_VIOLET,
+    "daily+rolling3": _SLOT_RED,
+}
+"""Colour of each training data layout (source), in the trainer's order."""
+
+LEVEL_COLOURS: Final[dict[str, str]] = {
+    "national": _SLOT_BLUE,
+    "intermediate": _SLOT_ORANGE,
+    "leaf": _SLOT_AQUA,
+}
+"""Colour of each level of a place hierarchy."""
+
+RUN_SHADES: Final[tuple[str, ...]] = (
+    "#1c5cab",
+    "#86b6ef",
+    "#0d366b",
+    "#5598e7",
+)
+"""Colours of earlier fine-tuning runs: steps of the fine-tuned model's blue
+ramp (dataviz reference ramp 550, 250, 700, 350), so every run reads as
+that model and the live run keeps the model's own colour."""
+
+UI_COLOURS: Final[dict[str, tuple[str, str]]] = {
+    "c1": (_SLOT_BLUE, "#3987e5"),
+    "c2": (_SLOT_ORANGE, "#d95926"),
+    "c3": (_SLOT_AQUA, "#199e70"),
+    "c4": (_SLOT_YELLOW, "#c98500"),
+    "ok": ("#0ca30c", "#0ca30c"),
+    "bad": ("#d03b3b", "#e66767"),
+}
+"""Dashboard accents as (light, dark): links, toggles and chart series
+(c1 to c4, the reference palette's first four slots) and status (ok, bad,
+its good and critical). The dashboard writes them as CSS variables."""
 
 _CHECKPOINT: Final = "@"
 _REAL: Final = "_real"

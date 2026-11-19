@@ -34,8 +34,11 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-PALETTE = ("#2563eb", "#db2777", "#ea580c", "#0d9488", "#7c3aed", "#65a30d")
-"""Colours of runs that name none, in order."""
+from bdbvhubrenewal.evaluation import labels
+
+PALETTE = labels.RUN_SHADES
+"""Colours of runs that name none, in order (`labels.RUN_SHADES`; the
+context names and colours every run as the fine-tuned model)."""
 
 RUN_FIELDS = {
     "label",
@@ -240,7 +243,7 @@ def make_reference(
     return Reference(
         key=key,
         label=label or key,
-        colour=colour or "#6b7280",
+        colour=colour or labels.NEUTRAL,
         model=model,
         checkpoint=checkpoint,
         role=_role(role or "other"),

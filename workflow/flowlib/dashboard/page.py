@@ -24,6 +24,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from bdbvhubrenewal.evaluation import labels
+
 from . import bias, learning, logs, nowcasts, paperstyle, scores, svg, training
 from .mirror import Source
 from .runs import Reference, Run, split_label
@@ -166,6 +168,19 @@ class Context:
 
 def _json(payload: Any) -> str:
     return json.dumps(payload, separators=(",", ":")).replace("</", "<\\/")
+
+
+def ui_colours() -> str:
+    """Return the dashboard's accent colours as CSS variables.
+
+    From the shared map (`labels.UI_COLOURS`), light and dark; the page's
+    stylesheet holds only neutrals.
+    """
+    light = ";".join(f"--{k}:{v[0]}" for k, v in labels.UI_COLOURS.items())
+    dark = ";".join(f"--{k}:{v[1]}" for k, v in labels.UI_COLOURS.items())
+    return (
+        f":root{{{light}}}@media(prefers-color-scheme:dark){{:root{{{dark}}}}}"
+    )
 
 
 def tip(key: str) -> str:
@@ -583,7 +598,17 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
         (n for n in st.params["prefixes"] if n not in st.saved), None
     )
     xlim = max([1.2 * now, 50] + ([next_ck] if next_ck else []))
-    data = _json({"runs": out, "marks": marks, "xlim": xlim})
+    # Layout and level colours from the shared map; others by position.
+    data = _json(
+        {
+            "runs": out,
+            "marks": marks,
+            "xlim": xlim,
+            "layouts": labels.LAYOUT_COLOURS,
+            "levels": labels.LEVEL_COLOURS,
+            "categorical": list(labels.CATEGORICAL),
+        }
+    )
     modebar = (
         '<div class="sctl modebar"><span class=mut>Loss scale</span>'
         "<button class=tog data-mode=raw>raw</button>"
@@ -911,7 +936,7 @@ def selector_data(ctx: Context, builts: Mapping[str, Any]) -> str:
                     {
                         "key": s,
                         "label": s.removeprefix("model:"),
-                        "color": "#94a3b8",
+                        "color": labels.NEUTRAL,
                     }
                 )
     shown = [r.key for r in ctx.runs] + [
@@ -1066,7 +1091,8 @@ def build(ctx: Context) -> str:
         "<!doctype html><html><head><meta charset=utf-8>"
         '<meta name=viewport content="width=device-width,initial-scale=1">'
         "<title>Fine-tuning dashboard</title>"
-        f"<style>{_asset('style.css')}</style><script>{info_js}</script>"
+        f"<style>{ui_colours()}{_asset('style.css')}</style>"
+        f"<script>{info_js}</script>"
         f"<script>{_asset('player.js')}\n{_asset('sel.js')}</script></head>"
         f"<body>{body}<script>{_asset('mode.js')}\n{_asset('nav.js')}\n"
         f"{_asset('expand.js')}\n{'' if ctx.once else _asset('live.js')}"

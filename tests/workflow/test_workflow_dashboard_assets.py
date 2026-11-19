@@ -77,3 +77,46 @@ def test_the_nowcasts_have_a_view_of_one_model_over_time():
     assert "pts=lat" in js
     # The score card still compares every ticked model.
     assert "wisChart(all[0],ticked())" in js
+
+
+HEX = re.compile(r"(?<![\w&])#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b")
+NEUTRALS = {
+    "#fff",
+    "#1d2127",
+    "#6b7280",
+    "#f6f7f9",
+    "#d9dde3",
+    "#14171c",
+    "#e6e8eb",
+    "#9aa3af",
+    "#1d2128",
+    "#343a44",
+}
+"""The page's neutral surfaces, text and lines (style.css)."""
+
+
+def test_no_dashboard_file_holds_a_colour_except_neutrals_in_the_style():
+    # Every data and accent colour comes from the shared map
+    # (bdbvhubrenewal.evaluation.labels): models, relations, layouts,
+    # levels, runs, WIS parts and the page's accents.
+    found = {}
+    for path in sorted(PAGE.parent.rglob("*")):
+        if path.suffix not in {".py", ".js", ".css", ".html", ".json"}:
+            continue
+        hexes = set(HEX.findall(path.read_text()))
+        if path.name == "style.css":
+            hexes -= NEUTRALS
+        if hexes:
+            found[str(path.relative_to(PAGE.parent))] = sorted(hexes)
+    assert found == {}
+
+
+def test_the_page_writes_its_accents_from_the_shared_map():
+    from flowlib.dashboard import page
+
+    from bdbvhubrenewal.evaluation import labels
+
+    css = page.ui_colours()
+    for name, (light, dark) in labels.UI_COLOURS.items():
+        assert f"--{name}:{light}" in css
+        assert f"--{name}:{dark}" in css
