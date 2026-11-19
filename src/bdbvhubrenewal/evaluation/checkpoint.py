@@ -72,7 +72,8 @@ N_DRAWS: Final = 1000
 SCORED_FROM: Final = "2026-11-21"
 """The first scored BDBV round; origins from it are never scored here."""
 GERMANY_CHUNK: Final = 20
-"""German dates forecast together (`germany_unit`)."""
+"""German dates forecast together (`germany_unit`) unless `SCORE_DATES`
+in the environment (local config) says otherwise."""
 FINAL_OUTBREAKS: Final = 8400
 """The reported model is the live run's final checkpoint."""
 FINAL_GRID: Final = "r5"
@@ -123,6 +124,7 @@ COLUMNS: Final = [
     "dispersion",
     "overprediction",
     "underprediction",
+    "precision",
 ]
 """The evidence table's columns, those of rows of other studies too."""
 SORT: Final = ["rule", "study", "level", "model", "outbreaks", "checkpoint"]
@@ -399,6 +401,36 @@ def merge_evidence(old: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
 # Units -----------------------------------------------------------------
 
 
+def score_dates() -> int:
+    """Return the German dates a unit forecasts together.
+
+    `SCORE_DATES` from the local config (`flowlib.machine.torch_env`),
+    else `GERMANY_CHUNK`: more is faster and holds more in memory.
+    """
+    return int(os.environ.get("SCORE_DATES") or GERMANY_CHUNK)
+
+
+PRECISION_FILE: Final = "precision.txt"
+
+
+def record_precision(root: Path) -> None:
+    """Write the precision a unit forecasts in to its folder."""
+    from bdbvhubrenewal.forecasters.foundation import (
+        inference_precision,
+        torch_device,
+    )
+
+    Path(root).mkdir(parents=True, exist_ok=True)
+    precision = inference_precision(torch_device())
+    (Path(root) / PRECISION_FILE).write_text(precision + "\n")
+
+
+def unit_precision(root: Path) -> str:
+    """Return the precision a unit forecast in: fp32 before it was kept."""
+    path = Path(root) / PRECISION_FILE
+    return path.read_text().strip() if path.exists() else "fp32"
+
+
 def _pin(label: str) -> None:
     """Pin the checkpoint, so no process resolves `latest` mid-run."""
     os.environ["BDBV_CHRONOS_FT"] = (
@@ -471,6 +503,7 @@ def bdbv_unit(
     )
     root = cache / ("zones" if zones else "bdbv") / label
     root.mkdir(parents=True, exist_ok=True)
+    record_precision(root)
     todo = {
         o: dataclasses.replace(tasks[o], n_samples=N_DRAWS, seed=config.seed)
         for o in bdbv_origins(data)
@@ -509,6 +542,36 @@ def bdbv_unit(
     print(f"{root.parent.name} {label} done", flush=True)
 
 
+def german_tasks_dir(
+    cache: Path, triangle: Path, n_samples: int, seed: int
+) -> Path:
+    """Return the store of the German tasks every checkpoint scores.
+
+    Keyed on what the tasks are built from: the triangle file's bytes,
+    the task-building code (`data.germany` and the `data.dates` it uses),
+    the fields of the `ForecastTask` they are pickled as, and the draws
+    and seed.
+    """
+    import dataclasses
+    import hashlib
+    import inspect
+
+    from bdbvhubrenewal.data import dates
+    from bdbvhubrenewal.data import germany as dg
+    from bdbvhubrenewal.forecasters import base
+
+    h = hashlib.sha256()
+    with Path(triangle).open("rb") as f:
+        for part in iter(lambda: f.read(1 << 24), b""):
+            h.update(part)
+    for module in (dg, dates):
+        h.update(inspect.getsource(module).encode())
+    fields = [f.name for f in dataclasses.fields(base.ForecastTask)]
+    h.update(repr(fields).encode())
+    h.update(f"{n_samples}-{seed}".encode())
+    return Path(cache) / "germany" / f"tasks-{h.hexdigest()[:12]}"
+
+
 def germany_unit(cache: Path, label: str) -> None:
     """Nowcast each German development date, own quantiles with truth."""
     from bdbvhubrenewal.data.germany import hub_triangle
@@ -516,22 +579,25 @@ def germany_unit(cache: Path, label: str) -> None:
 
     _pin(label)
     config = de.load_germany_config("config/germany.toml")
-    triangle = hub_triangle(
-        Path("data/raw/germany") / Path(config.triangle).name
-    )
+    path = Path("data/raw/germany") / Path(config.triangle).name
+    triangle = hub_triangle(path)
+    # Built once for every checkpoint, then read back.
+    tasks_dir = german_tasks_dir(cache, path, config.n_samples, config.seed)
     root = cache / "germany" / label
     root.mkdir(parents=True, exist_ok=True)
+    record_precision(root)
     dates = de.nowcast_dates(config, held_out=False)
     todo = [d for d in dates if not (root / f"{d}.csv.gz").exists()]
     models = list(label_models(label))
-    # Dates are forecast GERMANY_CHUNK at a time, Chronos-2 predicted for
+    # Dates are forecast `score_dates()` at a time, Chronos-2 predicted for
     # all of them in a few batched passes, and written one file a date so
     # a stopped run resumes.
-    for i in range(0, len(todo), GERMANY_CHUNK):
-        chunk = todo[i : i + GERMANY_CHUNK]
+    step = score_dates()
+    for i in range(0, len(todo), step):
+        chunk = todo[i : i + step]
         start = time.monotonic()
         fc = de.germany_forecasts(
-            models, triangle, chunk, config.n_samples, config.seed
+            models, triangle, chunk, config.n_samples, config.seed, tasks_dir
         )
         fc = de.with_truth(fc, triangle, config.truth_delay)
         for date in chunk:
@@ -586,6 +652,17 @@ def _cached(root: Path) -> pd.DataFrame | None:
     return rows.loc[keep].drop(columns="target")
 
 
+def _with_precision(
+    rows: pd.DataFrame, root: Path, labels: Sequence[str]
+) -> pd.DataFrame:
+    """Give each checkpoint's rows the precision its unit forecast in."""
+    at = {
+        ("zero-shot" if lb == REFERENCE else lb): unit_precision(root / lb)
+        for lb in labels
+    }
+    return rows.assign(precision=rows["checkpoint"].map(at))
+
+
 def germany_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
     """Return the German development half's rule rows."""
     from bdbvhubrenewal.evaluation import germany as de
@@ -611,7 +688,8 @@ def germany_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
     if not parts:
         return pd.DataFrame(columns=COLUMNS)
     sc = pd.concat(parts, ignore_index=True).rename(columns={"pool": "level"})
-    return relative(matched(sc, GERMANY_CELL), "germany", ("wis", "log_wis"))
+    out = relative(matched(sc, GERMANY_CELL), "germany", ("wis", "log_wis"))
+    return _with_precision(out, cache / "germany", labels)
 
 
 def bdbv_rows(
@@ -667,7 +745,8 @@ def bdbv_rows(
     if not parts:
         return pd.DataFrame(columns=COLUMNS)
     sc = pd.concat(parts, ignore_index=True)
-    return relative(matched(sc, BDBV_CELL), "ebola", ("crps", "log_crps"))
+    out = relative(matched(sc, BDBV_CELL), "ebola", ("crps", "log_crps"))
+    return _with_precision(out, cache / "bdbv", labels)
 
 
 def _existing(path: Path, columns: Sequence[str]) -> pd.DataFrame:

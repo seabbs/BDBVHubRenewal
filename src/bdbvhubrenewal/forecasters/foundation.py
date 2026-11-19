@@ -750,6 +750,54 @@ def torch_device(device: str | None = None) -> str:
     return "cpu"
 
 
+PRECISIONS: Final = ("fp32", "fp16", "bf16", "auto")
+"""Inference precisions (`PRECISION`). Training always runs in fp32."""
+
+
+def inference_precision(device: str, precision: str | None = None) -> str:
+    """Return the precision Chronos-2 forecasts in on `device`.
+
+    `precision`, by default `PRECISION`, fp32 if unset: stored fits and
+    submissions set none, so they stay fp32; the workflow gives scoring
+    units `auto` (`flowlib.machine.torch_env`). `auto` takes each device's
+    half precision: fp16 on CUDA before Ampere (Turing has fp16 tensor
+    cores and no bf16), bf16 on Ampere and later and on Apple GPUs, fp32
+    on the CPU (bf16 ran about 5 times slower on a CPU without native
+    bf16). fp16 moved relative WIS by under 0.06% on a Turing GPU.
+
+    Raises
+    ------
+    ValueError
+        If the precision is not one of `PRECISIONS`.
+    """
+    precision = precision or os.environ.get("PRECISION") or "fp32"
+    if precision not in PRECISIONS:
+        raise ValueError(f"precision {precision!r} is not one of {PRECISIONS}")
+    if precision != "auto":
+        return precision
+    kind = device.split(":")[0]
+    if kind == "cuda":
+        import torch
+
+        major, _ = torch.cuda.get_device_capability(device)
+        return "bf16" if major >= 8 else "fp16"
+    return "bf16" if kind == "mps" else "fp32"
+
+
+def _autocast(device: str) -> Any:
+    """Return the context Chronos-2 forecasts in.
+
+    Autocast at half precision (`inference_precision`), or none at fp32.
+    """
+    precision = inference_precision(device)
+    if precision == "fp32":
+        return contextlib.nullcontext()
+    import torch
+
+    dtype = torch.float16 if precision == "fp16" else torch.bfloat16
+    return torch.autocast(device_type=device.split(":")[0], dtype=dtype)
+
+
 def apply_threads() -> None:
     """Set torch's CPU threads to `TORCH_THREADS`, if set (the rule's)."""
     n = os.environ.get("TORCH_THREADS", "").strip()
@@ -894,9 +942,12 @@ def _predict(
             else None
         )
         with (
-            series_bias.assigned(model, rows)
-            if bias
-            else contextlib.nullcontext()
+            (
+                series_bias.assigned(model, rows)
+                if bias
+                else contextlib.nullcontext()
+            ),
+            _autocast(torch_device()),
         ):
             quantiles, _ = pipeline.predict_quantiles(
                 [_chronos_input(g) for g in part],
@@ -915,8 +966,14 @@ Known = Mapping[str, np.ndarray]
 
 
 def group_key(group: Series, horizon: int) -> str:
-    """Return a key of what Chronos-2 sees of a group, and the horizon."""
+    """Return a key of what Chronos-2 sees of a group, and the horizon.
+
+    The rows' places are in it too: with the series bias, the same numbers
+    at other places forecast differently.
+    """
     h = hashlib.sha256(str(horizon).encode())
+    for name in ("places", "target_places"):
+        h.update(f"{name}={list(group.get(name) or [])!r}".encode())
     for name in CHRONOS_KEYS:
         part = group.get(name)
         if part is None:
