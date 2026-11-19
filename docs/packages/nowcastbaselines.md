@@ -65,7 +65,7 @@ A task is what a model sees at one release.
 Both models return 100 sample trajectories for each place and week.
 
 ```python
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
+from nowcasteval.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import get_model
 
 latest = target.loc[target["vintage"] == target["vintage"].max()]
@@ -91,7 +91,7 @@ The forecasts are sample tables, so nowcasteval scores them ([nowcasteval](nowca
 ### Run them over many releases
 
 `make_tasks` gives one task per release in the target it is passed, so a backtest is a loop over its tasks.
-`bdbvhubrenewal.evaluation.backtest.run_forecasts` runs a list of models over a list of tasks and skips a model where it cannot forecast.
+`nowcasteval.backtest.run_forecasts` runs a list of models over a list of tasks and skips a model where it cannot forecast.
 
 ## Reference
 

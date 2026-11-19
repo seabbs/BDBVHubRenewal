@@ -1,7 +1,7 @@
 """Colours from the paper figures, for the dashboard.
 
 A reference configured with `paper_model` takes that model's name and
-colour from the shared map (`bdbvhubrenewal.evaluation.labels`, through
+colour from the shared map (`nowcasteval.labels`, through
 `paperfigs.style`), so a model is named and drawn alike on the dashboard
 and in the paper; WIS parts stack and fill as the paper's do
 (`labels.WIS_PART_STACK`, `labels.WIS_PART_FILLS`). `paper/` is put on
@@ -20,7 +20,7 @@ if str(PAPER) not in sys.path:
 
 from paperfigs import scores, style  # noqa: E402
 
-from bdbvhubrenewal.evaluation import labels  # noqa: E402
+from nowcasteval import labels  # noqa: E402
 
 
 def model_colour(model: str) -> str:

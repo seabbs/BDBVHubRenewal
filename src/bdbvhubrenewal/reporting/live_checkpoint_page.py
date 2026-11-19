@@ -16,7 +16,7 @@ from bdbvhubrenewal.reporting.live_checkpoint import (
     newest,
     summary_table,
 )
-from bdbvhubrenewal.reporting.tables import markdown_table
+from nowcasteval.tables import markdown_table
 
 __all__ = ["docs_page"]
 

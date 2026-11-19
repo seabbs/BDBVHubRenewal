@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.reporting.scoresummary import targets_attr
+from nowcasteval.scoresummary import targets_attr
 
 __all__ = [
     "TRAJECTORY_DRAWS",

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.pairing import summarise_pairing
+from nowcasteval.pairing import summarise_pairing
 
 __all__ = ["pairing_page"]
 

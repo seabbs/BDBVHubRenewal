@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.reporting.tables import (
+from nowcasteval.tables import (
     filter_table,
     markdown_table,
     sort_table,

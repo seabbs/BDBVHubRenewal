@@ -34,7 +34,7 @@ skip_origins = ["2026-08-18"]
 # ends, and leaves out weeks no release has reached yet. "auto" takes the
 # age by which `truth_level` of the national count is reported, pooled
 # over the releases (less skip_origins) against the latest one
-# (`bdbvhubrenewal.evaluation.nowcast.reporting_delay`). A number of days
+# (`nowcasteval.nowcast.reporting_delay`). A number of days
 # fixes it.
 truth_delay = "auto"
 truth_level = 0.98

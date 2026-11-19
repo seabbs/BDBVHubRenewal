@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.scoring import (
+from nowcasteval.scoring import (
     SCORE_COLUMNS,
     score_cells,
     score_forecasts,
@@ -94,10 +94,7 @@ def test_wis_components_of_sample_forecasts_sum_to_wis():
 
 
 def test_wis_components_of_quantile_forecasts_sum_to_wis():
-    from bdbvhubrenewal.evaluation.scoring import (
-        QUANTILE_LEVELS,
-        score_quantiles,
-    )
+    from nowcasteval.scoring import QUANTILE_LEVELS, score_quantiles
 
     rng = np.random.default_rng(6)
     rows = []

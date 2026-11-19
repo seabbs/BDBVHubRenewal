@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.nowcast import relative_crps
-from bdbvhubrenewal.reporting.scoresummary import mark_partial
+from nowcasteval.nowcast import relative_crps
+from nowcasteval.scoresummary import mark_partial
 
 
 def _rows() -> pd.DataFrame:

@@ -16,7 +16,7 @@ from typing import Any
 
 import yaml
 
-from bdbvhubrenewal.evaluation import labels
+from nowcasteval import labels
 
 from . import logs, paperstyle
 from . import runs as spec

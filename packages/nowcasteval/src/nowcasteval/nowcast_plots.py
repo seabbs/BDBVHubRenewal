@@ -14,7 +14,8 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 
-from bdbvhubrenewal.reporting.plots import (
+from bdbvhubrenewal.reporting.site import site_baseline
+from nowcasteval.plots import (
     THEMES,
     _date_axis,
     _grid,
@@ -25,8 +26,7 @@ from bdbvhubrenewal.reporting.plots import (
     mpl_dash,
     point_style,
 )
-from bdbvhubrenewal.reporting.scorechart import OVERALL_METRICS
-from bdbvhubrenewal.reporting.site import site_baseline
+from nowcasteval.scorechart import OVERALL_METRICS
 
 __all__ = [
     "plot_place_summary",

@@ -22,7 +22,7 @@ forecast every place and week of their task, and rounds no team
 forecast, and those extra cells are not scored.
 Each cell is scored on the weeks the latest real vintage reports in
 full, from the vintage serving its round
-(`bdbvhubrenewal.evaluation.nowcast.release_backtest`). Hub teams have no
+(`nowcasteval.nowcast.release_backtest`). Hub teams have no
 modelled delay we can see, so no model is scored on the counts later
 vintages report.
 A round is pending until a real vintage later than its matching vintage
@@ -50,20 +50,11 @@ import pandas as pd
 import yaml
 
 from bdbvhubrenewal.data.zones import ZoneData
-from bdbvhubrenewal.evaluation.backtest import (
-    BacktestConfig,
-    make_tasks,
-    run_forecasts,
-)
-from bdbvhubrenewal.evaluation.nowcast import (
-    release_backtest,
-)
-from bdbvhubrenewal.evaluation.scoring import (
-    relative_skill,
-    summarise_scores,
-)
 from bdbvhubrenewal.forecasters import get_model, list_models
 from bdbvhubrenewal.forecasters.zones import zone_task
+from nowcasteval.backtest import BacktestConfig, make_tasks, run_forecasts
+from nowcasteval.nowcast import release_backtest
+from nowcasteval.scoring import relative_skill, summarise_scores
 from nowcastutils.dates import as_date, reference_date_for_vintage
 from nowcastutils.hierarchy import is_zone
 from nowcastutils.snapshots import weekly_counts

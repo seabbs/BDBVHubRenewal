@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bdbvhubrenewal.reporting.nowcast_plots import (
+from nowcasteval.nowcast_plots import (
     plot_place_summary,
     plot_relative_overall,
     plot_truth_changes,

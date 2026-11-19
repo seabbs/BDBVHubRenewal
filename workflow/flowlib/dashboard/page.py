@@ -24,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from bdbvhubrenewal.evaluation import labels
+from nowcasteval import labels
 
 from . import bias, learning, logs, nowcasts, paperstyle, scores, svg, training
 from .mirror import Source

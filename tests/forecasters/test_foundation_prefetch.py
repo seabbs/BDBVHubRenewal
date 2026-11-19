@@ -11,8 +11,8 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.zones import ZoneData, hub_zones
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import foundation, get_model, series_bias
+from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastutils.base import ForecastTask
 
 pytestmark = pytest.mark.skipif(

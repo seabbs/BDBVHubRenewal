@@ -19,8 +19,8 @@ from bdbvhubrenewal.data.germany import (
     place_code,
     read_triangle,
 )
-from bdbvhubrenewal.evaluation.backtest import run_forecasts
 from bdbvhubrenewal.forecasters import NATIONAL, get_model
+from nowcasteval.backtest import run_forecasts
 
 FIXTURE = (
     Path(__file__).resolve().parents[1]

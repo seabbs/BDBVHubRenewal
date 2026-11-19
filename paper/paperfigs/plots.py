@@ -23,11 +23,6 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from bdbvhubrenewal.evaluation.labels import (
-    WIS_PART_FILLS,
-    WIS_PART_STACK,
-    model_label,
-)
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
@@ -38,6 +33,7 @@ from matplotlib.ticker import (
     MaxNLocator,
     NullFormatter,
 )
+from nowcasteval.labels import WIS_PART_FILLS, WIS_PART_STACK, model_label
 
 from paperfigs.checkpoints import checkpoint_of
 from paperfigs.factors import (

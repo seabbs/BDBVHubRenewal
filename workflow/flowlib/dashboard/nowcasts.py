@@ -33,9 +33,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.evaluation import labels
-from bdbvhubrenewal.evaluation.nowcast import reporting_delay, rolling_truth
-from bdbvhubrenewal.evaluation.scoring import crps_sample, wis_quantile
+from nowcasteval import labels
+from nowcasteval.nowcast import reporting_delay, rolling_truth
+from nowcasteval.scoring import crps_sample, wis_quantile
 
 from .paperstyle import WIS_PARTS
 from .rows import num, sources

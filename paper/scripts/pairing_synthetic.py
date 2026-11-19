@@ -10,7 +10,7 @@ same origins and horizons), with the strata in the hub's codes, so the
 country, the intermediate level (provinces) and the leaves (zones) are
 scored apart. Each walk model forecasts each task once and its draws are
 scored with no pairing and with the rolling rho_p
-(`bdbvhubrenewal.evaluation.pairing`) against the outbreak's final
+(`nowcasteval.pairing`) against the outbreak's final
 counts. OUT is the `variant_scores` table, with `study` `synthetic`.
 """
 
@@ -21,13 +21,13 @@ import logging
 from pathlib import Path
 
 import pandas as pd
-from bdbvhubrenewal.evaluation.pairing import (
+from bdbvhubrenewal.forecasters import get_model
+from nowcasteval.pairing import (
     MODELS,
     SCORE_COLUMNS,
     variant_forecasts,
     variant_scores,
 )
-from bdbvhubrenewal.forecasters import get_model
 from nowcastutils.files import write_csv
 
 from paperdata.synthetic_runner import (

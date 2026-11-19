@@ -13,7 +13,7 @@ import pytest
 
 from bdbvhubrenewal.cli import main
 from bdbvhubrenewal.evaluation.germany import load_germany_config
-from bdbvhubrenewal.reporting import plots
+from nowcasteval import plots
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "reporting" / "fixtures"
@@ -192,7 +192,7 @@ def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
     scores = pd.read_csv(tmp_path / "res" / "lopo-scores.csv")
     assert set(scores["model"]) == {"mask_aware"}
     # LOPO runs its models here, on `[samples] backtest` draws.
-    from bdbvhubrenewal.evaluation.backtest import load_config
+    from nowcasteval.backtest import load_config
 
     cfg = load_config(ROOT / "config" / "backtest.toml")
     assert set(scores["n_samples"]) == {cfg.score_samples}
@@ -271,9 +271,9 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
 
     from bdbvhubrenewal.cli import _stored
     from bdbvhubrenewal.data import load_target
-    from bdbvhubrenewal.evaluation.backtest import run_forecasts
-    from bdbvhubrenewal.evaluation.scoring import energy_scores
     from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
+    from nowcasteval.backtest import run_forecasts
+    from nowcasteval.scoring import energy_scores
 
     args = argparse.Namespace(
         data=str(DATA), results=str(tmp_path), store=str(tmp_path / "none")
@@ -394,7 +394,7 @@ def test_backtest_runs_only_the_named_scenarios(
         table = pd.DataFrame({"model": ["randomwalk"], "scenario": ["flat"]})
         return table, table, table, table
 
-    monkeypatch.setattr("bdbvhubrenewal.evaluation.backtest.run_scenarios", run)
+    monkeypatch.setattr("nowcasteval.backtest.run_scenarios", run)
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
     args = [
         "backtest",
@@ -458,7 +458,7 @@ def test_chunk_splits_in_order_into_contiguous_blocks() -> None:
 def test_backtest_runs_recovery_apart_by_chunk(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from bdbvhubrenewal.evaluation import backtest as bt
+    from nowcasteval import backtest as bt
 
     dates: list[tuple[str, ...]] = []
 
@@ -503,7 +503,7 @@ def test_backtest_without_recovery_never_runs_it(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from bdbvhubrenewal import cli
-    from bdbvhubrenewal.evaluation import backtest as bt
+    from nowcasteval import backtest as bt
 
     def recovery(*args: object, **kwargs: object) -> None:
         del args, kwargs
@@ -538,8 +538,8 @@ def test_backtest_scores_the_complete_target_on_the_truth_delay(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from bdbvhubrenewal import cli
-    from bdbvhubrenewal.evaluation import backtest as bt
-    from bdbvhubrenewal.evaluation.nowcast import resolve_truth_delay
+    from nowcasteval import backtest as bt
+    from nowcasteval.nowcast import resolve_truth_delay
 
     def development(*args: object, **kwargs: object) -> pd.DataFrame:
         del args, kwargs
@@ -574,8 +574,8 @@ def test_score_scores_the_complete_target_on_the_truth_delay(
 
     from bdbvhubrenewal import cli
     from bdbvhubrenewal.data.tidy import load_delays
-    from bdbvhubrenewal.evaluation import backtest as bt
-    from bdbvhubrenewal.evaluation.nowcast import (
+    from nowcasteval import backtest as bt
+    from nowcasteval.nowcast import (
         ReleaseBacktest,
         ReleaseForecasts,
         resolve_truth_delay,

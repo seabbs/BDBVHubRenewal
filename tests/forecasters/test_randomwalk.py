@@ -8,11 +8,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.backtest import (
-    BacktestConfig,
-    make_tasks,
-    run_forecasts,
-)
 from bdbvhubrenewal.forecasters import (
     ForecastTask,
     ModelUnavailableError,
@@ -29,6 +24,7 @@ from bdbvhubrenewal.forecasters.chain import (
     NoWalkSpread,
     Settings,
 )
+from nowcasteval.backtest import BacktestConfig, make_tasks, run_forecasts
 from nowcastutils.base import MissingSnapshots
 
 

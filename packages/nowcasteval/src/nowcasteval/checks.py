@@ -31,9 +31,9 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.scoring import summarise_scores
 from bdbvhubrenewal.forecasters.chain import Settings
 from bdbvhubrenewal.reporting.site import site_baseline
+from nowcasteval.scoring import summarise_scores
 
 __all__ = [
     "RECENT_WEEKS",

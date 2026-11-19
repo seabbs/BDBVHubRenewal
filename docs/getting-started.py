@@ -37,12 +37,12 @@ from pathlib import Path
 import pandas as pd
 
 from bdbvhubrenewal.data import load_daily, load_delays, load_target
-from bdbvhubrenewal.evaluation import backtest as bt
+from nowcasteval import backtest as bt
 from bdbvhubrenewal.evaluation import store
-from bdbvhubrenewal.evaluation.nowcast import relative_crps, release_backtest
-from bdbvhubrenewal.evaluation.scoring import relative_skill
+from nowcasteval.nowcast import relative_crps, release_backtest
+from nowcasteval.scoring import relative_skill
 from bdbvhubrenewal.forecasters import NATIONAL, get_model
-from bdbvhubrenewal.reporting.plots import plot_location_grid, save_light_dark
+from nowcasteval.plots import plot_location_grid, save_light_dark
 
 target = load_target("data")
 daily = load_daily("data")

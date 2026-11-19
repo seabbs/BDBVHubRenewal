@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data import load_daily, load_delays, load_target, tidy
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.forecasters import ForecastTask
+from nowcasteval.backtest import BacktestConfig
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "tests" / "fixtures" / "data"

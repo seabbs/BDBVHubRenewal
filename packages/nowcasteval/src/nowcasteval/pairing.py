@@ -26,12 +26,8 @@ from typing import Final, cast
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.scoring import (
-    coverage_sample,
-    crps_sample,
-    energy_sample,
-)
 from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from nowcasteval.scoring import coverage_sample, crps_sample, energy_sample
 from nowcastutils.base import (
     NATIONAL,
     ForecastTask,
@@ -267,12 +263,9 @@ def bdbv_sensitivity(
         `variant_scores` rows of every model, variant, origin and level.
     """
     from bdbvhubrenewal.data import load_daily, load_delays, load_target
-    from bdbvhubrenewal.evaluation.backtest import load_config, real_vintages
-    from bdbvhubrenewal.evaluation.nowcast import (
-        resolve_truth_delay,
-        rolling_truth,
-    )
     from bdbvhubrenewal.evaluation.store import origin_tasks
+    from nowcasteval.backtest import load_config, real_vintages
+    from nowcasteval.nowcast import resolve_truth_delay, rolling_truth
 
     config = load_config(config_path)
     target, delays = load_target(data), load_delays(data)
@@ -341,7 +334,7 @@ def germany_sensitivity(
         nowcast_tasks,
     )
     from bdbvhubrenewal.evaluation import germany as de
-    from bdbvhubrenewal.evaluation.nowcast import rolling_truth
+    from nowcasteval.nowcast import rolling_truth
 
     cfg = de.load_germany_config(config_path)
     triangle = hub_triangle(Path(data) / Path(cfg.triangle).name)
