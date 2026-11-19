@@ -48,6 +48,38 @@ def test_later_lines_see_earlier_ones_and_quotes_are_dropped(tmp_path):
     )
 
 
+def test_a_line_may_use_a_later_one(tmp_path):
+    path = tmp_path / "local.env"
+    path.write_text("SCORE_CACHE=$ROOT/cache\nRUN=${ROOT}/run\nROOT=/data\n")
+    cfg = localconfig.read(path, {"HOME": str(tmp_path)})
+    assert cfg["SCORE_CACHE"] == "/data/cache"
+    assert cfg["RUN"] == "/data/run"
+
+
+def test_a_line_may_use_a_default(tmp_path):
+    path = tmp_path / "local.env"
+    path.write_text("SCORE_CACHE=$RUN/cache\n")
+    cfg = localconfig.read(path, {"HOME": str(tmp_path)})
+    assert (
+        cfg["SCORE_CACHE"] == f"{tmp_path}/bdbv-rounds/checkpoints/slots/cache"
+    )
+
+
+def test_a_setting_in_the_environment_is_seen_by_the_file(tmp_path):
+    path = tmp_path / "local.env"
+    path.write_text("SCORE_CACHE=$ROOT/cache\nROOT=/data\n")
+    cfg = localconfig.read(path, {"HOME": str(tmp_path), "ROOT": "/env"})
+    assert cfg["ROOT"] == "/env"
+    assert cfg["SCORE_CACHE"] == "/env/cache"
+
+
+def test_settings_that_use_each_other_are_an_error(tmp_path):
+    path = tmp_path / "local.env"
+    path.write_text("ROOT=$RUN/x\nRUN=$ROOT/y\n")
+    with pytest.raises(ValueError, match="ROOT"):
+        localconfig.read(path, {"HOME": str(tmp_path)})
+
+
 def test_workflow_paths_default_under_the_rounds_folder(tmp_path):
     path = tmp_path / "local.env"
     path.write_text("ROOT=/data/rounds\n")
@@ -69,7 +101,7 @@ def test_the_path_comes_from_local_config_when_set(tmp_path):
 def test_same_values_as_the_shell_loader(tmp_path):
     path = tmp_path / "local.env"
     path.write_text(
-        "ROOT=$HOME/r\nMAILBOX=${HOME}/m.md\nHOST_NAME=h\nINBOX=i.md\n"
+        "MAILBOX=$ROOT/m.md\nROOT=$HOME/r\nHOST_NAME=h\nINBOX=i.md\n"
     )
     env = {
         "PATH": os.environ["PATH"],
@@ -81,6 +113,7 @@ def test_same_values_as_the_shell_loader(tmp_path):
         [
             "bash",
             "-c",
+            "set -u; "
             f'source "{SHELL}"; ' + "; ".join(f'echo "${k}"' for k in keys),
         ],
         env=env,
