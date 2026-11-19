@@ -451,3 +451,24 @@ def test_main_results_open_with_nowcasts_over_time(germany) -> None:
     titles = [ax.get_title() for ax in fig.axes]
     assert "Nowcasts over time" in titles
     plt.close(fig)
+
+
+def test_outer_band_is_90_unless_the_quantiles_stop_at_95() -> None:
+    from paperfigs.plots import outer_band
+
+    # Coverage and bands are 50% and 90% (Sam 09:50); the German hub's
+    # quantiles have no 5% or 95% level, so they fall back to 95%.
+    assert outer_band([0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975]) == (
+        0.05,
+        0.95,
+    )
+    hub = [0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975]
+    assert outer_band(hub) == (0.025, 0.975)
+    assert outer_band([0.25, 0.5, 0.75]) is None
+
+
+def test_sample_nowcast_panels_draw_90_percent_bands() -> None:
+    from paperfigs.plots import NOWCAST_LEVELS
+
+    assert 0.05 in NOWCAST_LEVELS and 0.95 in NOWCAST_LEVELS
+    assert 0.025 not in NOWCAST_LEVELS
