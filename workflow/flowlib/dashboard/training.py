@@ -146,6 +146,17 @@ def history(run: Run) -> list:
     return got if isinstance(got, list) else []
 
 
+PARTS = ("nowcast", "forecast")
+"""The parts of held-out loss: the steps to each block's cut-off and
+those after it."""
+
+
+def _parts(entry: Mapping[str, Any], name: str) -> dict[str, float]:
+    """Return the nowcast and forecast parts of loss `name`, if both."""
+    got = {p: entry.get(f"{name}_{p}") for p in PARTS}
+    return got if all(v is not None for v in got.values()) else {}
+
+
 def loss_run(
     run: Run,
     rows: Sequence[Mapping[str, Any]],
@@ -182,6 +193,7 @@ def loss_run(
         None,
     )
     src0 = h0.get("by_source") or {}
+    parts0 = _parts(h0, "held_out_loss")
     train = [
         (h["step"], h["loss"])
         for h in hist
@@ -198,7 +210,7 @@ def loss_run(
     for st, src in sorted(evals, key=lambda e: e[0]):
         for k, v in src.items():
             by.setdefault(k, []).append([st, round(v, 5)])
-    base = base or {"full0": full0, "src0": src0}
+    base = base or {"full0": full0, "src0": src0, "parts0": parts0}
     return {
         "key": run.key,
         "label": run.label,
@@ -214,7 +226,21 @@ def loss_run(
             for nm, s, _ in checkpoints
             if s.get("held_out_loss")
         ],
+        "held_parts": {
+            p: [[r["step"], r["parts"][p]] for r in rows if r.get("parts")]
+            for p in PARTS
+        },
+        "ck_parts": {
+            p: [
+                [s.get("steps") or round(_size(nm) * spo), parts[p]]
+                for nm, s, _ in checkpoints
+                if (parts := _parts(s, "held_out_loss"))
+            ]
+            for p in PARTS
+        },
         "full0": full0,
+        "parts0": parts0,
+        "bparts0": base.get("parts0") or {},
         "bfull": base["full0"],
         "src0": src0,
         "bsrc": base["src0"],
