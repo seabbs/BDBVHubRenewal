@@ -669,6 +669,8 @@ German nowcast hub scores by location and stratum. {{< meta results.germany.labe
 
 ### Ebola hub submissions
 
+::::: {.content-visible when-meta="results.ebola.shown"}
+
 ::: {#tbl-ebola-joint}
 {{< include build/tables/main/ebola-joint.md >}}
 
@@ -723,5 +725,7 @@ Ebola hub submissions scores by horizon. {{< meta results.ebola.label >}} {{< me
 
 Ebola hub submissions scores by location and stratum. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
+
+:::::
 
 ## References {.unnumbered}
