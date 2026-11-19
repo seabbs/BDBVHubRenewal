@@ -48,3 +48,11 @@ def test_a_release_s_grid_is_in_its_notes_and_unmarked_ones_are_r5():
     assert grids.release_grid("Fine-tuning simulations. Grid r6.") == "r6"
     assert grids.release_grid("Fine-tuning simulations of round 9.") == "r5"
     assert grids.release_grid("") == "r5"
+
+
+def test_the_top_up_round_is_its_grid_s():
+    # r6's top-up round (32) is r6's alone, so no other grid releases it.
+    assert TABLE["r6"]["topup_round"] == 32
+    assert grids.owner(32, TABLE) == "r6"
+    with pytest.raises(ValueError, match="round 32 is grid r6's"):
+        grids.check_release([32], "r5", TABLE)

@@ -936,3 +936,64 @@ def test_the_sim_qc_checks_fixed_thresholds_from_the_config(tmp_path):
     assert "--max-weekly-jump 1000" in qc
     assert "--max-mean-delay-days 35" in qc
     assert "claude" not in qc
+
+
+def _done_round(root, r, batches=40):
+    """A simulated, QC'd round on disk, its files written in rule order."""
+    import time
+
+    d = root / "rounds" / f"r{r}"
+    first = 30000 + 100 * r
+    for sub in ("sims", "records", "qc"):
+        (d / sub).mkdir(parents=True, exist_ok=True)
+    for s in range(first, first + batches):
+        (d / "sims" / f"counts-{s}.csv.gz").write_bytes(b"")
+        (d / "sims" / f"settings-{s}.csv").write_text("outbreak\n")
+    time.sleep(0.01)
+    for s in range(first, first + batches):
+        (d / "records" / f"record-{s}.csv").write_text("x\n")
+    time.sleep(0.01)
+    (d / "manifest.csv").write_text("x\n")
+    time.sleep(0.01)
+    (d / "qc" / "excluded.csv").write_text("simulation,reason,evidence\n")
+    (d / "qc" / "summary.txt").write_text("ok\n")
+    time.sleep(0.01)
+    (d / "seeds.txt").write_text("")
+    (d / "READY").write_text("")
+
+
+TOPUP = {"grid_rounds": {"r6": {"rounds": [4], "topup_round": 32}}}
+
+
+def test_the_top_up_plans_its_first_try_from_the_rounds_qc(tmp_path):
+    _done_round(tmp_path, 4)
+    jobs = dry(tmp_path, "topup", config=TOPUP)
+    assert jobs["topup_plan"] == 1
+    assert "simulate_batch" not in jobs
+
+
+def test_a_top_up_batch_simulates_its_planned_cells(tmp_path):
+    import time
+
+    _done_round(tmp_path, 4)
+    time.sleep(0.01)
+    plan = tmp_path / "rounds" / "r32" / "topup" / "plan-0.txt"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("33200 3364 3365\n")
+    blocks = score_jobs(tmp_path, TOPUP, target="topup")
+    sims = [b for b in blocks if re.match(r"rule simulate_batch:", b)]
+    assert len(sims) == 1
+    shell = " ".join(sims[0].replace("\\\n", " ").split())
+    assert 'ENW_CELLS="3364,3365"' in shell
+    assert "finetune_simulate.R 2 33200" in shell
+    qc = [b for b in blocks if re.match(r"rule topup_qc:", b)]
+    assert len(qc) == 1
+    assert "--max-weekly-jump 1000" in qc[0]
+
+
+def test_a_round_s_batch_names_no_cells(tmp_path):
+    blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
+    text = " ".join("".join(blocks).replace("\\\n", " ").split())
+    shell = text[text.index("finetune_simulate.R") - 400 :]
+    assert 'ENW_CELLS=""' in shell
+    assert "finetune_simulate.R 21 " in shell

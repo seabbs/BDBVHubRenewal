@@ -85,6 +85,7 @@ A round is grid block r, 840 simulations, and is used whole for training or as t
 - `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
 - `sim_qc`: the sim QC (`scripts/sim_qc.py`), a check against fixed plausibility thresholds (`simulate.qc`: cases per stratum, a week-on-week jump with no reporting shock, mean delay), whose exclusions (`qc/excluded.csv`, with reason and evidence) the trainer skips. Nothing is deleted.
+- `topup_plan` (checkpoint), `topup_qc`, `topup` (target): the top-up of the training rounds' missing cells (`flowlib.topup`). A cell the sim QC excluded, or one the simulator failed, is simulated again with a fresh seed in the grid's `topup_round` (r6: round 32), in tries: each try plans the cells still missing (`topup_plan`), simulates them with `simulate_batch` (`ENW_CELLS`), and checks the round with the sim QC (`topup_qc`), up to `simulate.topup_tries`. `topup` writes the round's manifest, seed list and READY, and says how many cells are still missing. A run trains on the top-ups by listing the top-up round's seeds after the training rounds' in its `seed_file`.
 - `round_ready`: the seed list and `READY`, last.
 - `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
 - `release_batch`, `release_qc`, `release`: opt-in, each batch and the round's QC exclusions to its round's release.

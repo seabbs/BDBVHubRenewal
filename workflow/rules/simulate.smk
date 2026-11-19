@@ -116,7 +116,7 @@ rule simulate_batch:
         rm -rf "$tmp" && mkdir -p "$tmp"
         trap 'rm -rf "$tmp"' EXIT
         rscript=$(command -v Rscript)
-        TMPDIR="$tmp" ENW_DRAWS={params.draws} ENW_CELLS={params.cells:q} \
+        TMPDIR="$tmp" ENW_DRAWS={params.draws} ENW_CELLS="{params.cells}" \
             ENW_SEED_BASE={params.seed_base} ENW_LIB={params.lib} \
             PATH="$(getconf PATH):$PATH" {params.prefix} \
             workflow/scripts/timed.sh \
