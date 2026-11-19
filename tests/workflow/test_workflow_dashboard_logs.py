@@ -3,6 +3,7 @@
 import json
 import os
 import time
+from datetime import datetime
 
 from flowlib.dashboard import logs
 
@@ -211,3 +212,27 @@ def test_a_renamed_launcher_log_is_read_with_the_segment_logs(tmp_path):
         LINE.format(step=20, loss=0.4, held=0.3) + "\n"
     )
     assert [r["step"] for r in logs.RunLog(tmp_path).rows()] == [10, 20]
+
+
+def test_the_last_line_is_the_newest_segment_log_s_last_line(tmp_path):
+    (tmp_path / "train").mkdir()
+    (tmp_path / "train.log").write_text(
+        LINE.format(step=10, loss=0.5, held=0.4) + "\n"
+    )
+    (tmp_path / "train" / "n250.log").write_text(
+        LINE.format(step=20, loss=0.4, held=0.3) + "\n"
+    )
+    # The segment running now: no step line yet, only its own lines.
+    (tmp_path / "train" / "n500.log").write_text(
+        "2026-11-19 10:01:02 [train] resumed at step 1500, outbreaks 251-\n"
+        "2026-11-19 10:05:09 [train] outbreaks 251-500: 9 blocks, "
+        "99 series, 1400 steps\n\n"
+    )
+    t, text = logs.RunLog(tmp_path).last_line()
+    assert text.startswith("outbreaks 251-500: 9 blocks")
+    want = datetime(2026, 11, 19, 10, 5, 9).timestamp()
+    assert t == want
+
+
+def test_a_run_with_no_logs_has_no_last_line(tmp_path):
+    assert logs.RunLog(tmp_path).last_line() is None
