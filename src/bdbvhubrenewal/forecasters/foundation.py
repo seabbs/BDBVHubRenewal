@@ -715,6 +715,53 @@ def torch_device(device: str | None = None) -> str:
     return "cpu"
 
 
+PRECISIONS: Final = ("fp32", "fp16", "bf16", "auto")
+"""Inference precisions (`PRECISION`). Training always runs in fp32."""
+
+
+def inference_precision(device: str, precision: str | None = None) -> str:
+    """Return the precision Chronos-2 forecasts in on `device`.
+
+    `precision`, by default `PRECISION` (the local config's, `auto` if
+    unset). `auto` takes each device's half precision: fp16 on CUDA
+    before Ampere (Turing has fp16 tensor cores and no bf16), bf16 on
+    Ampere and later and on Apple GPUs, fp32 on the CPU (bf16 there ran
+    about 5 times slower on archie). Half precision moved relative WIS by
+    under 0.06% on archie's GPU, German and BDBV.
+
+    Raises
+    ------
+    ValueError
+        If the precision is not one of `PRECISIONS`.
+    """
+    precision = precision or os.environ.get("PRECISION") or "auto"
+    if precision not in PRECISIONS:
+        raise ValueError(f"precision {precision!r} is not one of {PRECISIONS}")
+    if precision != "auto":
+        return precision
+    kind = device.split(":")[0]
+    if kind == "cuda":
+        import torch
+
+        major, _ = torch.cuda.get_device_capability(device)
+        return "bf16" if major >= 8 else "fp16"
+    return "bf16" if kind == "mps" else "fp32"
+
+
+def _autocast(device: str) -> Any:
+    """Return the context Chronos-2 forecasts in.
+
+    Autocast at half precision (`inference_precision`), or none at fp32.
+    """
+    precision = inference_precision(device)
+    if precision == "fp32":
+        return contextlib.nullcontext()
+    import torch
+
+    dtype = torch.float16 if precision == "fp16" else torch.bfloat16
+    return torch.autocast(device_type=device.split(":")[0], dtype=dtype)
+
+
 def apply_threads() -> None:
     """Set torch's CPU threads to `TORCH_THREADS`, if set (the rule's)."""
     n = os.environ.get("TORCH_THREADS", "").strip()
@@ -859,9 +906,12 @@ def _predict(
             else None
         )
         with (
-            series_bias.assigned(model, rows)
-            if bias
-            else contextlib.nullcontext()
+            (
+                series_bias.assigned(model, rows)
+                if bias
+                else contextlib.nullcontext()
+            ),
+            _autocast(torch_device()),
         ):
             quantiles, _ = pipeline.predict_quantiles(
                 [_chronos_input(g) for g in part],

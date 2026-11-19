@@ -133,6 +133,11 @@ def test_the_dates_a_scoring_unit_forecasts_together_come_from_local_config():
     assert "SCORE_DATES" not in machine.torch_env({}, threads=1, device="cpu")
 
 
+def test_the_inference_precision_comes_from_local_config():
+    env = machine.torch_env({"PRECISION": "auto"}, threads=1, device="cuda")
+    assert env["PRECISION"] == "auto"
+
+
 def test_torch_env_as_shell_assignments():
     got = machine.shell_env({"DEVICE": "cpu", "TORCH_THREADS": "2"})
     assert got == "DEVICE=cpu TORCH_THREADS=2"
