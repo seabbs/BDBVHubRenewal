@@ -32,7 +32,7 @@ from bdbvhubrenewal.data.dates import as_date
 from bdbvhubrenewal.data.files import write_csv
 from bdbvhubrenewal.data.releases import release_cutoff
 from bdbvhubrenewal.data.simulate import SimulatedOutbreak
-from bdbvhubrenewal.data.zones import weekly_zone_counts
+from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
     energy_tasks,
@@ -263,7 +263,7 @@ def zone_forecasts(
         if origins is not None and vintage not in origins:
             continue
         task = _zone_task(real, delays, daily, config, vintage)
-        counts = weekly_zone_counts(daily_zones, vintage)
+        counts = weekly_counts(daily_zones, vintage)
         active = tuple(z for z in zones if z in set(counts["location"]))
         zt = zone_task(task, counts, active, pd.concat([daily, daily_zones]))
         for name in models:
@@ -322,7 +322,7 @@ def score_zones(
     vintages = real_vintages(real)
     latest = vintages[-1]
     done = _complete_zone_weeks(daily_zones, daily, vintages)
-    latest_counts = weekly_zone_counts(daily_zones, latest)
+    latest_counts = weekly_counts(daily_zones, latest)
     runs = run.runs.astype({"origin": str})
     frames, energy, kept = [], [], []
     for vintage in vintages[:-1]:
@@ -330,7 +330,7 @@ def score_zones(
         if here.empty:
             continue
         task = _zone_task(real, delays, daily, config, vintage)
-        counts = weekly_zone_counts(daily_zones, vintage)
+        counts = weekly_counts(daily_zones, vintage)
         forecasts: dict[str, pd.DataFrame] = {}
         summaries: dict[str, pd.DataFrame | None] = {}
         for name in here:
@@ -385,7 +385,7 @@ def score_zones(
             if not drawn:
                 continue
             both = pd.concat(drawn, ignore_index=True)
-            truth = _zone_truth(weekly_zone_counts(daily_zones, o2), both, o2)
+            truth = _zone_truth(weekly_counts(daily_zones, o2), both, o2)
             both["horizon"] = _weeks(both, task)
             frames.append(score_forecasts(both, truth, keys=_KEYS))
             energy.append(energy_scores(both, truth, unit=_KEYS[1:4]))
@@ -485,7 +485,7 @@ def _complete_zone_weeks(
     `complete_weeks` on the zone counts of every release, over every zone
     and week with an onset in any release, a missing week counting as 0.
     """
-    counts = {v: weekly_zone_counts(daily_zones, v) for v in vintages}
+    counts = {v: weekly_counts(daily_zones, v) for v in vintages}
     every = pd.concat(counts.values())
     grid = pd.MultiIndex.from_product(
         [sorted(set(every["location"])), sorted(set(every["target_end_date"]))],

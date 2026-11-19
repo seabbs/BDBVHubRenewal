@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.zones import is_zone, province_of
+from bdbvhubrenewal.data.hierarchy import is_zone, province_of
 
 __all__ = [
     "NATIONAL",

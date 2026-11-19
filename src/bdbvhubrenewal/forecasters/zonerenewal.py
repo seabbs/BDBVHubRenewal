@@ -93,7 +93,8 @@ def task_zones(task: ForecastTask) -> tuple[str, ...]:
     tuple of str
         Zone codes, sorted.
     """
-    from bdbvhubrenewal.data.zones import hub_zones, province_of
+    from bdbvhubrenewal.data.hierarchy import province_of
+    from bdbvhubrenewal.data.zones import hub_zones
 
     tasks_json = _data_dir() / "hub-config" / "tasks.json"
     if tasks_json.exists():
@@ -139,11 +140,11 @@ def zone_target(task: ForecastTask) -> pd.DataFrame:
 
 def _zone_walk_task(task: ForecastTask) -> ForecastTask:
     """Return the random walks' zone task, which finds the silent zones."""
-    from bdbvhubrenewal.data.zones import weekly_zone_counts
+    from bdbvhubrenewal.data.snapshots import weekly_counts
     from bdbvhubrenewal.forecasters.zones import zone_task
 
     daily = _daily_zones()
-    counts = weekly_zone_counts(daily, task.vintage)
+    counts = weekly_counts(daily, task.vintage)
     history = (
         daily
         if task.daily_history is None
@@ -165,7 +166,7 @@ def sum_zones(samples: pd.DataFrame) -> pd.DataFrame:
     pandas.DataFrame
         Province samples with the same columns.
     """
-    from bdbvhubrenewal.data.zones import province_of
+    from bdbvhubrenewal.data.hierarchy import province_of
 
     keys = [c for c in samples.columns if c not in ("location", "value")]
     out = (
@@ -452,7 +453,7 @@ class ZoneRenewalModel(RenewalModel):
         """
         import hashlib
 
-        from bdbvhubrenewal.data.zones import province_of
+        from bdbvhubrenewal.data.hierarchy import province_of
 
         daily = _daily_zones()
         mine = daily.loc[

@@ -47,7 +47,7 @@ import pandas as pd
 from numpy.typing import NDArray
 
 from bdbvhubrenewal.data.files import write_csv
-from bdbvhubrenewal.data.zones import is_zone
+from bdbvhubrenewal.data.hierarchy import is_zone
 from bdbvhubrenewal.forecasters.base import (
     NATIONAL,
     SAMPLE_COLUMNS,

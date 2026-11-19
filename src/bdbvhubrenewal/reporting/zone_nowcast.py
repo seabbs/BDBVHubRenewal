@@ -15,7 +15,8 @@ from collections.abc import Mapping
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.zones import province_of, weekly_zone_counts
+from bdbvhubrenewal.data.hierarchy import province_of
+from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters.zones import zone_forecast
 from bdbvhubrenewal.reporting.explorer import compact, trajectories
@@ -55,7 +56,7 @@ def zone_nowcast(
         Zone samples with `model`, `kind`, `vintage`, `reference_date` and
         `horizon` in weeks from the reference date, as `run_forecasts`.
     """
-    counts = weekly_zone_counts(daily_zones, task.vintage)
+    counts = weekly_counts(daily_zones, task.vintage)
     samples = zone_forecast(get_model(model), task, counts, zones, daily_zones)
     ref = pd.Timestamp(task.reference_date)
     weeks = (pd.to_datetime(samples["target_end_date"]) - ref).dt.days // 7
@@ -94,7 +95,7 @@ def zone_counts(
         `target_end_date`, `total`) from `start` to the release's last
         week, with 0 for weeks with no onsets, and `province`.
     """
-    counts = weekly_zone_counts(daily_zones, vintage)
+    counts = weekly_counts(daily_zones, vintage)
     recent = counts.loc[counts["target_end_date"] >= start]
     shown = sorted(set(recent["location"]))
     weeks = pd.date_range(start, counts["target_end_date"].max(), freq="7D")
