@@ -53,7 +53,7 @@ rule slots_check_shard:
         shards=SLC["shards"],
         blocks=f"{CACHE}/slots-check/blocks.pkl",
         held=lambda wc: f"{held_seeds()[0]} {held_seeds()[-1]}",
-        sims=f"{ROUNDS_DIR}/r{FT['held_round']}/sims",
+        sims=f"{ROUNDS_DIR}/r{FT['validation_round']}/sims",
         noslots=LOCAL["NOSLOTS_RUN"],
         germany=LOCAL["GERMANY_BLOCKS"],
     shell:
