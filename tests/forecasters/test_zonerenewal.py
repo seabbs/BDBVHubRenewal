@@ -221,7 +221,19 @@ def test_zone_inputs_take_the_zone_counts_and_province_delays(
     )
 
 
-def test_zone_code_keys_only_the_zone_fits(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("rel", "moved"),
+    [
+        # The zone fits' forecaster keys only them.
+        ("forecasters/zonerenewal.py", ("renewal", "renewalbvd")),
+        # The model builder is every renewal model's, renewalsp one place
+        # a patch.
+        ("model/zones.py", ("renewal", "renewalbvd", "renewalsp")),
+    ],
+)
+def test_zone_code_keys_the_models_that_run_it(
+    tmp_path: Path, rel: str, moved: tuple[str, ...]
+) -> None:
     import shutil
 
     from bdbvhubrenewal.evaluation import store
@@ -233,17 +245,12 @@ def test_zone_code_keys_only_the_zone_fits(tmp_path: Path) -> None:
         tmp_path / "src",
         ignore=shutil.ignore_patterns("__pycache__"),
     )
-    zoned = ("renewal", "renewalbvd")
-    # renewalsp shares the province module, which finds the zone fits
-    # through the registry only.
-    others = ("renewalsp", "randomwalknowcast")
-    before = {m: store.code_digest(m, tmp_path) for m in zoned + others}
-    for rel in ("model/zones.py", "forecasters/zonerenewal.py"):
-        path = tmp_path / "src/bdbvhubrenewal" / rel
-        path.write_text(path.read_text() + "\n_EDITED = 1\n")
-    after = {m: store.code_digest(m, tmp_path) for m in zoned + others}
-    assert all(after[m] != before[m] for m in zoned)
-    assert all(after[m] == before[m] for m in others)
+    models = ("renewal", "renewalbvd", "renewalsp", "randomwalknowcast")
+    before = {m: store.code_digest(m, tmp_path) for m in models}
+    path = tmp_path / "src/bdbvhubrenewal" / rel
+    path.write_text(path.read_text() + "\n_EDITED = 1\n")
+    after = {m: store.code_digest(m, tmp_path) for m in models}
+    assert {m for m in models if after[m] != before[m]} == set(moved)
 
 
 def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
