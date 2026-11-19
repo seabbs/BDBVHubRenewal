@@ -1274,6 +1274,10 @@ def code_commit() -> str:
     ).stdout.strip()
 
 
+LEARNING_RATE = 1e-5
+"""The LoRA adapter's starting learning rate, as Chronos-2's fine-tuning
+(the workflow's `finetune.learning_rate`)."""
+
 BIAS_LR = 1e-3
 """The series bias's starting learning rate, decaying to zero with the
 adapter's."""
@@ -1300,7 +1304,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--held-out-seeds", type=int, nargs=2, required=True)
     parser.add_argument("--outbreaks", type=int, default=ft.PREFIXES[-1])
     parser.add_argument("--holdout", type=int, default=150)
-    parser.add_argument("--learning-rate", type=float, default=1e-4)
+    parser.add_argument("--learning-rate", type=float, default=LEARNING_RATE)
     # Sources to train on: weekly, daily, and 3-day blocks summed from the
     # daily triangle; one of them trains an adapter for it alone.
     # Every layout of the grid's design (`ft.DESIGNS`) by default.
