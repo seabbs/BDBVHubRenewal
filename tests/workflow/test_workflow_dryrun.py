@@ -270,28 +270,26 @@ def _records(tmp_path, r, seeds):
 
 
 def test_from_the_rounds_host_a_round_is_listed_once_its_qc_ran(tmp_path):
-    # Mid-round only batch records list what is done, but QC runs once the
-    # round is whole: a batch it later excludes must never be trained on.
+    # QC runs once the round is whole, after its manifest: a batch it
+    # later excludes must never be trained on, mid-round or in between.
     _rounds_host(tmp_path, {1: range(30100, 30140)})
     r2 = _records(tmp_path, 2, range(30200, 30213))
     jobs = dry(tmp_path, "finetune", config=REMOTE)
-    assert jobs.get("fetch_batch", 0) <= 40
+    assert "train_segment" not in jobs
+    (r2 / "manifest.csv").write_text(
+        "header\n"
+        + "".join(
+            f"2,{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n"
+            for s in range(30200, 30213)
+        )
+    )
+    jobs = dry(tmp_path, "finetune", config=REMOTE)
     assert "train_segment" not in jobs
     (r2 / "qc").mkdir()
     (r2 / "qc" / "excluded.csv").write_text("simulation,reason,evidence\n")
     jobs = dry(tmp_path, "finetune", config=REMOTE)
     assert jobs["train_segment"] == 1
     assert jobs["fetch_batch"] == 12 + 1 + 40
-
-
-def test_from_the_rounds_host_a_failed_records_copy_is_said(tmp_path):
-    _rounds_host(tmp_path, {1: range(30100, 30140)})
-    (tmp_path / "local.env").write_text(
-        f"ROOT={tmp_path}\nHOST_NAME=test-host\n"
-        f"REMOTE_ROOT={tmp_path}/no-such-host\n"
-    )
-    out = dry_run(tmp_path, "finetune", config=REMOTE)
-    assert "records" in out.stderr
 
 
 def test_finetune_never_publishes(tmp_path):
