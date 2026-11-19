@@ -63,6 +63,7 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
 
 - BDBV (Ebola) is held out from the fine-tuned model's development.
   We did not tune the training grid, recipe or settings on BDBV scores.
+  The Ebola case study is run once, after the models are finalised, as held-out evaluation, and development builds skip it.
   It is not blind.
   We knew the structure of the data and its challenges (weekly releases, reporting delays, downward revisions, sparse zones) from submitting other models to the hub, and this informed the simulation design.
   Some BDBV checkpoint scores were produced in error during development.
