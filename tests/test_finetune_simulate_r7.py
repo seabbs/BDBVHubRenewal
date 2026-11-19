@@ -234,7 +234,7 @@ strata <- data.table(.group = 1:3, place = sprintf("P%02d", 1:3),
 gt <- gt_pmf_r7(v$gt_mean, d$gt_shape)
 run <- r7_onsets(100L, gt, strata, d, v)
 w <- seq_along(gt)
-first <- run$onsets[w, , drop = FALSE]
+first <- run$infections[w, , drop = FALSE]
 cat("quiet", all(run$onsets[, 3] == 0), "\\n")
 cat("early_zero", all(first[-length(w), 1:2] == 0), "\\n")
 cat("seed_floor", all(first[length(w), 1:2] >= 1), "\\n")
