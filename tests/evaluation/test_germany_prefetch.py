@@ -108,3 +108,34 @@ def test_the_task_store_is_keyed_on_its_inputs(tmp_path: Path) -> None:
     assert one != german_tasks_dir(tmp_path, data, 100, 1)
     data.write_text("ab\n")
     assert one != german_tasks_dir(tmp_path, data, 1000, 1)
+
+
+def test_the_task_store_key_covers_the_code_the_tasks_depend_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import dataclasses
+    import inspect
+
+    from bdbvhubrenewal.data import dates
+    from bdbvhubrenewal.evaluation import checkpoint as ck
+    from bdbvhubrenewal.forecasters import base
+
+    data = tmp_path / "triangle.csv"
+    data.write_text("a\n")
+    one = ck.german_tasks_dir(tmp_path, data, 1000, 1)
+    real = inspect.getsource
+
+    def edited(obj):
+        text = real(obj)
+        return text + "# edit" if obj is dates else text
+
+    monkeypatch.setattr(inspect, "getsource", edited)
+    assert ck.german_tasks_dir(tmp_path, data, 1000, 1) != one
+    monkeypatch.setattr(inspect, "getsource", real)
+
+    @dataclasses.dataclass
+    class Wider(base.ForecastTask):
+        extra: int = 0
+
+    monkeypatch.setattr(base, "ForecastTask", Wider)
+    assert ck.german_tasks_dir(tmp_path, data, 1000, 1) != one
