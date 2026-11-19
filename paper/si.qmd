@@ -366,7 +366,10 @@ The simulated outbreaks' ranges against published values for several diseases, t
 
 We cut the held-out simulations into blocks as in training, with the five layouts and non-summing parents (@tbl-block-layouts), using a fixed seed.
 A manifest records each held-out block's layout and options.
-The held-out simulations are simulation round 9, one whole block of 840 separate from the ten training blocks, and are the paper's test set.
+We keep two sets of simulations out of training, each one whole block of 840 separate from the ten training blocks.
+The validation set is the round on which the trainer monitors its loss.
+The test set is a further round simulated with fresh seeds, and no model is scored on it until the final model is fixed.
+The test set is the paper's held-out synthetic data.
 The trainer monitors its loss on 90 of them, a random sample of the block's cells.
 
 The Ebola case study is held out from model development but not blind.
@@ -440,7 +443,6 @@ Our models give 1,000 samples and hub teams 100, so the fair form compares them 
 | Floor on Chronos-2's scale at inference | None | Held-out simulations and the BDBV release backtest |
 | Lag cap of the ragged layout | 4 weeks or 28 days | German first half and the BDBV release backtest |
 | Copula shrinkage weight $w$ | 10, the weakest of 0, 10, 30 and 100, which scored within 1% of one another | Ebola release backtest |
-| Checkpoint of the submitted fine-tuned model | 1,000 simulations | BDBV release backtest, the plausibility check of the 14 November 2026 round, and the German first half |
 | Realism checks of the simulation grid | Grid ranges | BDBV releases and German data reported by 2022-02-09 |
 
 Choices tuned on development data, with their values and the data they were set on.
@@ -531,7 +533,7 @@ Zero-shot Chronos-2 and the newest checkpoint of the runs with and without atten
 ### Real-data fine-tune against synthetic
 
 - We fine-tune a model on the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
-- Its BDBV training data are every release up to {{< meta results.realdata_after >}}, so we score it on BDBV rounds from 21 November 2026 only.
+- Its BDBV training data are every release up to {{< meta results.realdata_after >}}, so we score it only on held-out Ebola rounds after that release.
 - It saw the German development half, so we score it on the held-out half only.
 - Both use the same recipe and the ragged layout.
 - @tbl-real-finetune gives the scores, and @fig-compare-realdata shows them.
