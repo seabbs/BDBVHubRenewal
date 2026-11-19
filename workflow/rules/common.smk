@@ -405,24 +405,29 @@ def write_record(input, output, params, wildcards):
         params.sims,
         round_=r,
         seed=s,
-        kind="block",
+        kind=batch_kind(wildcards),
         grid=grid_name(),
         commit=git_commit(),
         draws=SIM["draws"],
-        batch=SIM["batch"],
+        batch=batch_size(wildcards),
         host=HOST,
         finished=dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
     Path(output[0]).write_text(f"{line}\n")
 
 
-def mark_ready(input, output, params, wildcards):
-    """Write a round's seed list and READY, and say so."""
+def write_ready(seeds, seeds_file, ready_file):
+    """Write a round's seed list, then READY with the time."""
     import datetime as dt
 
+    Path(seeds_file).write_text("".join(f"{s}\n" for s in seeds))
+    Path(ready_file).write_text(f"{dt.datetime.now(dt.UTC):%Y-%m-%dT%H:%M:%SZ}\n")
+
+
+def mark_ready(input, output, params, wildcards):
+    """Write a round's seed list and READY, and say so."""
     seeds = seeds_of(wildcards.round)
-    Path(output.seeds).write_text("".join(f"{s}\n" for s in seeds))
-    Path(output.ready).write_text(f"{dt.datetime.now(dt.UTC):%Y-%m-%dT%H:%M:%SZ}\n")
+    write_ready(seeds, output.seeds, output.ready)
     qc = Path(input[0]).read_text().strip()
     say(
         f"round {wildcards.round} ready: {len(seeds)} batches, one grid " f"block; {qc}"
@@ -438,11 +443,11 @@ def push_record(input, output, params, wildcards):
         params.sims,
         round_=r,
         seed=s,
-        kind="block",
+        kind=batch_kind(wildcards),
         grid=grid_name(),
         commit=git_commit(),
         draws=SIM["draws"],
-        batch=SIM["batch"],
+        batch=batch_size(wildcards),
         host=HOST,
         finished=dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
@@ -547,7 +552,8 @@ GRID = config["grid_rounds"].get(grid_name()) or {}
 TOPUP = GRID.get("topup_round")
 TOPUP_DIR = f"{ROUNDS_DIR}/r{TOPUP}"
 TOPUP_TRAINING = list(GRID.get("rounds") or [])
-TOPUP_FIRST = SIM["seed_base"] + 100 * (TOPUP or 0)
+TOPUP_SEEDS = segments.round_seeds(TOPUP or 0, SIM["seed_base"], segments.ROUND_SEEDS)
+BLOCK = SIM["batches"] * SIM["batch"]
 
 
 def topup_plans():
@@ -565,6 +571,11 @@ def batch_cells(wc):
     return ",".join(map(str, topup.cells_of(topup_plans(), int(wc.seed))))
 
 
+def batch_kind(wc):
+    """A batch's manifest kind: a top-up batch, else a block's batch."""
+    return "topup" if TOPUP is not None and int(wc.round) == TOPUP else "block"
+
+
 def batch_size(wc):
     """A batch's simulations: a top-up batch's cells, else `batch`."""
     cells = batch_cells(wc)
@@ -572,10 +583,11 @@ def batch_size(wc):
 
 
 def topup_plan_inputs(attempt):
-    """A try's inputs: the training rounds' QC, and the try before's."""
+    """A try's inputs: every training round ready (simulated and QC'd),
+    and the try before's QC."""
     if TOPUP is None:
         raise ValueError(f"grid {grid_name()} has no topup_round")
-    out = [f"{ROUNDS_DIR}/r{r}/qc/excluded.csv" for r in TOPUP_TRAINING]
+    out = [f"{ROUNDS_DIR}/r{r}/READY" for r in TOPUP_TRAINING]
     if attempt:
         out.append(f"{TOPUP_DIR}/qc/try-{attempt - 1}.done")
     return out
@@ -583,8 +595,8 @@ def topup_plan_inputs(attempt):
 
 def topup_write_plan(attempt, out, log):
     """Write try `attempt`'s batches of the cells still missing."""
-    cells = topup.missing_cells(Path(ROUNDS_DIR), TOPUP_TRAINING, TOPUP)
-    batches = topup.plan(cells, TOPUP_FIRST, attempt, SIM["batch"])
+    cells = topup.missing_cells(Path(ROUNDS_DIR), TOPUP_TRAINING, TOPUP, BLOCK)
+    batches = topup.plan(cells, TOPUP_SEEDS, attempt, SIM["batch"])
     topup.write_plan(batches, Path(out))
     Path(log).write_text(
         f"try {attempt}: {len(cells)} missing cells in {len(batches)} batches\n"
@@ -593,9 +605,7 @@ def topup_write_plan(attempt, out, log):
 
 def topup_records(plan):
     """The batch records of a plan's seeds."""
-    return [
-        f"{TOPUP_DIR}/records/record-{s}.csv" for s, _ in topup.read_plan(plan)
-    ]
+    return [f"{TOPUP_DIR}/records/record-{s}.csv" for s, _ in topup.read_plan(plan)]
 
 
 def topup_try_records(attempt):
@@ -618,22 +628,16 @@ def topup_done(wc):
 
 def topup_finish(input, output, log):
     """Write the top-up round's manifest, seeds and READY; say any shortfall."""
-    import datetime as dt
-
     records = [p for p in input if "/records/" in p]
     manifest.join(records, output.manifest)
     seeds = [int(Path(p).stem.split("-")[1]) for p in records]
-    Path(output.seeds).write_text("".join(f"{s}\n" for s in seeds))
-    left = topup.missing_cells(Path(ROUNDS_DIR), TOPUP_TRAINING, TOPUP)
-    note = (
-        f"top-up round {TOPUP}: {len(seeds)} batches; "
-        + (
-            "every training cell filled"
-            if not left
-            else f"SHORT: {len(left)} cells still missing after "
-            f"{SIM.get('topup_tries', 5)} tries ({left[:10]})"
-        )
+    left = topup.missing_cells(Path(ROUNDS_DIR), TOPUP_TRAINING, TOPUP, BLOCK)
+    note = f"top-up round {TOPUP}: {len(seeds)} batches; " + (
+        "every training cell filled"
+        if not left
+        else f"SHORT: {len(left)} cells still missing after "
+        f"{SIM.get('topup_tries', 5)} tries ({left[:10]})"
     )
     Path(log).write_text(note + "\n")
-    Path(output.ready).write_text(f"{dt.datetime.now(dt.UTC):%Y-%m-%dT%H:%M:%SZ}\n")
+    write_ready(seeds, output.seeds, output.ready)
     say(note)

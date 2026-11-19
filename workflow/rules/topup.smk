@@ -24,9 +24,9 @@ checkpoint topup_plan:
         f"{TOPUP_DIR}/topup/plan-{{attempt}}.txt",
     log:
         f"{TOPUP_DIR}/logs/topup-plan-{{attempt}}.log",
-    localrule: True
     wildcard_constraints:
         attempt=r"\d+",
+    localrule: True
     run:
         topup_write_plan(int(wildcards.attempt), output[0], log[0])
 
@@ -45,9 +45,7 @@ rule topup_qc:
         TOOLS_ENV
     params:
         round_dir=lambda wc, output: Path(output[0]).parents[1],
-        limits=" ".join(
-            f"--{k.replace('_', '-')} {v}" for k, v in SIM.get("qc", {}).items()
-        ),
+        limits=SIM_QC_ARGS,
     shell:
         "uv run python scripts/sim_qc.py {params.round_dir} {params.limits} "
         "> {log} 2>&1"

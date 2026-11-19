@@ -947,9 +947,18 @@ def _done_round(root, r, batches=40):
     for sub in ("sims", "records", "qc"):
         (d / sub).mkdir(parents=True, exist_ok=True)
     stages = [
-        [d / "sims" / f"counts-{s}.csv.gz" for s in range(first, first + batches)]
-        + [d / "sims" / f"settings-{s}.csv" for s in range(first, first + batches)],
-        [d / "records" / f"record-{s}.csv" for s in range(first, first + batches)],
+        [
+            d / "sims" / f"counts-{s}.csv.gz"
+            for s in range(first, first + batches)
+        ]
+        + [
+            d / "sims" / f"settings-{s}.csv"
+            for s in range(first, first + batches)
+        ],
+        [
+            d / "records" / f"record-{s}.csv"
+            for s in range(first, first + batches)
+        ],
         [d / "manifest.csv"],
         [d / "qc" / "excluded.csv", d / "qc" / "summary.txt"],
         [d / "seeds.txt", d / "READY"],
@@ -974,6 +983,16 @@ def test_the_top_up_plans_its_first_try_from_the_rounds_qc(tmp_path):
     jobs = dry(tmp_path, "topup", config=TOPUP)
     assert jobs["topup_plan"] == 1
     assert "simulate_batch" not in jobs
+
+
+def test_the_top_up_waits_for_every_training_round(tmp_path):
+    # Round 5 is not simulated yet: it is simulated and QC'd first.
+    _done_round(tmp_path, 4)
+    config = {"grid_rounds": {"r6": {"rounds": [4, 5], "topup_round": 32}}}
+    jobs = dry(tmp_path, "topup", config=config)
+    assert jobs["simulate_batch"] == 40
+    assert jobs["sim_qc"] == 1
+    assert jobs["topup_plan"] == 1
 
 
 def test_a_top_up_batch_simulates_its_planned_cells(tmp_path):
