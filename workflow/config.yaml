@@ -6,6 +6,22 @@
 # Simulation rounds to make or read, as round numbers.
 rounds: []
 
+# Each grid's rounds, held-out round and training sources: a run takes
+# its grid's unless `finetune` sets them. A round's number sets its seeds
+# and its release `sims-r<N>`, so no two grids share a round
+# (flowlib.grids): r6 has new rounds, round 20 held out and 21 to 30
+# trained on, and never overwrites r5's.
+grid_rounds:
+  r5:
+    rounds: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    held_round: 9
+    sources: [daily, weekly, 3day, daily+weekly, daily+3day]
+  r6:
+    rounds: [21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+    held_round: 20
+    sources: [daily, weekly, 3day, daily+weekly, daily+rolling7, daily+3day,
+      daily+rolling3]
+
 # Whether `finetune` trains only the next segment, not every one in
 # reach. A scheduled tick sets it (flowlib.schedule), so each run ends
 # after one segment and the next run plans afresh.
@@ -35,10 +51,12 @@ finetune:
   # from `seed_file` (one seed a line, in order). The held-out round is
   # one whole grid block, and the ten rounds after it the ten blocks
   # trained on. The trainer monitors the first `holdout` simulations of
-  # the held-out round; the scoring workflow scores it whole.
-  rounds: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+  # the held-out round; the scoring workflow scores it whole. Unset
+  # (null), the rounds, held-out round and sources are the grid's
+  # (grid_rounds).
+  rounds: null
   seed_file: null
-  held_round: 9
+  held_round: null
   holdout: 90
   # Where the batches come from: `local` (this machine's rounds),
   # `remote` (the rounds host's, REMOTE in config/local.env) or `release`
@@ -53,7 +71,7 @@ finetune:
   subset_seed: 1
   learning_rate: 1.0e-5
   bias_lr: 1.0e-3
-  sources: [daily, weekly, 3day, daily+weekly, daily+3day]
+  sources: null
   univariate_share: 0.2
   chunk: 250
   # Steps between the trainer's held-out evaluations: the monitor on the

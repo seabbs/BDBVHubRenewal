@@ -81,10 +81,12 @@
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
 
 epinowcast_sha <- "e084b080"
-# r6: as r5 (NB1 and Poisson only (4:1), NB1 sqrt_phi from 0.02, 16 to
-# 52 weeks for every strata structure, uneven waves, and bunching and
-# slowdowns among the delay's changes over time), with no reporting
-# shocks in half the simulations rather than a third.
+# r6: as r5 (NB1 and Poisson only (4:1), 16 to 52 weeks for every strata
+# structure, uneven waves, and bunching and slowdowns among the delay's
+# changes over time), with no reporting shocks in half the simulations
+# rather than a third, and every continuous setting drawn from a named
+# sampling distribution (`setting_distributions`; NB1 sqrt_phi
+# half-normal with scale 0.25).
 grid_name <- "r6"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])

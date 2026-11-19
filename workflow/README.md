@@ -79,11 +79,11 @@ One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into
 Segment N resumes from the state kept with the prefix before and stops once `n<N>` is saved (`--until N`).
 The state carries the learning-rate schedule, the step, the batch position and torch's random state, so the segments in turn are the run that never stopped.
 
-- `seed_list`: the training seeds in order, the rounds' in seed order (rounds 10 to 19, grid r5) or a fixed `seed_file`.
+- `seed_list`: the training seeds in order, the rounds' in seed order or a fixed `seed_file`. A run takes its grid's rounds (`grid_rounds`): r5 holds out round 9 and trains on 10 to 19, r6 holds out round 20 and trains on 21 to 30. No two grids share a round, as a round sets its seeds and its release `sims-r<N>`. The `release` target refuses another grid's round, and each upload refuses a release whose notes name another grid (unmarked releases are r5's).
 - `fetch_batch`: a batch into `<RUN>/sims/`, hard linked from this machine's rounds, copied from the rounds host's (`remote`, `REMOTE` and `REMOTE_ROOT`) or downloaded from its release (`release`; `sims_from`, or `SIMS_FROM` in `config/local.env`).
 - `available_batches`: on a machine without the rounds, the batches it can have, listed afresh each tick: those the rounds host's manifests list (mirrored with its QC exclusions in `<RUN>/rounds/`), or those released. A segment is planned only once its batches are listed, counting the training seeds up to the first batch not yet listed, and nothing trains before the whole held-out round is listed.
 - `real_validation`: the BDBV pseudo-origin blocks each checkpoint is scored on (`scripts/finetune_real_validation.py`).
-- `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks after QC exclusions, one spare, and the held-out round's batches (round 9). A finished checkpoint is final and is never retrained.
+- `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks after QC exclusions, one spare, and the held-out round's batches. A finished checkpoint is final and is never retrained.
 - `checkpoint_check`: a report of whether checkpoint `check_at` (1,000) beats zero-shot on the held-out simulations and the pseudo-origins. It never stops training.
 - `finetune`: every prefix.
 

@@ -128,8 +128,12 @@ SOURCES = tuple(SOURCE_SHARES)
 """Sources blocks are cut from, drawn at `SOURCE_SHARES`."""
 
 
+GRID_DESIGNS = {**{f"r{i}": "r5" for i in range(1, 6)}, "r6": "r6"}
+"""Each training grid's block design: grids before r6 keep r5's."""
+
+
 def use_design(grid: str) -> str:
-    """Set the block design of a training grid, r5's for any but r6.
+    """Set the block design of a training grid (`GRID_DESIGNS`).
 
     Grids before r6 keep r5's design, so a run of one keeps its blocks.
 
@@ -137,9 +141,19 @@ def use_design(grid: str) -> str:
     -------
     str
         The design used.
+
+    Raises
+    ------
+    ValueError
+        For a grid with no design, so a typo or a new grid is not
+        silently given r5's blocks.
     """
     global DESIGN, SOURCE_SHARES, CADENCES
-    DESIGN = grid if grid in DESIGNS else "r5"
+    if grid not in GRID_DESIGNS:
+        raise ValueError(
+            f"grid {grid!r} has no block design; known: {sorted(GRID_DESIGNS)}"
+        )
+    DESIGN = GRID_DESIGNS[grid]
     SOURCE_SHARES = dict(DESIGNS[DESIGN]["source_shares"])
     CADENCES = {k: dict(v) for k, v in DESIGNS[DESIGN]["cadences"].items()}
     return DESIGN

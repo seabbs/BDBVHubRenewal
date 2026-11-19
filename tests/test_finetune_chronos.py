@@ -1077,6 +1077,14 @@ def test_evaluation_cadence_defaults_to_the_recipe_s():
         fs.check_cadence(0, 0)
 
 
+def test_an_unknown_grid_has_no_design():
+    import finetune_chronos
+
+    with pytest.raises(ValueError, match="r7"):
+        finetune_chronos.use_design("r7")
+    finetune_chronos.use_design("r6")
+
+
 def test_grids_before_r6_keep_r5s_blocks(tmp_path):
     import finetune_chronos
     from finetune_stream import cut
