@@ -168,45 +168,41 @@ def read(
     for key in raw:
         if key in env:
             raw[key] = (env[key], False)
-    return _Settings(raw, env).resolve()
+    return _resolve(raw, env)
 
 
-class _Settings(Mapping[str, str]):
-    """Settings filled in on lookup, so a value may use any other."""
+def _resolve(
+    raw: dict[str, tuple[str, bool]], env: Mapping[str, str]
+) -> dict[str, str]:
+    """Fill each setting's `$NAME`s in, so a value may use any other."""
+    done: dict[str, str] = {}
+    open_: list[str] = []
 
-    def __init__(self, raw: dict[str, tuple[str, bool]], env: dict[str, str]):
-        self.raw, self.env = raw, env
-        self.done: dict[str, str] = {}
-        self.open: list[str] = []
+    class Names(dict):
+        def __missing__(self, key: str) -> str:
+            return value(key)
 
-    def __getitem__(self, key: str) -> str:
-        if key in self.done:
-            return self.done[key]
-        if key not in self.raw:
-            return self.env[key]
-        if self.open and self.open[-1] == key:
+    def value(key: str) -> str:
+        if key in done:
+            return done[key]
+        if key not in raw:
+            return env[key]
+        if open_ and open_[-1] == key:
             # A line that uses itself, as the shell reads it: the
             # environment has no value, or it would have won.
-            return self.env.get(key, "")
-        if key in self.open:
-            loop = " -> ".join([*self.open[self.open.index(key) :], key])
+            return env.get(key, "")
+        if key in open_:
+            loop = " -> ".join([*open_[open_.index(key) :], key])
             raise ValueError(f"local config settings use each other: {loop}")
-        value, fill = self.raw[key]
-        self.open.append(key)
+        text, fill = raw[key]
+        open_.append(key)
         if fill:
-            value = Template(value).safe_substitute(self)
-        self.open.pop()
-        self.done[key] = value
-        return value
+            text = Template(text).safe_substitute(Names())
+        open_.pop()
+        done[key] = text
+        return text
 
-    def __iter__(self):
-        return iter(self.raw)
-
-    def __len__(self) -> int:
-        return len(self.raw)
-
-    def resolve(self) -> dict[str, str]:
-        return {key: self[key] for key in self.raw}
+    return {key: value(key) for key in raw}
 
 
 def expand(value: str, settings: Mapping[str, str] | None = None) -> str:
