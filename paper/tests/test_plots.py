@@ -218,18 +218,13 @@ def gappy():
 def test_missing_forecasts_are_labelled(gappy) -> None:
     fc, obs, scores, _ = gappy
     fig = results_panel(fc, obs, scores)
-    labels = [
-        t.get_text()
-        for ax in fig.axes
-        for t in ax.get_yticklabels()
-        if "Random walk nowcast" in t.get_text()
-    ]
-    assert any("% made" in label for label in labels)
+    labels = [t.get_text() for t in fig.legends[0].get_texts()]
+    assert any(
+        "% made" in label and "Random walk nowcast" in label
+        for label in labels
+    )
     assert not any(
-        "% made" in t.get_text()
-        for ax in fig.axes
-        for t in ax.get_yticklabels()
-        if t.get_text().startswith("Hub baseline")
+        "% made" in label for label in labels if label.startswith("Hub")
     )
     plt.close(fig)
 
@@ -376,19 +371,45 @@ def test_results_panel_shows_only_the_given_models(germany) -> None:
     plt.close(fig)
 
 
-def test_split_bars_put_the_period_on_the_axis(germany) -> None:
+def _bar_axes(fig):
+    titles = {"Relative WIS", "Relative WIS, log scale", "Bias", "Coverage"}
+    return [ax for ax in fig.axes if ax.get_title() in titles]
+
+
+def test_split_bars_put_only_the_period_on_the_axis(germany) -> None:
     fc, obs, scores, split = germany
     fig = results_panel(fc, obs, scores, split=split)
-    rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
     models = model_order(scores["model"].unique())
-    ticks = rel_ax.get_yticklabels()
-    # One row per model and period, each named and in its model's colour.
-    assert len(ticks) == 2 * len(models)
-    for k, m in enumerate(models):
-        for t, period in zip(ticks[2 * k : 2 * k + 2], PERIODS, strict=True):
-            assert t.get_text().startswith(model_label(m))
-            assert t.get_text().endswith(period)
-            assert mpl.colors.same_color(t.get_color(), model_style(m, [])[0])
+    colours = [model_style(m, [])[0] for m in models]
+    for ax in _bar_axes(fig):
+        # The axis names the periods only; models are told by colour.
+        ticks = [t.get_text() for t in ax.get_yticklabels()]
+        assert ticks == list(PERIODS)
+        # Within each period, one bar per model side by side, in order.
+        centres = ax.get_yticks()
+        for c in centres:
+            near = sorted(
+                (b for b in ax.patches if abs(b.get_y() - c) < 0.5),
+                key=lambda b: b.get_y(),
+            )
+            edges = [b.get_edgecolor() for b in near]
+            seen = []
+            for e in edges:
+                if not seen or not mpl.colors.same_color(seen[-1], e):
+                    seen.append(e)
+            assert len(seen) == len(models)
+            for e, colour in zip(seen, colours, strict=True):
+                assert mpl.colors.same_color(e[:3], colour)
+    legend = [t.get_text() for t in fig.legends[0].get_texts()]
+    assert all(model_label(m) in legend for m in models)
+    plt.close(fig)
+
+
+def test_unsplit_bars_have_no_axis_names(gappy) -> None:
+    fc, obs, scores, _ = gappy
+    fig = results_panel(fc, obs, scores)
+    for ax in _bar_axes(fig):
+        assert all(not t.get_text() for t in ax.get_yticklabels())
     plt.close(fig)
 
 
