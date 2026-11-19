@@ -417,19 +417,22 @@ def test_unsplit_bars_have_no_axis_names(gappy) -> None:
     plt.close(fig)
 
 
-def test_bars_are_neither_hatched_nor_faded(germany) -> None:
+def test_model_bars_are_solid_and_only_wis_parts_are_hatched(germany) -> None:
+    # A model is its colour: bias and coverage bars are solid and never
+    # faded; WIS part segments are solid or hatched by part
+    # (labels.WIS_PART_FILLS), the two hatches opposite ways.
     fc, obs, scores, split = germany
     fig = results_panel(fc, obs, scores, split=split)
-    bar_axes = [
-        ax
-        for ax in fig.axes
-        if ax.get_title() in {"Relative WIS", "Relative WIS, log scale"}
-        or ax.get_title() in {"Bias", "Coverage"}
-    ]
-    assert len(bar_axes) == 4
-    for ax in bar_axes:
-        for bar in ax.patches:
+    titles = {ax.get_title(): ax for ax in fig.axes}
+    for name in ("Bias", "Coverage"):
+        for bar in titles[name].patches:
             assert not bar.get_hatch()
+            assert bar.get_alpha() in (None, 1.0)
+    for name in ("Relative WIS", "Relative WIS, log scale"):
+        hatches = {bar.get_hatch() for bar in titles[name].patches}
+        assert len(hatches) == 3
+        assert None in hatches
+        for bar in titles[name].patches:
             assert bar.get_alpha() in (None, 1.0)
     plt.close(fig)
 
@@ -452,3 +455,22 @@ def test_main_results_open_with_nowcasts_over_time(germany) -> None:
     titles = [ax.get_title() for ax in fig.axes]
     assert "Nowcasts over time" in titles
     plt.close(fig)
+
+
+def test_wis_parts_stack_and_fill_as_the_shared_map() -> None:
+    # The paper draws WIS parts as the dashboard does: stacked in
+    # labels.WIS_PART_STACK order, dispersion solid and the other two
+    # hatched opposite ways.
+    from bdbvhubrenewal.evaluation.labels import WIS_PART_FILLS, WIS_PART_STACK
+
+    from paperfigs import plots
+
+    handles = plots._part_handles()
+    assert [h.get_label().lower() for h in handles] == list(WIS_PART_STACK)
+    hatches = {h.get_label().lower(): h.get_hatch() for h in handles}
+    assert hatches["dispersion"] is None
+    assert hatches["overprediction"] != hatches["underprediction"]
+    assert all(
+        (hatches[p] is None) == (WIS_PART_FILLS[p] == "solid")
+        for p in WIS_PART_STACK
+    )

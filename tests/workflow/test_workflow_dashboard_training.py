@@ -227,7 +227,7 @@ def test_a_falling_logged_rate_is_a_decay_even_without_lr_decay(tmp_path):
 
 
 def test_loss_runs_carry_checkpoint_losses_by_layout_and_level(tmp_path):
-    # Sam 11:10: the Loss type selector draws by layout and by level too.
+    # The Loss type selector draws by layout and by level too.
     folder = tmp_path / "run"
     (folder / "train").mkdir(parents=True)
     (folder / "train" / "history.json").write_text(

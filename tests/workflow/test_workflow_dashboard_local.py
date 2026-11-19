@@ -50,7 +50,7 @@ runs:
     )
     ctx = context.build(BASE, local, root=tmp_path)
     assert [r.key for r in ctx.runs] == ["bias"]
-    # The live run shows the shared display name, not its label (Sam 10:45).
+    # The live run shows the shared display name, not its label.
     assert ctx.runs[0].label == "Fine-tuned (delays)"
     assert ctx.runs[0].hue == 217
     assert ctx.source.root == tmp_path / "cache"
@@ -153,7 +153,7 @@ datasets:
 
 
 def test_bdbv_is_held_out_of_every_panel_even_from_the_local_file(tmp_path):
-    # Sam 11:20: BDBV (Ebola) is entirely held out for the paper; no panel,
+    # BDBV (Ebola) is entirely held out for the paper; no panel,
     # selector, table or mailbox line shows it.
     from pathlib import Path
 
@@ -169,7 +169,7 @@ def test_bdbv_is_held_out_of_every_panel_even_from_the_local_file(tmp_path):
     box.write_text(
         "slots BDBV unit scored, CRPS 1.2\n"
         "slots ebola rows\n"
-        "slots [archie bdbv-scoring] German unit 286 s\n"
+        "slots [hostname bdbv-scoring] German unit 286 s\n"
     )
     cfg = {
         **BASE,

@@ -110,8 +110,8 @@ def test_the_page_payload_lists_each_run_with_bias(tmp_path):
     rs = runs.load_runs([], f"r={folder},live;x=x-", [])
     got = bias.payload(rs, live_step=None)
     assert [r["key"] for r in got["runs"]] == ["r"]
-    # No self relation (#417); colours from the shared map.
-    assert [p["key"] for p in got["pairs"]] == ["same", "up", "down"]
+    # Every relation a run may train; colours from the shared map.
+    assert [p["key"] for p in got["pairs"]] == ["self", "same", "up", "down"]
     from bdbvhubrenewal.evaluation import labels
 
     assert got["col"] == labels.RELATION_COLOURS
@@ -183,7 +183,7 @@ def test_each_run_s_bias_is_its_own_logged_values_over_simulations(tmp_path):
         "r6": [[50, -0.5], [150, -0.7]],
     }
     for key, pts in want.items():
-        for rel in ("same",):
+        for rel in ("self", "same"):
             assert [p[0] for p in by[key][rel]] == [x for x, _ in pts]
             assert [p[1] for p in by[key][rel]] == pytest.approx(
                 [m for _, m in pts]

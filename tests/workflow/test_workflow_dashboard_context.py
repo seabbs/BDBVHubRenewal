@@ -158,7 +158,7 @@ def test_runs_and_references_take_the_shared_display_names(tmp_path):
 
 
 def test_runs_take_the_shared_name_and_colour_whatever_their_label(tmp_path):
-    # Sam 10:40, 10:45: the live run is plain "Fine-tuned (delays)", earlier
+    # The live run is plain "Fine-tuned (delays)", earlier
     # runs "Fine-tuned (delays) - <grid> grid" (else their key), never a
     # configured label such as "grid r6 (live)".
     import json
@@ -195,7 +195,7 @@ def test_runs_take_the_shared_name_and_colour_whatever_their_label(tmp_path):
 
 
 def test_references_take_their_line_style_from_the_shared_map():
-    # Sam 11:55: zero-shot dotted, complete data dashed, as in the paper.
+    # Zero-shot dotted, complete data dashed, as in the paper.
     from flowlib.dashboard import paperstyle
 
     assert paperstyle.model_dash("fm_chronos_daily_ragged") == "dotted"

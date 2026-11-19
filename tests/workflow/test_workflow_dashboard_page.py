@@ -15,6 +15,11 @@ from flowlib.dashboard import logs, mirror, page, runs
 LINE = "2026-11-16 16:{m:02d}:00 [train] step {s}: loss {l}, held-out (x) {h}"
 
 
+def _gdata(section):
+    """Return the nowcasts section's page data (its `gdata` JSON)."""
+    return json.loads(section.split("id=gdata>", 1)[1].split("</script>", 1)[0])
+
+
 def _machine(tmp_path):
     run = tmp_path / "run"
     (run / "train" / "n250" / "finetuned-ckpt").mkdir(parents=True)
@@ -290,7 +295,7 @@ def test_the_run_size_comes_from_the_config_without_a_trainer(tmp_path):
 
 
 def test_wis_has_no_section_of_its_own(tmp_path):
-    # Sam 11:05: each model's WIS is in the nowcasts' score card only.
+    # Each model's WIS is in the nowcasts' score card only.
     ctx = _machine(tmp_path)
     table = tmp_path / "scores" / "tables" / "checkpoint-scores.csv"
     with table.open() as f:
@@ -384,7 +389,7 @@ def test_the_next_checkpoint_names_its_simulations_and_planned_step(tmp_path):
 
 
 def test_every_configured_dataset_is_in_the_selector(tmp_path):
-    # Sam 11:05: every configured dataset, each listed whether or not it
+    # Every configured dataset, each listed whether or not it
     # has nowcasts yet.
     ctx = _machine(tmp_path)
     ctx.datasets = [
@@ -398,7 +403,7 @@ def test_every_configured_dataset_is_in_the_selector(tmp_path):
         },
     ]
     sel = page.sections(ctx)["nowcasts"]
-    data = json.loads(sel.split("id=gdata>", 1)[1].split("</script>", 1)[0])
+    data = _gdata(sel)
     got = [
         (d["key"], d["label"], bool(d.get("empty"))) for d in data["datasets"]
     ]
@@ -448,16 +453,16 @@ def test_the_loss_panel_offers_each_loss_type(tmp_path):
 
 
 def test_checkpoint_tables_have_no_real_data_validation_column(tmp_path):
-    # Its loss is on BDBV pseudo-origins, held out (Sam 11:20).
+    # Its loss is on BDBV pseudo-origins, held out.
     out = page.build(_machine(tmp_path))
     assert "real-val" not in out
 
 
 def test_wis_parts_are_told_apart_by_fill_and_stack_in_one_order(tmp_path):
-    # Sam 12:00: dispersion solid, over- and underprediction hatched the
+    # Dispersion solid, over- and underprediction hatched the
     # two ways, stacked underprediction, dispersion, overprediction.
     sel = page.sections(_machine(tmp_path))["nowcasts"]
-    data = json.loads(sel.split("id=gdata>", 1)[1].split("</script>", 1)[0])
+    data = _gdata(sel)
     fills = dict(data["parts"])
     assert fills == {
         "dispersion": "solid",

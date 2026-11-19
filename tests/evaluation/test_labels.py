@@ -4,7 +4,8 @@ import pytest
 from bdbvhubrenewal.evaluation.labels import (
     MODEL_LABELS,
     MODEL_STYLES,
-    WIS_PART_SHADES,
+    WIS_PART_FILLS,
+    WIS_PART_STACK,
     model_label,
     tint,
 )
@@ -54,14 +55,13 @@ def test_real_data_names_only_models_with_a_variant(model) -> None:
     assert model_label(model) == model
 
 
-def test_wis_parts_are_shades_darkest_first() -> None:
-    shades = list(WIS_PART_SHADES.values())
-    assert list(WIS_PART_SHADES) == [
-        "dispersion",
-        "overprediction",
-        "underprediction",
-    ]
-    assert shades == sorted(shades, reverse=True)
+def test_wis_parts_stack_and_differ_by_fill() -> None:
+    assert WIS_PART_STACK == ("underprediction", "dispersion", "overprediction")
+    assert WIS_PART_FILLS == {
+        "underprediction": "hatch-down",
+        "dispersion": "solid",
+        "overprediction": "hatch-up",
+    }
     assert tint("#2a78d6", 1.0) == "#2a78d6"
     assert tint("#2a78d6", 0.0) == "#ffffff"
 
@@ -150,7 +150,7 @@ def _contrast(a: str, b: str) -> float:
 
 
 def test_zero_shot_is_green_and_complete_data_zero_shot_purple() -> None:
-    # Sam 10:30, 10:35: green as the old dashboard's zero-shot, not pink.
+    # Green as the old dashboard's zero-shot, not pink.
     def hue(colour: str) -> float:
         _, a, b = _lab(_linear(colour))
         return float(np.degrees(np.arctan2(b, a)) % 360)
@@ -199,7 +199,7 @@ def _oklab(rgb: np.ndarray) -> np.ndarray:
 
 
 def test_zero_shots_meet_the_palette_validator_against_the_main_models():
-    # Sam 11:55: Zero-shot (green) and Zero-shot complete data (purple) are
+    # Zero-shot (green) and Zero-shot complete data (purple) are
     # clearly distinct from Fine-tuned (delays) and Random walk nowcast:
     # the dataviz validator's thresholds, OKLab Delta E x 100 of at least 8
     # under simulated deuteranopia and protanopia and 15 under normal
@@ -232,8 +232,8 @@ def test_dashboard_colour_maps_are_shared_and_distinct() -> None:
 
     from bdbvhubrenewal.evaluation import labels
 
-    # Relations without self (PR 417); layouts as the trainer's r6 design.
-    assert list(labels.RELATION_COLOURS) == ["same", "up", "down"]
+    # Every relation a run may train; layouts as the trainer's r6 design.
+    assert list(labels.RELATION_COLOURS) == ["self", "same", "up", "down"]
     sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
     import finetune_chronos as ft
 
@@ -244,7 +244,7 @@ def test_dashboard_colour_maps_are_shared_and_distinct() -> None:
         labels.LEVEL_COLOURS,
     ):
         assert len(set(colours.values())) == len(colours)
-        assert set(colours.values()) <= set(labels.CATEGORICAL)
+        assert set(colours.values()) <= {*labels.CATEGORICAL, labels.NEUTRAL}
     # Earlier runs' shades are the fine-tuned model's blues, apart from it.
     ft_blue = labels.MODEL_STYLES["fm_chronos_daily_ragged_ft"][0]
     assert ft_blue not in labels.RUN_SHADES

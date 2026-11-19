@@ -3,8 +3,8 @@
 A reference configured with `paper_model` takes that model's name and
 colour from the shared map (`bdbvhubrenewal.evaluation.labels`, through
 `paperfigs.style`), so a model is named and drawn alike on the dashboard
-and in the paper; the WIS bars shade
-the model's colour by part as the paper's do. `paper/` is put on
+and in the paper; WIS parts stack and fill as the paper's do
+(`labels.WIS_PART_STACK`, `labels.WIS_PART_FILLS`). `paper/` is put on
 the path here, as the paper's workflow does. The nowcast panels keep the
 laptop dashboard's own drawing (ribbons, medians, truth line).
 """
@@ -30,7 +30,7 @@ def model_colour(model: str) -> str:
 
 def model_dash(model: str) -> str:
     """Return a model's line style in the paper figures (`solid`, ...)."""
-    return labels.MODEL_STYLES.get(model, ("", "solid"))[1]
+    return style.model_style(model, [model])[1]
 
 
 def model_label(model: str) -> str:
@@ -41,10 +41,6 @@ def model_label(model: str) -> str:
 WIS_PARTS: tuple[str, ...] = tuple(scores.WIS_PARTS)
 """WIS's components, in the order the paper's bars stack them."""
 
-INK_TEXT: str = style.INK["text"]
-"""The paper's text ink, whose shades key the parts in a legend."""
-
-
 WIS_STACK: tuple[str, ...] = tuple(labels.WIS_PART_STACK)
 """WIS parts in the order they stack, from the bottom or left."""
 
@@ -52,25 +48,3 @@ WIS_STACK: tuple[str, ...] = tuple(labels.WIS_PART_STACK)
 def part_fill(part: str) -> str:
     """Return a WIS part's fill: `solid`, `hatch-up` or `hatch-down`."""
     return str(labels.WIS_PART_FILLS[part])
-
-
-def part_share(part: str) -> float:
-    """Return the share of its model's colour a WIS part's segment takes."""
-    return float(labels.WIS_PART_SHADES[part])
-
-
-def part_colour(colour: str, part: str) -> str:
-    """Return a WIS part's bar colour: its model's colour, shaded.
-
-    The share of the colour each part takes, the rest white, is the
-    paper's (`labels.WIS_PART_SHADES`).
-    """
-    from matplotlib.colors import to_hex, to_rgb
-
-    share = part_share(part)
-    try:
-        rgb = to_rgb(colour)
-    except ValueError:
-        # A CSS colour (a variable) matplotlib cannot read stays as it is.
-        return colour
-    return to_hex(tuple(share * c + (1 - share) for c in rgb))

@@ -160,7 +160,7 @@ def named_runs(run_list: Sequence[spec.Run]) -> list[spec.Run]:
     """Name and colour every run as the fine-tuned model.
 
     The live run is the model's display name in its colour; earlier runs
-    are `<name> - <identifier>` (their grid, else their key, Sam 19 Nov)
+    are `<name> - <identifier>` (their grid, else their key)
     in shades of it (`RUN_SHADES`). A configured label or colour is not
     shown, so the toggles and every panel name runs alike.
     """
