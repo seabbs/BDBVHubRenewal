@@ -4,7 +4,7 @@ import datetime as dt
 
 import pytest
 
-from bdbvhubrenewal.data.dates import (
+from nowcastutils.dates import (
     HUB_TIMEZONE,
     epiweek_end,
     horizon_weeks,

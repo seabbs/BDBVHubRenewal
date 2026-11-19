@@ -85,7 +85,7 @@ def torch_env(
     `threads` CPU threads, its rule's, for torch and BLAS. JAX reads
     none of those settings: `XLA_FLAGS` makes XLA's Eigen pool
     single-threaded, kept beside any flags already set (as
-    `bdbvhubrenewal.devices` keeps them). `CHRONOS_BATCH` in the local
+    `nowcastutils.devices` keeps them). `CHRONOS_BATCH` in the local
     config, if set, is the series in one Chronos-2 forward pass, and
     `SCORE_DATES` the German dates a scoring unit forecasts together, and
     `PRECISION` the precision Chronos-2 forecasts in, `auto` by default.

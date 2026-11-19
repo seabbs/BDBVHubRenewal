@@ -121,9 +121,8 @@ def test_the_task_store_key_covers_the_code_the_tasks_depend_on(
     import dataclasses
     import inspect
 
-    from bdbvhubrenewal.data import dates
     from bdbvhubrenewal.evaluation import checkpoint as ck
-    from bdbvhubrenewal.forecasters import base
+    from nowcastutils import base, dates
 
     data = tmp_path / "triangle.csv"
     data.write_text("a\n")

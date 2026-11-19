@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bdbvhubrenewal.data.hierarchy import depth, is_zone, parent, province_of
-from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_counts
+from nowcastutils.hierarchy import depth, is_zone, parent, province_of
+from nowcastutils.snapshots import snapshot_arrays, weekly_counts
 
 
 def test_parent_drops_the_last_part() -> None:

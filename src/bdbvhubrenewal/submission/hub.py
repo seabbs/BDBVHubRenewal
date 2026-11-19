@@ -28,8 +28,8 @@ from typing import Any, Final
 import pandas as pd
 import yaml
 
-from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.files import write_csv
+from nowcastutils.dates import as_date
+from nowcastutils.files import write_csv
 
 __all__ = [
     "HUB_COLUMNS",

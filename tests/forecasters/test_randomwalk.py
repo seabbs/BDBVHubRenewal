@@ -23,13 +23,13 @@ from bdbvhubrenewal.forecasters import (
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters.base import MissingSnapshots
 from bdbvhubrenewal.forecasters.chain import (
     NoCompleteWeek,
     NoDelayPair,
     NoWalkSpread,
     Settings,
 )
+from nowcastutils.base import MissingSnapshots
 
 
 def _task(
@@ -386,13 +386,13 @@ def test_the_walk_forecasts_on_from_each_samples_nowcast(
 def test_the_start_week_search_reaches_back_over_the_nowcast_window(
     daily: pd.DataFrame, daily_zones: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.data.snapshots import snapshot_arrays
     from bdbvhubrenewal.forecasters.chain import build_origin
     from bdbvhubrenewal.forecasters.randomwalk import (
         _quiet,
         _start_weeks,
         start_window,
     )
+    from nowcastutils.snapshots import snapshot_arrays
 
     # 1.5 D days, the nowcast's own training window, is 9 weeks for D = 42.
     assert start_window(Settings()) == 9

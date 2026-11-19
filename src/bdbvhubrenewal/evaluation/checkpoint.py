@@ -321,8 +321,8 @@ def zone_truth(
     pandas.DataFrame
         As `rolling_truth`.
     """
-    from bdbvhubrenewal.data.snapshots import weekly_counts
     from bdbvhubrenewal.evaluation.nowcast import rolling_truth
+    from nowcastutils.snapshots import weekly_counts
 
     counts = {v: weekly_counts(daily_zones, v) for v in cutoffs}
     weeks = sorted(
@@ -501,11 +501,8 @@ def bdbv_unit(
     from bdbvhubrenewal.evaluation import backtest as bt
     from bdbvhubrenewal.evaluation import store
     from bdbvhubrenewal.forecasters import get_model
-    from bdbvhubrenewal.forecasters.base import (
-        ModelUnavailableError,
-        add_national,
-    )
     from bdbvhubrenewal.forecasters.foundation import FoundationModel, prefetch
+    from nowcastutils.base import ModelUnavailableError, add_national
 
     _pin(label)
     config = bt.load_config()
@@ -572,9 +569,8 @@ def german_tasks_dir(
     import hashlib
     import inspect
 
-    from bdbvhubrenewal.data import dates
     from bdbvhubrenewal.data import germany as dg
-    from bdbvhubrenewal.forecasters import base
+    from nowcastutils import base, dates
 
     h = hashlib.sha256()
     with Path(triangle).open("rb") as f:

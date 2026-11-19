@@ -60,14 +60,6 @@ import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import as_date
-from bdbvhubrenewal.data.snapshots import SnapshotArrays, snapshot_arrays
-from bdbvhubrenewal.forecasters.base import (
-    SAMPLE_COLUMNS,
-    ForecastTask,
-    MissingSnapshots,
-    register_model,
-)
 from bdbvhubrenewal.forecasters.chain import (
     NoCompleteWeek,
     Origin,
@@ -84,6 +76,14 @@ from bdbvhubrenewal.forecasters.copula import (
 from bdbvhubrenewal.forecasters.introductions import silent_trajectories
 from bdbvhubrenewal.forecasters.obs import sample_count
 from bdbvhubrenewal.forecasters.walk import random_walks
+from nowcastutils.base import (
+    SAMPLE_COLUMNS,
+    ForecastTask,
+    MissingSnapshots,
+    register_model,
+)
+from nowcastutils.dates import as_date
+from nowcastutils.snapshots import SnapshotArrays, snapshot_arrays
 
 __all__ = ["RandomWalk", "RandomWalkNowcast"]
 

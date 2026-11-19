@@ -66,16 +66,16 @@ tasks:
   lint:
     desc: Lint, check formatting and type-check
     cmds:
-      - uv run ruff check src tests workflow scripts
-      - uv run ruff format --check src tests workflow scripts
-      - uv run mypy src
+      - uv run ruff check src packages tests workflow scripts
+      - uv run ruff format --check src packages tests workflow scripts
+      - uv run mypy src packages/*/src
 
 
   format:
     desc: Format and fix lint where safe
     cmds:
-      - uv run ruff format src tests workflow scripts
-      - uv run ruff check --fix src tests workflow scripts
+      - uv run ruff format src packages tests workflow scripts
+      - uv run ruff check --fix src packages tests workflow scripts
 
 
   getting-started:

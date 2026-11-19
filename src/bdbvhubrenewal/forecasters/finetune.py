@@ -15,14 +15,14 @@ from typing import Any, Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.forecasters.base import NATIONAL
 from bdbvhubrenewal.forecasters.foundation import (
     HubTriangle,
     hub_triangle,
     layout_block,
     rolling_totals,
 )
+from nowcastutils.base import NATIONAL
+from nowcastutils.dates import as_date, epiweek_end
 
 __all__ = [
     "AHEAD_WEEKS",

@@ -20,17 +20,17 @@ from typing import Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.files import write_csv
-from bdbvhubrenewal.data.hierarchy import is_zone
-from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.forecasters import ForecastTask
-from bdbvhubrenewal.forecasters.base import NATIONAL, SAMPLE_COLUMNS
 from bdbvhubrenewal.forecasters.zones import zones_for_model
 from bdbvhubrenewal.submission.hub import (
     own_national,
     to_hub_table,
     zones_need_not_sum,
 )
+from nowcastutils.base import NATIONAL, SAMPLE_COLUMNS
+from nowcastutils.files import write_csv
+from nowcastutils.hierarchy import is_zone
+from nowcastutils.snapshots import weekly_counts
 
 __all__ = [
     "HUB_QUANTILE_LEVELS",

@@ -15,11 +15,11 @@ from collections.abc import Mapping
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.hierarchy import province_of
-from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters.zones import zone_forecast
 from bdbvhubrenewal.reporting.explorer import compact, trajectories
+from nowcastutils.hierarchy import province_of
+from nowcastutils.snapshots import weekly_counts
 
 __all__ = [
     "place_chart_data",

@@ -49,9 +49,6 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from bdbvhubrenewal.data.dates import as_date, reference_date_for_vintage
-from bdbvhubrenewal.data.hierarchy import is_zone
-from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.data.zones import ZoneData
 from bdbvhubrenewal.evaluation.backtest import (
     BacktestConfig,
@@ -67,6 +64,9 @@ from bdbvhubrenewal.evaluation.scoring import (
 )
 from bdbvhubrenewal.forecasters import get_model, list_models
 from bdbvhubrenewal.forecasters.zones import zone_task
+from nowcastutils.dates import as_date, reference_date_for_vintage
+from nowcastutils.hierarchy import is_zone
+from nowcastutils.snapshots import weekly_counts
 
 __all__ = [
     "ATTRIBUTION",

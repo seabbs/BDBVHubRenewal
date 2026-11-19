@@ -172,7 +172,7 @@ def test_plot_scores_by_truth() -> None:
 def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
     from evaluation.test_backtest import _MaskAware
 
-    from bdbvhubrenewal.forecasters.base import _REGISTRY, register_model
+    from nowcastutils.base import _REGISTRY, register_model
 
     register_model("mask_aware", _MaskAware, "Test model.", replace=True)
     try:
@@ -326,7 +326,7 @@ def test_backtest_of_fitted_models_only_points_to_the_fit_store(
 def test_cli_fit_store_plans_fits_and_loads(
     flat_model: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from bdbvhubrenewal.forecasters import base
+    from nowcastutils import base
 
     factory = base._REGISTRY[flat_model].factory
 
@@ -411,7 +411,7 @@ def test_backtest_runs_only_the_named_scenarios(
 
 
 def test_concat_results_keeps_every_partial(tmp_path: Path) -> None:
-    from bdbvhubrenewal.data.files import write_csv
+    from nowcastutils.files import write_csv
 
     parts = [tmp_path / "falling", tmp_path / "flat"]
     for part in parts:
@@ -610,7 +610,7 @@ def test_score_scores_the_complete_target_on_the_truth_delay(
 def test_concat_results_keeps_one_copy_of_shared_tables(
     tmp_path: Path,
 ) -> None:
-    from bdbvhubrenewal.data.files import write_csv
+    from nowcastutils.files import write_csv
 
     parts = [tmp_path / "a", tmp_path / "b"]
     for part in parts:
@@ -647,7 +647,7 @@ def test_zone_backtest_of_a_skipped_block_writes_empty_files(
 
 
 def test_concat_results_skips_empty_parts(tmp_path: Path) -> None:
-    from bdbvhubrenewal.data.files import write_csv
+    from nowcastutils.files import write_csv
 
     parts = [tmp_path / "a", tmp_path / "b"]
     for part in parts:
@@ -880,8 +880,8 @@ def test_cli_fit_store_archives_what_each_model_submits(
     flat_model: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from bdbvhubrenewal.evaluation import store
-    from bdbvhubrenewal.forecasters import base
     from bdbvhubrenewal.forecasters.zones import with_zones
+    from nowcastutils import base
 
     flat = base._REGISTRY[flat_model].factory
 
@@ -1115,8 +1115,8 @@ def test_a_stored_forecast_takes_the_zones_of_its_fit_directory(
     # zones file. The table takes those zones, as the submission does from
     # the fit directory (#366).
     from bdbvhubrenewal import cli
-    from bdbvhubrenewal.forecasters.forecast import Forecast
     from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
+    from nowcastutils.forecast import Forecast
 
     zones = pd.DataFrame(
         {

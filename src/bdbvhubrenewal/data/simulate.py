@@ -38,11 +38,8 @@ import pandas as pd
 from numpy.typing import NDArray
 
 from bdbvhubrenewal.data import PROVINCE_POPULATIONS
-from bdbvhubrenewal.data.dates import as_date, epiweek_end
 from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.data.releases import release_cutoff
 from bdbvhubrenewal.data.tidy import province_places
-from bdbvhubrenewal.forecasters.base import NATIONAL
 from bdbvhubrenewal.model.censored import censored_pmf
 from bdbvhubrenewal.model.inputs import (
     gravity_kernel as model_gravity_kernel,
@@ -55,6 +52,9 @@ from bdbvhubrenewal.model.model import (
     incubation_period,
 )
 from bdbvhubrenewal.model.renewal import coupled_renewal, mixing_matrix
+from nowcastutils.base import NATIONAL
+from nowcastutils.dates import as_date, epiweek_end
+from nowcastutils.releases import release_cutoff
 
 __all__ = [
     "SimulatedOutbreak",
@@ -487,7 +487,7 @@ class SimulatedOutbreak:
             Vintage dates.
         cutoff_lags : mapping of int to int, optional
             Days from release to data cut-off by release weekday
-            (`bdbvhubrenewal.data.releases.cutoff_lags`). None for no
+            (`nowcastutils.releases.cutoff_lags`). None for no
             cut-off.
 
         Returns
