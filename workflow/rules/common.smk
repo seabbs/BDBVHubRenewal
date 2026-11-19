@@ -5,7 +5,16 @@
 import functools
 import json
 
-from flowlib import grids, hosts, localconfig, manifest, notify, releases, segments
+from flowlib import (
+    grids,
+    hosts,
+    localconfig,
+    manifest,
+    notify,
+    releases,
+    segments,
+    simulator,
+)
 
 LOCAL = localconfig.read()
 HOST = LOCAL["HOST_NAME"]
@@ -53,6 +62,30 @@ MINE = hosts.seeds(LOCAL["SIM_SEEDS"], seeds_of)
 def here(seed):
     """Whether this host simulates batch `seed`."""
     return hosts.simulates(int(seed), MINE)
+
+
+# The epinowcast the simulator is pinned to (finetune_simulate.R's
+# `epinowcast_sha`), installed once a machine under ROOT.
+ENW_SHA = simulator.epinowcast_sha()
+ENW_LIB = f"{LOCAL['ROOT']}/rlib/epinowcast-{ENW_SHA}"
+
+
+def batch_lib(wc):
+    """Already simulated batches take no library input.
+
+    So installing it never reruns them.
+    """
+    sims = Path(f"{ROUNDS_DIR}/r{wc.round}/sims")
+    done = all(
+        (sims / f"{kind}-{wc.seed}.{ext}").exists()
+        for kind, ext in (("counts", "csv.gz"), ("settings", "csv"))
+    )
+    return [] if done else ancient(f"{ENW_LIB}/.installed")
+
+
+def batch_priority(wc):
+    """A batch's priority: 15, earlier seeds a fraction higher."""
+    return segments.batch_priority(int(wc.seed), 15, SIM["seed_base"])
 
 
 def batch_files(wc):
@@ -249,7 +282,7 @@ def checkpoint_labels(wc=None):
 
 ROOM = (
     f"workflow/scripts/wait_for_room.sh {LOCAL['MIN_FREE_GB']} "
-    f"{LOCAL['MIN_DISK_GB']} {CACHE} && "
+    f"{LOCAL['MIN_DISK_GB']} {CACHE} {LOCAL['MAX_LOAD']} && "
 )
 
 
@@ -282,17 +315,17 @@ def unit_env(wc, threads):
     return machine.shell_env(machine.torch_env(LOCAL, threads))
 
 
-def cpu_env(wc, threads):
-    """As `unit_env`, on the CPU."""
-    return machine.shell_env(machine.torch_env(LOCAL, threads, device="cpu"))
-
-
 EVALUATE = "uv run --group chronos python -m bdbvhubrenewal.evaluation.checkpoint"
+
+
+def unit_rows(study):
+    """The unit's rows folder, which a worker brings back with its output."""
+    return lambda wc: f"{CACHE}/{study}/{wc.label}/"
 
 
 def unit_shell(study):
     return (
-        f"mkdir -p {CACHE} && {ROOM}{{params.prefix}} nice -n 19 "
+        f"mkdir -p {{params.copy_back}} && {ROOM}{{params.prefix}} nice -n 19 "
         f"env {{params.env}} {EVALUATE} {study} {CACHE} {{wildcards.label}} "
         "> {log} 2>&1 && touch {output}"
     )
@@ -302,7 +335,6 @@ def table_inputs(wc):
     labels = checkpoint_labels()
     every = [*SC["reference"], *labels]
     return {
-        "bdbv": expand(f"{CACHE}/bdbv/{{label}}.done", label=every),
         "germany": expand(f"{CACHE}/germany/{{label}}.done", label=every),
         "release": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
     }
@@ -312,12 +344,6 @@ def unit_stamps(wc=None):
     """Every unit the tables read, as one list (`rule score` asks for them
     itself, so a new label's units run under tables already built)."""
     return [f for files in table_inputs(wc).values() for f in files]
-
-
-def zone_units(wc=None):
-    """Every label's zone unit."""
-    labels = [*SC["reference"], *checkpoint_labels()]
-    return expand(f"{CACHE}/zones/{{label}}.done", label=labels)
 
 
 # From followups.smk.
@@ -337,7 +363,6 @@ def slots_labels():
 
 def main_scores(wc):
     return [
-        f"{CACHE}/bdbv/{wc.label}.done",
         f"{CACHE}/germany/{wc.label}.done",
     ]
 
@@ -483,16 +508,16 @@ def listed_batches():
 
 
 def check_report(input, output, params, wildcards):
-    """Report whether checkpoint `check_at` beats zero-shot, and say so."""
+    """Report whether checkpoint `check_at` beats zero-shot, and say so.
+
+    On the held-out simulations only: BDBV is held out for the paper.
+    """
     s = json.loads(Path(input[0]).read_text())
-    real = s.get("real_validation_loss", float("inf"))
-    held = s["held_out_loss"] < s["held_out_loss_start"]
-    ok = held and real < params.zero_shot
+    ok = s["held_out_loss"] < s["held_out_loss_start"]
     text = (
         f"n{CHECK} {'beats' if ok else 'does NOT beat'} zero-shot: "
         f"held-out {s['held_out_loss']:.4f} vs "
-        f"{s['held_out_loss_start']:.4f}, real {real:.4f} vs "
-        f"{params.zero_shot}"
+        f"{s['held_out_loss_start']:.4f}"
     )
     Path(output[0]).write_text(f"{text}\n")
     nxt = f", check before n{AFTER[0]}" if AFTER else ""

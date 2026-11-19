@@ -2,8 +2,7 @@
 
 Rows are the checkpoint score table (`<SCORE_CACHE>/tables/
 checkpoint-scores.csv`, or its copy on the evidence branch) under one
-scoring rule: relative WIS for Germany, relative CRPS for the BDBV
-backtest, and the mean WIS with its components for the WIS bars. Each
+scoring rule: relative WIS, and the mean WIS with its components. Each
 row goes to the configured run or reference it belongs to
 (`runs.Classifier`); rows no run or reference claims are left out.
 """

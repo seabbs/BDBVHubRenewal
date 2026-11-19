@@ -717,7 +717,7 @@ def nowcasts_section(
     """Return the nowcast panels of every dataset, behind a selector.
 
     Every configured dataset is listed (Germany's development half and
-    the held-out simulations; BDBV is held out, Sam 11:20). One with no
+    the held-out simulations; BDBV is held out). One with no
     nowcasts yet is listed as empty, with why (its `missing`), so the
     selector always offers it.
     """

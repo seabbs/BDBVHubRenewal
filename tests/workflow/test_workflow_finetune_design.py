@@ -25,7 +25,7 @@ DESIGN = {
     "chunk": 250,
     "subset_seed": 1,
     # Held-out evaluation, which never changes the steps trained.
-    "eval_every": 100,
+    "eval_every": 200,
     "by_source_every": 200,
 }
 
@@ -158,3 +158,15 @@ def test_each_grid_s_sources_are_its_block_design():
 
     for grid, entry in CONFIG["grid_rounds"].items():
         assert entry["sources"] == list(ft.DESIGNS[grid]["source_shares"])
+
+
+def test_development_scores_no_bdbv_blocks(tmp_path):
+    # BDBV is held out for the paper: the shipped config gives the
+    # trainer no real validation blocks and the check no BDBV loss.
+    config = yaml.safe_load(
+        (Path(__file__).parents[2] / "workflow" / "config.yaml").read_text()
+    )["finetune"]
+    assert config["real_validation"] is None
+    assert "zero_shot_real" not in config
+    args = _trainer_args(tmp_path, {"real_validation": None})
+    assert "--real-validation" not in args

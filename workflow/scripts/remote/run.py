@@ -141,7 +141,11 @@ def elsewhere(cfg: dict, worker: compute.Worker, rec: dict) -> int:
     pull = back + extra if rc == 0 else files(job.get("log"))
     for path in pull:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        got = rsync(addr(at(path)), path, missing_ok=True)
+        src, dst = addr(at(path)), path
+        if path.endswith("/"):
+            # A folder's contents, so it is not copied into itself.
+            src, dst = src.rstrip("/") + "/", dst.rstrip("/") + "/"
+        got = rsync(src, dst, missing_ok=True)
         if got and rc == 0:
             say(f"cannot pull {path} from {worker.name}")
             rc = 1

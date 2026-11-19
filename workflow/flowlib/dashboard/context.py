@@ -51,7 +51,7 @@ def build(
             if k not in ("runs", "exclude", "datasets")
         },
     }
-    # Held out of model development (BDBV, Sam 11:20): never shown, even
+    # Held out of model development (BDBV): never shown, even
     # if a machine's local file adds it back.
     held = dict(config["dashboard"].get("held_out") or {})
     hidden = set(held.get("datasets") or ())

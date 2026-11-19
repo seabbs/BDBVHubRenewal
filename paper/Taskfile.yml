@@ -1,7 +1,10 @@
 version: "3"
 
-# Machine settings, such as CORES (config/local.env).
-dotenv: ["../config/local.env"]
+# Machine settings, such as CORES (config/local.env), read as the
+# workflow reads them (flowlib.localconfig).
+vars:
+  CORES:
+    sh: python3 ../workflow/flowlib/localconfig.py CORES
 
 tasks:
   test:

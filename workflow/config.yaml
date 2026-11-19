@@ -77,7 +77,7 @@ finetune:
   # Steps between the trainer's held-out evaluations: the monitor on the
   # first 100 held-out blocks, and by source (100 blocks a source) on a
   # multiple of it. They only score: the steps trained are the same.
-  eval_every: 100
+  eval_every: 200
   by_source_every: 200
   # Where the trainer's held-out evaluation runs: `local` (in the trainer,
   # as before) or `offload` (the trainer saves adapter snapshots for
@@ -85,14 +85,12 @@ finetune:
   eval: local
   series_bias: true
   note: continuous r5
-  # The real validation blocks (scripts/finetune_real_validation.py) and
-  # the delay table they are cut from; null leaves them out.
-  real_validation: output/finetune/real-validation.pkl
-  # `task data` writes it.
-  delays: data/delays.csv.gz
-  # The checkpoint checked against zero-shot Chronos-2's loss on them.
+  # Real validation blocks the trainer scores each checkpoint on, or null.
+  # Null: BDBV is held out for the paper, so no BDBV blocks are scored in
+  # development, and there is no other real-data set yet.
+  real_validation: null
+  # The checkpoint checked against zero-shot on the held-out simulations.
   check_at: 1000
-  zero_shot_real: 4.147
 
 score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
@@ -107,13 +105,8 @@ score:
   # Labels scored beside every checkpoint: randomwalknowcast and zero-shot
   # Chronos-2.
   reference: [reference]
-  # The BDBV data the units read; newer data reruns them.
-  data: data/target.csv
   # A unit's memory cap (MB), at its measured 5 GB peak.
   mem_mb: 6144
-  # A zone unit's memory cap (MB): Chronos-2 on the CPU with the zones in
-  # its block, at its measured 15.4 GB peak (daily ragged, 2026-11-08).
-  zones_mem_mb: 18432
   # The evidence tables the scores merge into, kept rows of other rules.
   evidence: evidence/checkpoint-scores.csv
   checkpoints: evidence/checkpoints.csv
@@ -183,11 +176,10 @@ dashboard:
   exclude: {hashes: []}
   # The checkpoint scores' rule shown.
   rule: own-quantile-wis_crps-1000-common
-  # Held out of model development (Sam 11:20): BDBV (Ebola) is entirely
-  # held out for the paper, so no panel, selector, table or mailbox line
-  # shows its scores or nowcasts, even if a machine's local file adds
-  # them. Datasets and score studies by key; mailbox lines matching
-  # `mail` (BDBV or Ebola, not agent names such as bdbv-scoring).
+  # Held out of model development: BDBV (Ebola) is entirely held out for
+  # the paper, so no panel, selector, table or mailbox line shows its
+  # scores or nowcasts, even if a machine's local file adds them.
+  # Datasets and score studies by key; mailbox lines matching `mail`.
   held_out:
     datasets: [bdbv]
     studies: [ebola]

@@ -10,7 +10,7 @@
   lists them as `name=host:ROOT:CHECKOUT` (`host` as ssh names it, or
   `local`, which may leave out ROOT and CHECKOUT for this machine's).
   `WORKER_GROUPS` maps rule groups to a worker
-  (`train=laptop score=archie`); a group left out, or mapped to `any`,
+  (`train=laptop score=server`); a group left out, or mapped to `any`,
   runs on the first worker with room. The pool is the sum of the
   workers' budgets, each read from the worker itself at launch.
 - any other name: its profile, `workflow/profiles/<name>`, alone (a
@@ -52,11 +52,8 @@ RULE_GROUPS = {
     "simulate_batch": "simulate",
     "epinowcast_lib": "simulate",
     "train_segment": "train",
-    "real_validation": "train",
     "verify_checkpoint": "publish",
     "publish_checkpoint": "publish",
-    "score_bdbv": "score",
-    "score_zones": "score",
     "score_germany": "score",
     "slots_check_shard": "score",
     "agg_sanity": "score",
@@ -65,7 +62,7 @@ RULE_GROUPS = {
 }
 """Each placed rule's group; any other rule is in `any`."""
 
-GPU_RULES = frozenset({"train_segment", "score_bdbv", "score_germany"})
+GPU_RULES = frozenset({"train_segment", "score_germany"})
 """The rules taking the `gpu` resource. Placed on a worker by their
 group, each also takes that worker's own `gpu_<worker>`, so the pooled
 GPUs are not shared across workers."""
@@ -97,6 +94,7 @@ MACHINE_KEYS = frozenset(
         "DASHBOARD_RUNS",
         "MIN_FREE_GB",
         "MIN_DISK_GB",
+        "MAX_LOAD",
         "PAPER_LOGS",
         "COMPUTE",
         "WORKERS",

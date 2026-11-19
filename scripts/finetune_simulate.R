@@ -97,8 +97,10 @@ out_dir <- args[[3]]
 lib <- Sys.getenv("ENW_LIB", "output/finetune/rlib")
 .libPaths(c(lib, .libPaths()))
 
+# Only the pinned epinowcast: another, from R's own libraries, runs but
+# every draw comes out empty.
 suppressPackageStartupMessages({
-  library(epinowcast)
+  library(epinowcast, lib.loc = lib)
   library(data.table)
 })
 options(cmdstanr_warn_inits = FALSE, mc.cores = 1)
