@@ -84,14 +84,14 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - A third each of the training blocks with places have a country equal to, above or later than the sum of its places.
 - We fine-tune base Chronos-2 on synthetic data on a laptop, with its default LoRA recipe.
 - LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (SI).
-- The learning rate falls linearly to zero over the 8,400 simulations.
+- We train on 3,200 simulations drawn from the grid, each drawing its settings independently.
+- The learning rate falls linearly to zero over these simulations.
 - Each simulation gives up to 32 training blocks.
 - A block is daily, 3-day or weekly.
 - A daily block can also have one extra row per place, with its weekly or 3-day totals or its rolling 7-day or 3-day sums.
 - Most blocks are multivariate, and one in five blocks from outbreaks with more than one stratum is univariate.
-- We save checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400 simulations.
-- We report the final checkpoint, at 8,400 simulations, where the learning rate reaches zero, and select no checkpoint on real data.
-- The simulations come in balanced blocks of 840, so the final model has seen ten whole blocks and the checkpoints before 840 only part of the grid.
+- We save checkpoints at 100, 200, 400, 800, 1,600 and 3,200 simulations.
+- We report the final checkpoint, where the learning rate reaches zero, and select no checkpoint on real data.
 - Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
 - We compare the joint block with forecasting each level alone and with summing the lowest level (SI).
 - We compare lags capped at 4 weeks or 28 days with lags run to the truth delay (SI).
@@ -117,9 +117,18 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
-- We simulate outbreaks of up to 52 weeks with epinowcast over a crossed grid of epidemic process, trajectory, places and age groups, reporting delays and their changes, report days, reporting shocks and observation noise (SI).
-- The outbreaks range from one wave to several, with cases spread over many places or concentrated in a few, delays that drift, step, bunch or slow down, and NB1 or Poisson noise.
-- We checked the grid's ranges against published values for several diseases, the case studies among them.
+- **What the grid simulates.**
+  - We simulate outbreaks in four layers, each described with its figure and sampling distributions in the SI.
+  - In layer 1 we simulate infections by a renewal process with susceptible depletion in each place and age group, with R(t) following one of several transmission paths, shifts in R(t), immune escape, imports and mixing between strata.
+  - In layer 2 we observe infections as reference events after a delay such as incubation, ascertain a share of them and add NB1 or Poisson noise.
+  - In layer 3 we report them after a reporting delay that is static or changes over time, through epinowcast's observation model.
+  - In layer 4 we add the reporting system: report days, bunching, backlogs, outages, revisions, so a release can exceed the final count, and the release cadence.
+  - Layer 1 is the epidemic setting, and layers 2 to 4 are what fine-tuning teaches.
+  - The workflow simulates outbreaks from the grid's config and writes every summary and figure, so a change to the grid regenerates them.
+- **What the summaries show.**
+  - We compare the grid's summary statistics with the German development half and with published ranges for other diseases.
+  - Figure (planned): "The simulation grid against real outbreaks. (A) A few example simulations across settings (endemic, early outbreak and established epidemic), each with its final counts and the counts reported by the nowcast date, and strips of R(t) with effective R and of the mean reporting delay. (B) The share of simulated outbreaks with 0, 1 and 2 or more rises. (C) The share of training cut-offs in each epidemic phase (growing, stable, declining and turning). (D) Outbreak sizes. (E) Growth rates. (F) Reporting delays. (G) Coverage: for R and effective R, the generation time mean, the infection-to-reference delay mean, the mean reporting delay and the growth rate, the grid's median and 5 to 95% range beside published ranges for influenza, COVID-19, Ebola, mpox, cholera, measles and dengue and the German development half's values. Panels B to F compare the simulations with the German development half and published ranges for other diseases where values exist."
+  - We give the published ranges with their sources in a table in the SI.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @Ansari2024; @Dooley2023; @Muller2022; @Hollmann2025].
 :::
 
@@ -175,7 +184,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - $D$ is part of the scoring rule, not a choice tuned on the data.
 - The SI compares the samples directly with the fair CRPS.
 - We score our models on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.
-- The fine-tuned models use the final run's last checkpoint, at 8,400 simulations (`{{< meta results.finetuned >}}`), trained on simulations only.
+- The fine-tuned models use the final run's last checkpoint, at 3,200 simulations (`{{< meta results.finetuned >}}`), trained on simulations only.
 - Key references: [@bdbv_modeling_hub_2026; @Viboud2018; @funkAssessingPerformanceRealtime2019].
 :::
 

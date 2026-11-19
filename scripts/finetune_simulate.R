@@ -92,6 +92,8 @@ epinowcast_sha <- "e084b080"
 # rather than a third, and every continuous setting drawn from a named
 # sampling distribution (`setting_distributions`; NB1 sqrt_phi
 # half-normal with scale 0.25).
+# r7 (renewal with depletion and imports, `factors_r7`, `r7_distributions`,
+# `r7_onsets`) runs when this names "r7"; r6 stays the default until then.
 grid_name <- "r6"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
@@ -214,11 +216,12 @@ cell_for <- function(g) {
   if (!exists(".Random.seed", envir = globalenv())) set.seed(NULL)
   saved <- get(".Random.seed", envir = globalenv())
   on.exit(assign(".Random.seed", saved, envir = globalenv()))
-  out <- lapply(seq_along(factors), function(k) {
+  levels <- grid_factors()
+  out <- lapply(seq_along(levels), function(k) {
     set.seed(b * 100L + k)
-    sample(rep_len(factors[[k]], block))[at]
+    sample(rep_len(levels[[k]], block))[at]
   })
-  names(out) <- names(factors)
+  names(out) <- names(levels)
   out
 }
 
@@ -441,7 +444,13 @@ draw_design <- function(g) {
   cell <- cell_for(g)
   # Up to a year, for contexts of 364 days; ENW_WEEKS fixes it (pilots).
   fixed <- Sys.getenv("ENW_WEEKS")
-  weeks <- if (nzchar(fixed)) as.integer(fixed) else sample(16:52, 1)
+  weeks <- if (nzchar(fixed)) {
+    as.integer(fixed)
+  } else if (grid_name == "r7") {
+    r7_weeks()
+  } else {
+    sample(16:52, 1)
+  }
   cap <- max_strata(weeks)
   n_places <- switch(cell$strata,
     single = 1L, ages = 1L,
@@ -610,7 +619,14 @@ setting_distributions <- list(
 # `n` draws of setting `name` from its sampling distribution
 # (`setting_distributions`), truncated by its inverse cdf.
 draw_setting <- function(name, n = 1L) {
-  d <- setting_distributions[[name]]
+  # Grid r7 draws its own distribution where it has one, and none is
+  # truncated (`r7_distributions`).
+  r7 <- grid_name == "r7"
+  d <- if (r7 && !is.null(r7_distributions[[name]])) {
+    r7_distributions[[name]]
+  } else {
+    setting_distributions[[name]]
+  }
   if (is.null(d)) stop("no sampling distribution for ", name)
   p <- switch(d[[1]],
     lognormal = list(
@@ -633,14 +649,15 @@ draw_setting <- function(name, n = 1L) {
       q = function(u) qunif(u, d$lower, d$upper),
       p = function(x) punif(x, d$lower, d$upper)
     ),
+    gamma = list(
+      q = function(u) qgamma(u, (d$mean / d$sd)^2, d$mean / d$sd^2),
+      p = function(x) pgamma(x, (d$mean / d$sd)^2, d$mean / d$sd^2)
+    ),
     stop("unknown distribution ", d[[1]])
   )
-  lo <- if (is.null(d$lower) || d[[1]] %in% c("beta", "uniform")) 0 else {
-    p$p(d$lower)
-  }
-  hi <- if (is.null(d$upper) || d[[1]] %in% c("beta", "uniform")) 1 else {
-    p$p(d$upper)
-  }
+  support <- r7 || d[[1]] %in% c("beta", "uniform")
+  lo <- if (is.null(d$lower) || support) 0 else p$p(d$lower)
+  hi <- if (is.null(d$upper) || support) 1 else p$p(d$upper)
   p$q(runif(n, lo, hi))
 }
 
@@ -1139,37 +1156,49 @@ simulate_outbreak <- function(design, v) {
   # Latent infections: growth r(t) directly, or the Rt(t) giving it, with
   # mixing between places and imports, run here and injected into
   # epinowcast (`latent_expectation`).
-  gt <- if (design$process == "growth") 1 else gt_pmf(v$gt_mean, design$gt_shape)
+  gt <- if (grid_name == "r7") {
+    gt_pmf_r7(v$gt_mean, design$gt_shape)
+  } else if (design$process == "growth") {
+    1
+  } else {
+    gt_pmf(v$gt_mean, design$gt_shape)
+  }
   reference_dow <- design$reference_dow == "yes"
   n_r <- length(unique(pobs$metareference[[1]]$date)) - length(gt)
-  growth <- place_growth(n_r, strata, design, v)
-  log_r <- if (design$process == "growth") {
-    growth
+  if (grid_name == "r7") {
+    r7 <- r7_onsets(n_r, gt, strata, design, v)
+    onsets <- r7$onsets
+    v <- r7$values
   } else {
-    matrix(log_r_from_growth(as.numeric(growth), gt), nrow = n_r)
+    growth <- place_growth(n_r, strata, design, v)
+    log_r <- if (design$process == "growth") {
+      growth
+    } else {
+      matrix(log_r_from_growth(as.numeric(growth), gt), nrow = n_r)
+    }
+    place_weight <- exp(rnorm(design$n_places, 0, v$stratum_sd))
+    place_weight[v$quiet_places] <- 0
+    age_weight <- exp(rnorm(design$n_ages, 0, v$stratum_sd / 2))
+    weight <- place_weight[match(strata$place, place_ids)] *
+      age_weight[match(strata$age, age_ids)]
+    share <- weight / sum(weight)
+    mixing <- place_mixing(n_r, strata, design, v)
+    # Imports are in units of the seed, so the expected outbreak is linear
+    # in the seed, which is scaled to give the target size.
+    imports <- stratum_imports(n_r, share, strata, design, v)
+    unit <- expected_onsets(
+      stratum_seed(share, strata, design, v), gt, log_r,
+      mixing = mixing, imports = imports
+    )
+    v$seed_size <- v$target_size / sum(unit)
+    # Quiet strata (share 0) get no seed; a floor here would seed them after
+    # the scaling and break the target size (`latent_expectation` floors
+    # the infections it logs).
+    size <- stratum_seed(v$seed_size * share, strata, design, v)
+    onsets <- expected_onsets(
+      size, gt, log_r, mixing = mixing, imports = v$seed_size * imports
+    )
   }
-  place_weight <- exp(rnorm(design$n_places, 0, v$stratum_sd))
-  place_weight[v$quiet_places] <- 0
-  age_weight <- exp(rnorm(design$n_ages, 0, v$stratum_sd / 2))
-  weight <- place_weight[match(strata$place, place_ids)] *
-    age_weight[match(strata$age, age_ids)]
-  share <- weight / sum(weight)
-  mixing <- place_mixing(n_r, strata, design, v)
-  # Imports are in units of the seed, so the expected outbreak is linear
-  # in the seed, which is scaled to give the target size.
-  imports <- stratum_imports(n_r, share, strata, design, v)
-  unit <- expected_onsets(
-    stratum_seed(share, strata, design, v), gt, log_r,
-    mixing = mixing, imports = imports
-  )
-  v$seed_size <- v$target_size / sum(unit)
-  # Quiet strata (share 0) get no seed; a floor here would seed them after
-  # the scaling and break the target size (`latent_expectation` floors
-  # the infections it logs).
-  size <- stratum_seed(v$seed_size * share, strata, design, v)
-  onsets <- expected_onsets(
-    size, gt, log_r, mixing = mixing, imports = v$seed_size * imports
-  )
   # Days before the outbreak first expects one onset a day.
   total <- rowSums(onsets)
   v$low_start_days <- if (any(total >= 1)) {
@@ -1191,6 +1220,14 @@ simulate_outbreak <- function(design, v) {
   set(meta, j = "step", value = as.numeric(meta$week >= v$step_at * n_weeks))
   set(meta, j = "periodic",
       value = sin(2 * pi * meta$week / v$periodic_weeks))
+  if (grid_name == "r7") {
+    # r7's delay walk, smooth between weeks, and its smooth cycle.
+    day <- as.integer(meta$date - min(meta$date))
+    set(meta, j = "walk_daily", value = daily_walk(day, v$delay_walk))
+    set(meta, j = "smooth", value = sin(
+      2 * pi * day / v$smooth_period + v$smooth_phase
+    ))
+  }
   # A backlog's covariate is the log of its multiplier, so shocks of
   # different sizes share one effect (1, or -1 on the logit hazard).
   ref_dates <- data.table(reference_date = meta$date)
@@ -1214,7 +1251,14 @@ simulate_outbreak <- function(design, v) {
   # part, which already walks over delays, changes by week as iid effects.
   change_terms <- switch(design$delay_change,
     static = NULL, drift = "trend", step = "step", periodic = "periodic",
-    walk = if (parametric) "rw(week)" else "(1 | week)",
+    walk = if (grid_name == "r7") {
+      "walk_daily"
+    } else if (parametric) {
+      "rw(week)"
+    } else {
+      "(1 | week)"
+    },
+    smooth = "smooth",
     bunching = NULL, slowdown = "slowdown"
   )
   change_beta <- switch(design$delay_change,
@@ -1260,6 +1304,8 @@ simulate_outbreak <- function(design, v) {
     sign <- if (prefix == "refp_mean") 1 else -1
     beta[cols == "backlog"] <- sign
     beta[cols == "slowdown"] <- log(v$slow_mult) * sign
+    beta[cols == "walk_daily"] <- sign
+    beta[cols == "smooth"] <- v$smooth_amp * sign
     parameters[[paste0(prefix, "_beta")]] <<- array(beta)
   }
   if (parametric) {
@@ -1280,7 +1326,7 @@ simulate_outbreak <- function(design, v) {
       parameters$refp_sd_int <- delay$sd_int
       parameters$refp_sd_beta <- array(numeric(length(fcols)))
     }
-    if (design$delay_change == "walk") {
+    if (design$delay_change == "walk" && grid_name != "r7") {
       parameters$refp_arima_z <- matrix(
         rnorm(rd$refp_arima_T * rd$refp_arima_G),
         rd$refp_arima_T, rd$refp_arima_G
@@ -1340,7 +1386,8 @@ simulate_outbreak <- function(design, v) {
       ]
     }
   }
-  if (design$delay_change == "bunching") {
+  if (design$delay_change == "bunching" ||
+      identical(design$bunching, "yes")) {
     if (is.null(structural)) {
       structural <- enw_structural_reporting_metadata(pobs)
       structural[, report := 1L]
@@ -1406,9 +1453,12 @@ simulate_outbreak <- function(design, v) {
   } else {
     place
   }]
+  if (grid_name == "r7" && design$revisions == "yes") {
+    pp <- revise_counts(pp, v)
+  }
   list(
     values = v,
-    counts = pp[mean > 0, .(
+    counts = pp[mean != 0, .(
       outbreak = NA_character_, draw, timestep = "day", location,
       reference_date, report_date, count = as.integer(mean)
     )]
@@ -1451,13 +1501,18 @@ simulate_cell <- function(design, id = NA_character_) {
   }
   failures <- list()
   for (try in 1:5) {
-    v <- draw_values(design)
+    v <- draw_cell_values(design)
     res <- tryCatch(simulate_outbreak(design, v), error = function(e) e)
     reason <- if (inherits(res, "error")) {
       conditionMessage(res)
     } else {
       size <- sum(res$counts$count) / draws
-      if (size < min_size) {
+      # Grid r7 redraws only broken draws: an outbreak with no case.
+      if (grid_name == "r7" && size <= 0) {
+        "no case"
+      } else if (grid_name == "r7") {
+        NA_character_
+      } else if (size < min_size) {
         "too small"
       } else if (size > max_size(design)) {
         "too large"
@@ -1494,7 +1549,7 @@ simulate_independent <- function(design, id = NA_character_) {
   }
   # Quiet places (a concentrated outbreak's many) have no cases, so only
   # the strata of places with cases are simulated.
-  quiet <- draw_values(design)$quiet_places
+  quiet <- draw_cell_values(design)$quiet_places
   place_of <- match(sub("-.*", "", labels), place_ids)
   active <- which(!(place_of %in% quiet))
   failures <- list()
@@ -1550,6 +1605,593 @@ simulate_independent <- function(design, id = NA_character_) {
     failures = failures,
     strata_values = strata_values
   )
+}
+
+# Grid r7 (`grid_name <- "r7"`; r6 stays the default until it is
+# switched), in four layers:
+# 1. infections: a renewal with depletion of each stratum's population,
+#    imports and new variants that return immune people to susceptible.
+#    R(t) comes from r6's trajectory shapes on the log R scale, or a
+#    weekly walk around R = 1 (endemic settings, and early outbreaks
+#    brought under control), with shifts that react to the epidemic. The
+#    window opens at seeding (early), on an endemic setting or on an
+#    established epidemic;
+# 2. observation: ascertainment per stratum and r6's count noise (NB1
+#    four times as often as Poisson, on the NB2 scale of epinowcast #937);
+# 3. reporting delays: r6's families and changes, with the weekly walk
+#    smoothed between weeks and a smooth cyclic change added;
+# 4. the reporting system: r6's report days, day-of-week effects and
+#    shocks, bunching as its own factor, and revisions (cases reported in
+#    error and later removed, cases filed under a nearby day and later
+#    moved), applied to the counts after epinowcast.
+# Every continuous setting comes from a named sampling distribution with
+# no truncation (`r7_distributions` where r7 has its own). The floors are
+# seed infections (1), series length (4 weeks) and the periods of
+# oscillations and smooth delay changes (30 days).
+
+# r7's factors: r6's without `process` (always a renewal), with the
+# window (early 5, endemic 7 and established 8 in 20), static delays in 4
+# of 10, weekday-only reporting in 3 of 10, bunching in 3 of 20 and
+# revisions in 3 of 10.
+factors_r7 <- c(
+  factors[setdiff(names(factors), c("process", "delay_change", "reporting"))],
+  list(
+    window = c(rep("early", 5), rep("endemic", 7), rep("established", 8)),
+    delay_change = c(
+      rep("static", 4), "drift", "smooth", "step", "periodic", "walk",
+      "slowdown"
+    ),
+    reporting = c(rep("daily", 7), rep("weekdays", 3)),
+    bunching = c(rep("no", 17), rep("yes", 3)),
+    revisions = c(rep("no", 7), rep("yes", 3)),
+    # How layer 2's (observation) and layer 4's (reporting system)
+    # per-stratum values vary across places and ages (`stratum_values`).
+    # Layer 3's reporting delays keep r6's `delay_places`.
+    observation_strata = c("shared", "pooled", "independent"),
+    reporting_strata = c("shared", "pooled", "independent")
+  )
+)
+
+# The factors of the grid the simulator runs.
+grid_factors <- function() {
+  if (grid_name == "r7") factors_r7 else factors
+}
+
+# The rising shape an early outbreak not brought under control follows:
+# the cell's trajectory if it rises, else its rising counterpart, so the
+# trajectory factor stays balanced.
+r7_rising <- c(
+  growth = "growth", decline = "growth", flat = "rise_fall_gradual",
+  rise_fall_sharp = "rise_fall_sharp",
+  rise_fall_gradual = "rise_fall_gradual", fall_rise = "rise_fall_sharp",
+  oscillating = "multi_wave", multi_wave = "multi_wave"
+)
+
+# The pull of the weekly walk on log R back towards R = 1.
+r7_walk_ar <- 0.7
+
+# r7's sampling distributions, used in place of r6's of the same name.
+r7_distributions <- list(
+  # Layer 1: infections.
+  weeks = list("lognormal", median = 30, sdlog = 0.25,
+    why = "series of about 4 to 9 months, few of them burnt-out tails"),
+  amplitude = list("lognormal", median = 0.4, sdlog = 0.5,
+    why = "shapes' log R: R about x1.2 to x3 from 1"),
+  flat = list("normal", mean = 0, sd = 0.05,
+    why = "a flat outbreak's R within about 10% of 1"),
+  peak = list("beta", a = 3, b = 3, lower = 0, upper = 1,
+    why = "a single wave turns away from the ends of the series"),
+  flip_days = list("lognormal", median = 14, sdlog = 0.6,
+    why = "a sharp turn over a few days to six weeks"),
+  period = list("gamma", mean = 120, sd = 60,
+    why = "cycles of about 1 to 8 months"),
+  wave_scale = list("lognormal", median = 0.45, sdlog = 0.5,
+    why = "waves of a fifth of the amplitude to above it"),
+  walk_r_step = list("normal", mean = 0, sd = 0.1,
+    why = "endemic log R moves by about 0.1 a week around R = 1"),
+  control_days = list("lognormal", median = 42, sdlog = 0.5,
+    why = "control brings an early outbreak's R to 1 over 2 to 16 weeks"),
+  r_drift = list("lognormal", median = 0.8, sdlog = 0.15,
+    why = "a slow fall of R by a tenth to a third over the series"),
+  shift_at = list("beta", a = 2, b = 2, lower = 0, upper = 1,
+    why = "shifts in R away from the ends of the series"),
+  shift_size = list("lognormal", median = 0.35, sdlog = 0.4,
+    why = "shifts of R by about x1.2 to x2"),
+  shift_days = list("lognormal", median = 14, sdlog = 0.6,
+    why = "a shift or a variant's rise over a few days to six weeks"),
+  variant_at = list("beta", a = 1.5, b = 1.5, lower = 0, upper = 1,
+    why = "a new variant at any time, less often at the ends"),
+  escape = list("beta", a = 2.4, b = 5.6, lower = 0, upper = 1,
+    why = "a variant returns about a tenth to a half of the immune"),
+  variant_r = list("lognormal", median = 1.3, sdlog = 0.15,
+    why = "a variant raises R by about x1.1 to x1.7"),
+  population = list("lognormal", median = 2e5, sdlog = 1,
+    why = "places of about 30,000 to 1.5 million people"),
+  endemic_population = list("lognormal", median = 1e6, sdlog = 1,
+    why = "endemic settings of about 150,000 to 7 million people"),
+  seed = list("lognormal", median = 5, sdlog = 0.7,
+    why = "an early outbreak seeded by a few infections"),
+  level = list("lognormal", median = 30, sdlog = 1.5,
+    why = "an established epidemic at about 2 to 500 infections a day"),
+  endemic_level = list("lognormal", median = 300, sdlog = 1,
+    why = "an endemic setting at about 40 to 2,000 infections a day"),
+  trickle = list("lognormal", median = 0.05, sdlog = 1,
+    why = "an import every few weeks to a few a week"),
+  gt_mean = list("lognormal", median = 7, sdlog = 0.55,
+    why = "generation times of about 2 to 20 days"),
+  late_at = list("beta", a = 2, b = 4, lower = 0, upper = 1,
+    why = "a place imported mostly in the outbreak's first half"),
+  mixing_eps = list("beta", a = 0.7, b = 8, lower = 0, upper = 1,
+    why = "mostly a few percent of pressure from other places"),
+  mixing_xy = list("beta", a = 2, b = 2, lower = 0, upper = 1,
+    why = "places' positions on a unit square, fewer at its edges"),
+  mixing_switch_at = list("beta", a = 2, b = 2, lower = 0, upper = 1,
+    why = "mixing switches away from the ends"),
+  import_at = list("beta", a = 2, b = 2, lower = 0, upper = 1,
+    why = "import pulses away from the ends"),
+  # Layer 2: observation.
+  incubation_mean = list("lognormal", median = 5, sdlog = 0.5,
+    why = "infection to onset, test or admission in about 2 to 13 days"),
+  pool_z = list("normal", mean = 0, sd = 1,
+    why = "a stratum's deviation from the shared value, scaled by tau"),
+  pool_tau = list("halfnormal", scale = 0.3,
+    why = "pooled strata within about x0.5 to x2 of the shared value"),
+  ascertainment = list("beta", a = 1.8, b = 4.2, lower = 0, upper = 1,
+    why = "a stratum reports about 5% to 70% of its infections"),
+  # Layer 3: reporting delays.
+  delay_mean = list("lognormal", median = 5, sdlog = 0.6,
+    why = "mean delays of about 1.5 to 16 days"),
+  delay_median = list("lognormal", median = 3.2, sdlog = 0.5,
+    why = "lognormal delays with medians of about 1 to 9 days"),
+  delay_sdlog = list("lognormal", median = 0.9, sdlog = 0.3,
+    why = "right-skewed delays, no longer-tailed than real ones"),
+  delay_shape = list("beta", a = 4, b = 2, lower = 0, upper = 2,
+    why = "gamma delays need a shape below 2 in the simulate branch"),
+  delay_place_sd = list("lognormal", median = 0.28, sdlog = 0.45,
+    why = "places' delays differ by up to about x2"),
+  walk_step = list("normal", mean = 0, sd = 1,
+    why = "the delay walk's weekly steps, scaled by walk_sd"),
+  smooth_amp = list("lognormal", median = 0.3, sdlog = 0.5,
+    why = "a smooth cycle of the mean delay by about x1.1 to x2"),
+  smooth_period = list("gamma", mean = 120, sd = 60,
+    why = "delay cycles of about 1 to 8 months"),
+  step_at = list("beta", a = 3, b = 3, lower = 0, upper = 1,
+    why = "a step in the delay away from the ends"),
+  slow_at = list("beta", a = 4, b = 2, lower = 0, upper = 1,
+    why = "a slowdown, more often later in the outbreak"),
+  # Layer 4: the reporting system.
+  dow_sd = list("lognormal", median = 0.25, sdlog = 0.4,
+    why = "day-of-week effects on reports of about x1.2 to x3"),
+  reference_dow_sd = list("lognormal", median = 0.3, sdlog = 0.35,
+    why = "day-of-week effects on onsets of about x1.3 to x3"),
+  bunch_at = list("beta", a = 2, b = 2, lower = 0, upper = 1,
+    why = "bunches away from the ends"),
+  shock_at = list("beta", a = 3, b = 3, lower = 0, upper = 1,
+    why = "shocks away from the ends"),
+  revise_over = list("beta", a = 0.6, b = 19.4, lower = 0, upper = 1,
+    why = "a few percent of counts reported in error"),
+  revise_move = list("beta", a = 0.6, b = 19.4, lower = 0, upper = 1,
+    why = "a few percent of counts filed under a nearby day"),
+  revise_keep = list("lognormal", median = 14, sdlog = 0.5,
+    why = "errors corrected after about one to five weeks")
+)
+
+# A series length in weeks: log-normal, at least 4 weeks.
+r7_weeks <- function() {
+  max(4L, as.integer(round(draw_setting("weeks"))))
+}
+
+# `n` weeks of an AR(1) walk on log R around 0 (R = 1).
+r7_walk <- function(n) {
+  e <- draw_setting("walk_r_step", n)
+  x <- e
+  for (w in seq_len(n)[-1]) x[w] <- r7_walk_ar * x[w - 1] + e[w]
+  x
+}
+
+# A weekly walk read on `days` (0 the first), linear between weeks.
+daily_walk <- function(days, walk) {
+  x <- days / 7
+  w <- floor(x)
+  f <- x - w
+  n <- length(walk)
+  walk[pmin(w + 1, n)] * (1 - f) + walk[pmin(w + 2, n)] * f
+}
+
+# Per-stratum values of setting `name` for `n` strata, as `structure`
+# says: shared (one value), pooled (the shared value times
+# LogNormal(0, tau), tau half-normal; on the logit scale for a
+# `probability`) or independent (each its own draw).
+stratum_values <- function(structure, n, name, probability = FALSE) {
+  switch(structure,
+    shared = rep(draw_setting(name), n),
+    pooled = {
+      shared <- draw_setting(name)
+      dev <- draw_setting("pool_tau") * draw_setting("pool_z", n)
+      if (probability) plogis(qlogis(shared) + dev) else shared * exp(dev)
+    },
+    independent = draw_setting(name, n),
+    stop("unknown strata structure ", structure)
+  )
+}
+
+# The infection-to-reference-event delay (incubation, or infection to
+# test or admission) on 0, 1, ... days: a discretised gamma with CV 0.5
+# and mean `mean`, to its 99.9% quantile.
+incubation_pmf <- function(mean) {
+  shape <- 4
+  q <- qgamma(0.999, shape, shape / mean)
+  pmf <- diff(pgamma(0:max(1L, as.integer(ceiling(q))), shape, shape / mean))
+  pmf / sum(pmf)
+}
+
+# Each column of `x` (days by strata) convolved with its own pmf in
+# `pmfs` on delays 0, 1, ...
+convolve_rows <- function(x, pmfs) {
+  out <- matrix(0, nrow(x), ncol(x))
+  for (j in seq_len(ncol(x))) {
+    p <- pmfs[[j]]
+    for (d in seq_along(p) - 1L) {
+      if (d >= nrow(x)) break
+      rows <- (d + 1L):nrow(x)
+      out[rows, j] <- out[rows, j] + p[d + 1L] * x[rows - d, j]
+    }
+  }
+  out
+}
+
+# The continuous settings of a simulation in the grid it runs.
+draw_cell_values <- function(design) {
+  if (grid_name == "r7") draw_values_r7(design) else draw_values(design)
+}
+
+# r7's settings: r6's draws (with r7's distributions where it has them),
+# then r7's own by layer. `draw_values` reads the generation time's level
+# from `process`, which r7 does not have, so it is given a placeholder
+# and the mean is drawn here. Counts at least 1 by definition are 1 (or
+# 7 days) plus a Poisson; choices are Bernoulli.
+draw_values_r7 <- function(design) {
+  v <- draw_values(modifyList(design, list(process = "renewal_1")))
+  early <- design$window == "early"
+  endemic <- design$window == "endemic"
+  # Layer 1: infections.
+  v$path <- if (early) {
+    if (rbinom(1, 1, 0.5) == 1) "controlled" else r7_rising[[design$trajectory]]
+  } else if (endemic) {
+    "endemic"
+  } else {
+    design$trajectory
+  }
+  v$gt_mean <- draw_setting("gt_mean")
+  v$period <- max(30, v$period)
+  v$waves <- 2L + rpois(1, 0.5)
+  v$wave_scale <- draw_setting("wave_scale", v$waves + 1L)
+  v$flip_days <- draw_setting("flip_days")
+  # Weeks of the series, the longest delay (12 weeks) and the horizon.
+  v$walk_r <- r7_walk(v$weeks + 18L)
+  v$control_days <- draw_setting("control_days")
+  v$r_drift <- if (!endemic && rbinom(1, 1, 0.3) == 1) {
+    draw_setting("r_drift")
+  } else {
+    1
+  }
+  v$population <- draw_setting(
+    if (endemic) "endemic_population" else "population", design$n_places
+  )
+  v$seed <- max(1, draw_setting("seed"))
+  v$level <- draw_setting(if (endemic) "endemic_level" else "level")
+  v$trickle <- draw_setting("trickle")
+  n_shifts <- rpois(1, 2)
+  v$shift_at <- draw_setting("shift_at", n_shifts)
+  v$shift_size <- draw_setting("shift_size", n_shifts)
+  v$shift_days <- draw_setting("shift_days", n_shifts)
+  v$shift_reactive <- rbinom(n_shifts, 1, 0.8) == 1
+  v$shift_up <- rbinom(n_shifts, 1, 0.5) == 1
+  n_variants <- if (early) 0L else rpois(1, 4 * v$weeks / 52)
+  v$variant_at <- draw_setting("variant_at", n_variants)
+  v$variant_escape <- draw_setting("escape", n_variants)
+  v$variant_r <- draw_setting("variant_r", n_variants)
+  v$variant_days <- draw_setting("shift_days", n_variants)
+  v$late_days <- 7L + rpois(1, 3)
+  v$place_lags <- c(0L, rpois(design$n_places - 1L, 10))
+  v$mixing_switch_days <- 7L + rpois(1, 7)
+  v$import_at <- sort(draw_setting("import_at", 1L + rpois(1, 1)))
+  # Layer 2: observation.
+  n_s <- design$n_places * design$n_ages
+  v$ascertainment <- stratum_values(
+    design$observation_strata, n_s, "ascertainment", probability = TRUE
+  )
+  v$incubation_mean <- stratum_values(
+    design$observation_strata, n_s, "incubation_mean"
+  )
+  # Layer 3: reporting delays.
+  v$delay_cv <- 1 / sqrt(draw_setting("delay_shape"))
+  family <- if (design$delay_form == "non_parametric") {
+    "none"
+  } else {
+    design$delay_family
+  }
+  v$max_delay <- max_delay_for(delay_parameters(family, v)$q99)
+  v$delay_walk <- v$walk_sd * cumsum(c(0, draw_setting("walk_step", v$weeks + 17L)))
+  v$smooth_amp <- draw_setting("smooth_amp")
+  v$smooth_period <- max(30, draw_setting("smooth_period"))
+  v$smooth_phase <- draw_setting("phase")
+  v$slow_weeks <- 1L + rpois(1, 3)
+  # Layer 4: the reporting system.
+  v$bunch_len <- 1L + rpois(length(v$bunch_at), 0.5)
+  places <- unique(v$shock_places)
+  v$shock_places <- rep(places, 1L + rpois(length(places), 0.5))
+  n_shocks <- length(v$shock_places)
+  v$shock_at <- draw_setting("shock_at", n_shocks)
+  v$shock_weeks <- 1L + rpois(n_shocks, 1)
+  v$shock_mult <- draw_setting("shock_mult", n_shocks)
+  v$revise_over <- stratum_values(
+    design$reporting_strata, n_s, "revise_over", probability = TRUE
+  )
+  v$revise_move <- stratum_values(
+    design$reporting_strata, n_s, "revise_move", probability = TRUE
+  )
+  v$revise_keep <- stratum_values(design$reporting_strata, n_s, "revise_keep")
+  v
+}
+
+# A generation time on 1, ..., n days, n its 99.9% quantile.
+gt_pmf_r7 <- function(mean, shape) {
+  family <- sub("_.*", "", shape)
+  cv <- as.numeric(sub(".*_", "", shape))
+  if (family == "gamma") {
+    k <- 1 / cv^2
+    cdf <- function(d) pgamma(d, k, k / mean)
+    q <- qgamma(0.999, k, k / mean)
+  } else {
+    sdlog <- sqrt(log(1 + cv^2))
+    meanlog <- log(mean) - sdlog^2 / 2
+    cdf <- function(d) plnorm(d, meanlog, sdlog)
+    q <- qlnorm(0.999, meanlog, sdlog)
+  }
+  pmf <- diff(cdf(0:max(2L, as.integer(ceiling(q)))))
+  pmf / sum(pmf)
+}
+
+# Log R of a path on `n` days: r6's shapes on log R, the weekly walk
+# around R = 1 (endemic), or a start at the amplitude decaying onto that
+# walk (an early outbreak brought under control).
+r7_shape <- function(n, kind, v) {
+  t <- seq_len(n) - 1
+  u <- t / n
+  a <- v$amplitude
+  switch(kind,
+    endemic = daily_walk(t, v$walk_r),
+    controlled = a * exp(-t / v$control_days) + daily_walk(t, v$walk_r),
+    growth = rep(a, n),
+    decline = rep(-a, n),
+    flat = rep(v$flat, n),
+    rise_fall_gradual = a * (v$peak - u) / max(v$peak, 1 - v$peak),
+    fall_rise = -a * (v$peak - u) / max(v$peak, 1 - v$peak),
+    rise_fall_sharp = a *
+      (1 - 2 * plogis((t - v$peak * n) / (v$flip_days / 4.4))),
+    oscillating = a * sin(2 * pi * t / v$period + v$phase),
+    multi_wave = {
+      k <- pmin(
+        length(v$wave_scale), floor(v$waves * u + v$phase / (2 * pi)) + 1
+      )
+      2 * a * v$wave_scale[k] * sin(2 * pi * v$waves * u + v$phase)
+    }
+  )
+}
+
+# Each stratum's log R on `n` days, with places related as
+# `design$place_rt` says (as `place_growth`), and a slow drift. Noise on
+# daily growth becomes noise on log R through the generation time's mean.
+r7_place_log_r <- function(n, strata, design, v) {
+  places <- sort(unique(strata$place))
+  scale <- v$gt_mean
+  shared <- r7_shape(n, v$path, v)
+  own_path <- function() {
+    if (v$path %in% c("endemic", "controlled")) {
+      v$path
+    } else {
+      sample(factors$trajectory, 1)
+    }
+  }
+  paths <- switch(design$place_rt,
+    shared = rep(list(shared), length(places)),
+    independent = c(list(shared), lapply(places[-1], function(p) {
+      r7_shape(n, own_path(), v)
+    })),
+    correlated = {
+      common <- weekly_noise(n, scale * v$place_sd)
+      lapply(places, function(p) {
+        shared + sqrt(v$place_rho) * common +
+          sqrt(1 - v$place_rho) * weekly_noise(n, scale * v$place_sd)
+      })
+    },
+    lagged = lapply(seq_along(places), function(i) {
+      k <- v$place_lags[i]
+      c(rep(shared[1], k), shared)[seq_len(n)]
+    })
+  )
+  path <- paths[match(strata$place, places)]
+  drift <- log(v$r_drift) * (seq_len(n) - 1) / n
+  matrix(vapply(seq_len(nrow(strata)), function(i) {
+    path[[i]] + drift + (1 - v$coupling) * weekly_noise(n, 0.01 * scale)
+  }, numeric(n)), nrow = n)
+}
+
+# Expected infections of each stratum: a renewal with depletion,
+# lambda[t] = R[t] S[t] / N M[t] sum_s gt[s] lambda[t - s] + imports[t],
+# at most S[t], from `start` (the generation time's span before the
+# window), with mixing as `expected_onsets`.
+# - Shift j moves R by exp(+-size[j]) along a logistic over `days[j]`
+#   centred on `at[j]`. Its direction is set when it starts: a reactive
+#   shift lowers R where effective R is above 1 and raises it where
+#   below; the others go `up` or down.
+# - Variant j, on day `at[j]`, returns a share `escape[j]` of the immune
+#   (N - S) to susceptible and raises R by `mult[j]` along a logistic over
+#   `days[j]`.
+# Returns the infections (with `start`), R, effective R and the
+# susceptible after each day.
+r7_infections <- function(start, gt, log_r, population, mixing = NULL,
+                          imports = NULL, shifts = NULL, variants = NULL) {
+  n_gt <- length(gt)
+  n <- nrow(log_r)
+  k <- ncol(log_r)
+  out <- matrix(0, n_gt + n, k)
+  out[seq_len(n_gt), ] <- start
+  susceptible <- pmax(population - colSums(out), 0)
+  rev_gt <- rev(gt)
+  if (!is.null(mixing)) from <- rowSums(mixing$K)
+  n_sh <- length(shifts$at)
+  mult <- matrix(NA_real_, n_sh, k)
+  escaped <- rep(FALSE, length(variants$at))
+  r <- reff <- left <- matrix(0, n, k)
+  prev <- rep(1, k)
+  for (t in seq_len(n)) {
+    R <- exp(log_r[t, ])
+    for (j in seq_len(n_sh)) {
+      if (is.na(mult[j, 1]) && t >= shifts$at[j] - shifts$days[j] / 2) {
+        up <- if (shifts$reactive[j]) prev < 1 else rep(shifts$up[j], k)
+        mult[j, ] <- exp(ifelse(up, 1, -1) * shifts$size[j])
+      }
+      if (!is.na(mult[j, 1])) {
+        R <- R * (1 + (mult[j, ] - 1) *
+          plogis((t - shifts$at[j]) / (shifts$days[j] / 4.4)))
+      }
+    }
+    for (j in seq_along(variants$at)) {
+      if (!escaped[j] && t >= variants$at[j]) {
+        susceptible <- susceptible +
+          variants$escape[j] * (population - susceptible)
+        escaped[j] <- TRUE
+      }
+      R <- R * (1 + (variants$mult[j] - 1) *
+        plogis((t - variants$at[j]) / (variants$days[j] / 4.4)))
+    }
+    past <- out[t:(t + n_gt - 1), , drop = FALSE]
+    force <- colSums(past * rev_gt)
+    if (!is.null(mixing) && mixing$eps[t] > 0) {
+      force <- force +
+        mixing$eps[t] * (drop(mixing$K %*% force) - from * force)
+    }
+    new <- R * susceptible / population * force
+    if (!is.null(imports)) new <- new + imports[t, ]
+    new <- pmin(new, susceptible)
+    susceptible <- susceptible - new
+    out[n_gt + t, ] <- new
+    r[t, ] <- R
+    reff[t, ] <- R * susceptible / population
+    left[t, ] <- susceptible
+    prev <- reff[t, ]
+  }
+  list(infections = out, r = r, reff = reff, susceptible = left)
+}
+
+# r7's expected onsets (ascertained infections) on the generation time's
+# span plus `n` days, for `simulate_outbreak`. Strata weights are r6's
+# (`stratum_sd`, quiet places none). Each place's population is split over
+# its ages by their weights. An early window starts each stratum with
+# cases from a seed on the last day before it (at least 1); an endemic or
+# established one runs at the drawn level over the span. Late places,
+# r6's import kinds (in units of the seed or level) and a trickle of
+# imports into every stratum with cases come in as imports. Returns the
+# onsets, the infections and the values with each stratum's population
+# and the attack rate added.
+r7_onsets <- function(n, gt, strata, design, v) {
+  if (n < 1) stop("the generation time is longer than the series")
+  place_ids <- sprintf("P%02d", seq_len(design$n_places))
+  age_ids <- sprintf("A%d", seq_len(design$n_ages))
+  place_weight <- exp(rnorm(design$n_places, 0, v$stratum_sd))
+  place_weight[v$quiet_places] <- 0
+  age_weight <- exp(rnorm(design$n_ages, 0, v$stratum_sd / 2))
+  at_place <- match(strata$place, place_ids)
+  at_age <- match(strata$age, age_ids)
+  weight <- place_weight[at_place] * age_weight[at_age]
+  active <- weight > 0
+  rel <- weight / mean(weight[active])
+  population <- v$population[at_place] *
+    (age_weight / sum(age_weight))[at_age]
+  late <- late_strata(strata, design, v)
+  on <- active & !late
+  n_gt <- length(gt)
+  start <- matrix(0, n_gt, nrow(strata))
+  early <- design$window == "early"
+  if (early) {
+    start[n_gt, on] <- pmax(1, v$seed * rel[on])
+  } else {
+    start[, on] <- rep(v$level * rel[on], each = n_gt)
+  }
+  if (any(colSums(start) > population)) {
+    stop("an established epidemic larger than its population")
+  }
+  unit <- (if (early) v$seed else v$level) * rel
+  imports <- stratum_imports(n, unit, strata, design, v)
+  imports[, on] <- imports[, on] + v$trickle
+  shifts <- list(
+    at = v$shift_at * n, size = v$shift_size, days = v$shift_days,
+    reactive = v$shift_reactive, up = v$shift_up
+  )
+  variants <- list(
+    at = v$variant_at * n, escape = v$variant_escape, mult = v$variant_r,
+    days = v$variant_days
+  )
+  run <- r7_infections(
+    start, gt, r7_place_log_r(n, strata, design, v), population,
+    mixing = place_mixing(n, strata, design, v), imports = imports,
+    shifts = shifts, variants = variants
+  )
+  v$stratum_population <- population
+  v$attack <- sum(run$infections[, active]) / sum(population[active])
+  # Layer 2: infections to reference events, then ascertained.
+  asc <- v$ascertainment[strata$.group]
+  pmfs <- lapply(v$incubation_mean[strata$.group], incubation_pmf)
+  list(
+    onsets = sweep(convolve_rows(run$infections, pmfs), 2, asc, `*`),
+    infections = run$infections,
+    values = v
+  )
+}
+
+# Revisions (layer 4) on counts by report date (`mean`, as
+# `simulate_outbreak` builds them), with each stratum's rates: cases reported in error (a Poisson
+# share `revise_over` of each count) stay in the releases for
+# `revise_keep` days and are then removed; cases filed under a nearby
+# reference day (a binomial share `revise_move`, 1 + Poisson(1) days
+# either way, never after the report date) are moved back after the same
+# time. A correction past the last report date falls on it, so the final
+# counts are unchanged; cumulative counts by report date can fall but not
+# below zero.
+revise_counts <- function(pp, v) {
+  last <- max(pp$report_date)
+  first <- min(pp$reference_date)
+  group <- if (".group" %in% names(pp)) pp[mean > 0, .group] else NULL
+  base <- pp[mean > 0, .(draw, location, reference_date, report_date, mean)]
+  n <- nrow(base)
+  # Each stratum's rates (`.group`), or the one rate if no strata given.
+  rate <- function(x) if (is.null(group)) rep(x[1], n) else x[group]
+  keep <- pmax(1L, as.integer(round(rate(v$revise_keep))))
+  later <- pmin(base$report_date + keep, last)
+  err <- rpois(n, rate(v$revise_over) * base$mean)
+  moved <- rbinom(n, base$mean, rate(v$revise_move))
+  shift <- (2L * rbinom(n, 1, 0.5) - 1L) * (1L + rpois(n, 1))
+  to <- pmin(pmax(base$reference_date + shift, first), base$report_date)
+  at <- function(ref, rep, x) {
+    data.table(
+      draw = base$draw, location = base$location, reference_date = ref,
+      report_date = rep, mean = x
+    )
+  }
+  ref <- base$reference_date
+  rep <- base$report_date
+  out <- rbind(
+    base,
+    at(ref, rep, err), at(ref, later, -err),
+    at(ref, rep, -moved), at(to, rep, moved),
+    at(ref, later, moved), at(to, later, -moved)
+  )
+  out <- out[, .(mean = sum(mean)),
+    by = .(draw, location, reference_date, report_date)
+  ]
+  out[mean != 0]
 }
 
 if (sys.nframe() == 0L) {
