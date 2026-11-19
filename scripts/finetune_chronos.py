@@ -254,12 +254,27 @@ def max_series(budget_gb: float) -> int:
     return _most_within(budget_gb, checkpointed=True)
 
 
-CODE = (
-    "scripts/finetune_simulate.R",
-    "scripts/finetune_chronos.py",
-    "src/bdbvhubrenewal/forecasters/finetune.py",
-)
-"""Files the checkpoint depends on, hashed into its settings."""
+CODE = {
+    "scripts/finetune_simulate.R": "scripts/finetune_simulate.R",
+    "scripts/finetune_chronos.py": "scripts/finetune_chronos.py",
+    "src/bdbvhubrenewal/forecasters/finetune.py": (
+        "src/bdbvhubrenewal/forecasters/finetune.py"
+    ),
+}
+"""Files the checkpoint depends on, hashed into its settings: each
+file's name in `code_sha256`, then where it is now.
+
+A name is the file's path when checkpoints were first hashed and never
+changes, so moving a file changes no checkpoint's hash: update its path
+here only. The paths go into the settings outside the hash
+(`code_paths`), for `finetune_verify`."""
+
+TRAINER = "scripts/finetune_stream.py"
+"""The trainer's name in `code_sha256` (its path is its own file)."""
+
+FOUNDATION_PATH = "src/bdbvhubrenewal/forecasters/foundation.py"
+"""Where the module of `FOUNDATION_CODE` is now (`code_paths`
+`foundation`)."""
 
 FOUNDATION_CODE = (foundation.hub_triangle, foundation.layout_block)
 """The functions of `foundation` the blocks are laid out with, hashed into
