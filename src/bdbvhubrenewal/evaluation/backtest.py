@@ -409,7 +409,7 @@ def make_tasks(
     """
     tasks = []
     source = target if history is None else history
-    places = functools.cache(hub_places)
+    places = hub_places()
     imputation = functools.cache(hub_delay_pmf)
     for (kind, vintage), rows in target.groupby(["kind", "vintage"]):
         mine = source["kind"] == kind
@@ -441,7 +441,7 @@ def make_tasks(
                 daily_history=_daily_for(daily, str(kind), str(vintage)),
                 **fields_of_zones,
                 imputation_delay=imputation(str(vintage)),
-                places=places(fields_of_zones.get("zone_codes", ())),
+                places=places,
                 locations=forecast_locations(rows),
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,

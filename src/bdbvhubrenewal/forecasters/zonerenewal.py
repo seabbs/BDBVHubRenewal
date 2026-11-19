@@ -318,11 +318,37 @@ def zone_vintage_inputs(
 
 
 def _zone_places(task: ForecastTask) -> pd.DataFrame:
-    """Return the places of a zone task's zones, in its order."""
+    """Return the places of a zone task's zones, in its order.
+
+    A zone the task's places lack takes its province's centre and the
+    mean population of the province's zones that have places, or the
+    median zone's where none do.
+    """
+    from bdbvhubrenewal.data.hierarchy import is_zone, province_of
+
     places = task_places(task).set_index("location")
+    zones = places.loc[places.index.map(is_zone)]
     missing = [z for z in task.locations if z not in places.index]
     if missing:
-        raise ValueError(f"No places for zones {missing[:5]}.")
+        by_province = zones.groupby(zones.index.map(province_of))[
+            "population"
+        ].mean()
+        median = zones["population"].median()
+        extra = pd.DataFrame(
+            {
+                "population": [
+                    by_province.get(province_of(z), median) for z in missing
+                ],
+                "latitude": [
+                    places.loc[province_of(z), "latitude"] for z in missing
+                ],
+                "longitude": [
+                    places.loc[province_of(z), "longitude"] for z in missing
+                ],
+            },
+            index=pd.Index(missing, name="location"),
+        )
+        places = pd.concat([places, extra])
     return places.loc[list(task.locations)].reset_index()
 
 

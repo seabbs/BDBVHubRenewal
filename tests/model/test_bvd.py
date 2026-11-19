@@ -148,7 +148,8 @@ def test_fit_axis_reaches_the_bvd_day(outbreak, sim_tables, table, release):
     rows["as_of"] = vintage_date(outbreak, day + 7)
     data = vintage_from_tables(
         target, delays, vintage_date(outbreak, day), SIM_LOCATIONS, table,
-        BVD, bvd=rows, imputation_delay=hub_delay_pmf(vintage_date(outbreak, day))
+        BVD, bvd=rows,
+        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
     )  # fmt: skip
     assert data.bvd["day"] // 7 + 1 > data.n_weeks
     assert fit_weeks(data, BVD) == data.bvd["day"] // 7 + 1

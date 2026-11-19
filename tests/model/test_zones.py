@@ -7,12 +7,12 @@ import pytest
 from numpyro.infer import init_to_median
 
 from bdbvhubrenewal.data.delays import hub_delay_pmf
+from bdbvhubrenewal.data.zones import zone_places
 from bdbvhubrenewal.model import MAIN, build_model, model_args
 from bdbvhubrenewal.model.inputs import vintage_from_tables
 from bdbvhubrenewal.model.zones import (
     build_zone_model,
     nested_basis,
-    zone_table,
     zone_vintage_from_tables,
 )
 
@@ -159,7 +159,7 @@ def zone_vintage(outbreak, sim_tables):
         delays,
         vintage_date(outbreak, day),
         zones,
-        zone_table(),
+        zone_places(),
         parents={z: z[:5] for z in zones},
         imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
     )
@@ -173,7 +173,7 @@ def test_zone_vintage_scores_delays_by_province(zone_vintage):
     assert v.delay_counts.shape == (v.n_weeks, 6, 61)
     assert v.kernel.shape == (12, 12)
     np.testing.assert_allclose(v.kernel.sum(axis=1), 1.0)
-    pops = zone_table().set_index("location")["population"]
+    pops = zone_places().set_index("location")["population"]
     np.testing.assert_allclose(v.populations, pops[v.names].to_numpy())
 
 

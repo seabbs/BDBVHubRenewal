@@ -32,12 +32,43 @@ def test_distances_come_from_the_places_table() -> None:
     np.testing.assert_allclose(d[0, 1], 111.19, rtol=1e-3)
 
 
-def test_zone_places_fall_back_to_the_province() -> None:
-    out = zone_places(("CD-IT-01", "CD-IT-99"))
+def test_zone_places_are_the_mapped_zones() -> None:
+    out = zone_places()
     assert list(out.columns) == [
         "location",
         "population",
         "latitude",
         "longitude",
     ]
-    assert out["location"].tolist() == ["CD-IT-01", "CD-IT-99"]
+    assert out["location"].str.match(r"^CD-[A-Z]{2}-[0-9]{2}$").all()
+
+
+def test_unmapped_zones_take_their_province_place() -> None:
+    from dataclasses import replace
+
+    from bdbvhubrenewal.forecasters.base import ForecastTask
+    from bdbvhubrenewal.forecasters.zonerenewal import _zone_places
+
+    places = pd.DataFrame(
+        {
+            "location": ["DE-BY", "DE-BY-01", "DE-BY-02"],
+            "population": [100.0, 10.0, 30.0],
+            "latitude": [48.0, 47.0, 49.0],
+            "longitude": [11.0, 10.0, 12.0],
+        }
+    )
+    task = ForecastTask(
+        vintage="2026-10-24",
+        reference_date=pd.Timestamp("2026-10-24").date(),
+        kind="real",
+        cutoff="2026-10-24",
+        target=pd.DataFrame(),
+        delays=None,
+        locations=("DE-BY-02", "DE-BY-09"),
+        target_end_dates=(),
+        places=places,
+    )
+    out = _zone_places(replace(task)).set_index("location")
+    assert out.loc["DE-BY-02", "population"] == 30.0
+    assert out.loc["DE-BY-09", "population"] == 20.0
+    assert out.loc["DE-BY-09", "latitude"] == 48.0
