@@ -98,7 +98,8 @@ def test_batches_already_simulated_are_kept(tmp_path):
 
 def _enw_lib(tmp_path):
     """The pinned epinowcast's library under the machine's ROOT."""
-    return tmp_path / "rlib" / f"epinowcast-{simulator.epinowcast_sha()}"
+    grid = "config/finetune/grids/r7.yaml"
+    return tmp_path / "rlib" / f"epinowcast-{simulator.epinowcast_sha(grid)}"
 
 
 def test_simulate_installs_the_pinned_epinowcast_first(tmp_path):
@@ -170,11 +171,11 @@ FT = {
 def test_finetune_trains_one_segment_per_prefix(tmp_path):
     jobs = dry(tmp_path, "finetune", config=FT)
     assert jobs["train_segment"] == 2
-    # 500 outbreaks are 24 batches of 21, one spare, and the held-out
+    # 500 outbreaks are 25 batches of 20, one spare, and the held-out
     # round's 40 batches.
-    assert jobs["fetch_batch"] == 65
+    assert jobs["fetch_batch"] == 66
     # On one machine the batches are simulated here.
-    assert jobs["simulate_batch"] == 65
+    assert jobs["simulate_batch"] == 66
 
 
 RELEASE = {**FT, "finetune": {**FT["finetune"], "sims_from": "release"}}
@@ -216,18 +217,18 @@ def _stale_list(tmp_path, seeds):
 def test_finetune_takes_batches_from_releases(tmp_path):
     _released(tmp_path, [*range(30100, 30140), *range(30200, 30240)])
     jobs = dry(tmp_path, "finetune", config=RELEASE)
-    assert jobs["fetch_batch"] == 65
+    assert jobs["fetch_batch"] == 66
     assert "simulate_batch" not in jobs
 
 
 def test_from_releases_only_released_batches_are_trained_on(tmp_path):
-    # The held-out round and 13 batches of round 2: 273 outbreaks, enough
+    # The held-out round and 14 batches of round 2: 280 outbreaks, enough
     # for n250 and its spare batch but not n500.
-    _released(tmp_path, [*range(30100, 30140), *range(30200, 30213)])
+    _released(tmp_path, [*range(30100, 30140), *range(30200, 30214)])
     jobs = dry(tmp_path, "finetune", config=RELEASE)
     assert jobs["train_segment"] == 1
-    # 12 batches hold 252 outbreaks, then one spare, then the held-out.
-    assert jobs["fetch_batch"] == 12 + 1 + 40
+    # 13 batches hold 260 outbreaks, then one spare, then the held-out.
+    assert jobs["fetch_batch"] == 13 + 1 + 40
 
 
 def test_from_releases_nothing_trains_before_the_held_out_round_is_in(tmp_path):
@@ -251,10 +252,10 @@ REMOTE = {**FT, "finetune": {**FT["finetune"], "sims_from": "remote"}}
 def test_from_the_rounds_host_only_listed_batches_are_trained_on(tmp_path):
     # A machine without the rounds streams them from the rounds host's
     # manifests, as they are simulated, before any release.
-    _rounds_host(tmp_path, {1: range(30100, 30140), 2: range(30200, 30213)})
+    _rounds_host(tmp_path, {1: range(30100, 30140), 2: range(30200, 30214)})
     jobs = dry(tmp_path, "finetune", config=REMOTE)
     assert jobs["train_segment"] == 1
-    assert jobs["fetch_batch"] == 12 + 1 + 40
+    assert jobs["fetch_batch"] == 13 + 1 + 40
     assert "simulate_batch" not in jobs
 
 
@@ -264,7 +265,7 @@ def _records(tmp_path, r, seeds):
     records.mkdir(parents=True)
     for s in seeds:
         (records / f"record-{s}.csv").write_text(
-            f"{r},{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n"
+            f"{r},{s},block,r7,c,1,20,a,b,,1,2.0,h,t\n"
         )
     return records.parent
 
@@ -273,14 +274,14 @@ def test_from_the_rounds_host_a_round_is_listed_once_its_qc_ran(tmp_path):
     # QC runs once the round is whole, after its manifest: a batch it
     # later excludes must never be trained on, mid-round or in between.
     _rounds_host(tmp_path, {1: range(30100, 30140)})
-    r2 = _records(tmp_path, 2, range(30200, 30213))
+    r2 = _records(tmp_path, 2, range(30200, 30214))
     jobs = dry(tmp_path, "finetune", config=REMOTE)
     assert "train_segment" not in jobs
     (r2 / "manifest.csv").write_text(
         "header\n"
         + "".join(
-            f"2,{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n"
-            for s in range(30200, 30213)
+            f"2,{s},block,r7,c,1,20,a,b,,1,2.0,h,t\n"
+            for s in range(30200, 30214)
         )
     )
     jobs = dry(tmp_path, "finetune", config=REMOTE)
@@ -289,7 +290,7 @@ def test_from_the_rounds_host_a_round_is_listed_once_its_qc_ran(tmp_path):
     (r2 / "qc" / "excluded.csv").write_text("simulation,reason,evidence\n")
     jobs = dry(tmp_path, "finetune", config=REMOTE)
     assert jobs["train_segment"] == 1
-    assert jobs["fetch_batch"] == 12 + 1 + 40
+    assert jobs["fetch_batch"] == 13 + 1 + 40
 
 
 OFFLOAD = {**FT, "finetune": {**FT["finetune"], "eval": "offload"}}
@@ -325,6 +326,38 @@ def test_a_checkpoint_is_scored_only_after_step_0(tmp_path):
     jobs = dry(tmp_path, str(tmp_path / sidecar), config=OFFLOAD)
     assert jobs["evaluate_steps"] == 2
     assert jobs["evaluate_checkpoint"] == 1
+
+
+def _dag(tmp_path, target, config):
+    """Return a dry run's jobs (id to label) and edges (from, to)."""
+    out = dry_run(tmp_path, target, config=config, extra=["--dag"])
+    assert out.returncode == 0, out.stderr
+    jobs = dict(re.findall(r'^\s*(\d+)\[label = "([^"]+)"', out.stdout, re.M))
+    edges = re.findall(r"^\s*(\d+) -> (\d+)$", out.stdout, re.M)
+    return jobs, edges
+
+
+def test_a_checkpoint_s_evaluation_depends_on_step_0_and_earlier_settings(
+    tmp_path,
+):
+    for n in (250, 500):
+        _checkpoint(tmp_path, n)
+    sidecar = tmp_path / "checkpoints/slots/train/n500/held-out.json"
+    jobs, edges = _dag(tmp_path, str(sidecar), OFFLOAD)
+    steps = [j for j, label in jobs.items() if label == "evaluate_steps"]
+    (check,) = [
+        j for j, label in jobs.items() if label == "evaluate_checkpoint"
+    ]
+    (first,) = [
+        j for j, label in jobs.items() if label == "train_segment\\nn: 250"
+    ]
+    # One segment's step evaluation feeds the next's, which feeds the
+    # checkpoint's: step 0 is scored before the checkpoint.
+    chain = [(a, b) for a, b in edges if a in steps and b in steps]
+    assert len(chain) == 1
+    assert (chain[0][1], check) in edges
+    # The first checkpoint's settings are an input of n500's evaluation.
+    assert (first, check) in edges
 
 
 def test_finetune_never_publishes(tmp_path):
@@ -837,7 +870,7 @@ def _rounds_host(tmp_path, rounds):
         where = host / "rounds" / f"r{r}"
         (where / "qc").mkdir(parents=True)
         rows = "".join(
-            f"{r},{s},block,r5,c,1,21,a,b,,1,2.0,h,t\n" for s in seeds
+            f"{r},{s},block,r7,c,1,20,a,b,,1,2.0,h,t\n" for s in seeds
         )
         (where / "manifest.csv").write_text("header\n" + rows)
         (where / "qc" / "excluded.csv").write_text(
@@ -969,9 +1002,10 @@ def test_the_sim_qc_checks_fixed_thresholds_from_the_config(tmp_path):
     blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
     qc = next(b for b in blocks if re.match(r"(local)?rule sim_qc:", b))
     assert "scripts/sim_qc.py" in qc
-    limits = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())[
+    grid = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())[
         "simulate"
-    ]["qc"]
+    ]["grid_file"]
+    limits = yaml.safe_load((ROOT / grid).read_text())["qc"]
     for key, value in limits.items():
         assert f"--{key.replace('_', '-')} {value}" in qc
 
@@ -1013,48 +1047,9 @@ def _done_round(root, r, batches=40):
     return 1_000_000 + 10 * len(stages)
 
 
-TOPUP = {"grid_rounds": {"r6": {"rounds": [4], "topup_round": 32}}}
-
-
-def test_the_top_up_plans_its_first_try_from_the_rounds_qc(tmp_path):
-    _done_round(tmp_path, 4)
-    jobs = dry(tmp_path, "topup", config=TOPUP)
-    assert jobs["topup_plan"] == 1
-    assert "simulate_batch" not in jobs
-
-
-def test_the_top_up_waits_for_every_training_round(tmp_path):
-    # Round 5 is not simulated yet: it is simulated and QC'd first.
-    _done_round(tmp_path, 4)
-    config = {"grid_rounds": {"r6": {"rounds": [4, 5], "topup_round": 32}}}
-    jobs = dry(tmp_path, "topup", config=config)
-    assert jobs["simulate_batch"] == 40
-    assert jobs["sim_qc"] == 1
-    assert jobs["topup_plan"] == 1
-
-
-def test_a_top_up_batch_simulates_its_planned_cells(tmp_path):
-    import os
-
-    after = _done_round(tmp_path, 4)
-    plan = tmp_path / "rounds" / "r32" / "topup" / "plan-0.txt"
-    plan.parent.mkdir(parents=True)
-    plan.write_text("33200 3364 3365\n")
-    os.utime(plan, (after, after))
-    blocks = score_jobs(tmp_path, TOPUP, target="topup")
-    sims = [b for b in blocks if re.match(r"rule simulate_batch:", b)]
-    assert len(sims) == 1
-    shell = " ".join(sims[0].replace("\\\n", " ").split())
-    assert 'ENW_CELLS="3364,3365"' in shell
-    assert "finetune_simulate.R 2 33200" in shell
-    qc = [b for b in blocks if re.match(r"rule topup_qc:", b)]
-    assert len(qc) == 1
-    assert "--max-weekly-jump 1000" in qc[0]
-
-
-def test_a_round_s_batch_names_no_cells(tmp_path):
+def test_a_round_s_batch_runs_the_grid(tmp_path):
     blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
     text = " ".join("".join(blocks).replace("\\\n", " ").split())
-    shell = text[text.index("finetune_simulate.R") - 400 :]
-    assert 'ENW_CELLS=""' in shell
-    assert "finetune_simulate.R 21 " in shell
+    shell = text[text.index("workflow/scripts/simulate.R") - 400 :]
+    assert "ENW_CELLS" not in shell
+    assert "simulate.R config/finetune/grids/r7.yaml 20 " in shell

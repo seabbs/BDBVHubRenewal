@@ -550,20 +550,27 @@ def test_non_summing_parents_draw_from_named_distributions() -> None:
 
     rng = np.random.default_rng(0)
     share = [
-        draw_named({"dist": "beta", "a": 3.0, "b": 14.0}, rng)
+        draw_named(
+            {"dist": "beta", "a": 3, "b": 14, "lower": 0, "upper": 1}, rng
+        )
         for _ in range(4000)
     ]
     assert np.mean(share) == pytest.approx(3 / 17, abs=0.01)
     assert min(share) > 0
     assert max(share) < 1
     lag = [
-        draw_named(
-            {"dist": "lognormal", "meanlog": np.log(7), "sdlog": 0.4}, rng
-        )
+        draw_named({"dist": "lognormal", "median": 7, "sdlog": 0.4}, rng)
         for _ in range(4000)
     ]
     assert np.median(lag) == pytest.approx(7, rel=0.05)
-    assert draw_named({"dist": "uniform", "low": 0.05, "high": 0.3}, rng) < 0.3
+    assert (
+        draw_named({"dist": "uniform", "lower": 0.05, "upper": 0.3}, rng) < 0.3
+    )
+    # A beta on its support, lower to upper.
+    on = draw_named(
+        {"dist": "beta", "a": 2, "b": 2, "lower": 3, "upper": 5}, rng
+    )
+    assert 3 < on < 5
     with pytest.raises(ValueError, match="gamma"):
         draw_named({"dist": "gamma"}, rng)
 
@@ -573,12 +580,14 @@ def test_a_late_parent_lags_by_its_drawn_days() -> None:
 
     counts = _two_places()
     draws = {
-        "unallocated_share": {"dist": "beta", "a": 3.0, "b": 14.0},
-        "parent_lag_days": {
-            "dist": "lognormal",
-            "meanlog": np.log(7),
-            "sdlog": 0.4,
+        "unallocated_share": {
+            "dist": "beta",
+            "a": 3,
+            "b": 14,
+            "lower": 0,
+            "upper": 1,
         },
+        "parent_lag_days": {"dist": "lognormal", "median": 7, "sdlog": 0.4},
     }
     lags = []
     for seed in range(40):

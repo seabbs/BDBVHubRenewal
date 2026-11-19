@@ -400,20 +400,21 @@ PARENTS: Final = ("exact", "unallocated", "late_parent")
 
 
 PARENT_DRAWS: Final = {
-    "unallocated_share": {"dist": "uniform", "low": 0.05, "high": 0.3},
-    "parent_lag_days": {"dist": "uniform", "low": 3, "high": 15},
+    "unallocated_share": {"dist": "uniform", "lower": 0.05, "upper": 0.3},
+    "parent_lag_days": {"dist": "uniform", "lower": 3, "upper": 15},
 }
 """The draws of a parent that does not sum (`country_counts`): the share
 of cases with no place, and the days the parent is reported after its
-places, rounded down to whole days. These are r6's; a block design may
-give its own (`finetune_chronos.PARENT_DRAWS`)."""
+places, rounded down to whole days. A grid file's `aggregation` gives its
+own (`finetune_chronos.PARENTS`)."""
 
 
 def draw_named(spec: dict[str, Any], rng: np.random.Generator) -> float:
-    """Draw one value from a named distribution.
+    """Draw one value from a named distribution, as a grid file names it.
 
-    `spec` is `{"dist": ..., <parameters>}`: `uniform` (`low`, `high`),
-    `beta` (`a`, `b`) or `lognormal` (`meanlog`, `sdlog`).
+    `spec` is `{"dist": ..., <parameters>}`: `uniform` (`lower`, `upper`),
+    `beta` (`a`, `b`, on its support `lower` to `upper`, 0 to 1 by
+    default) or `lognormal` (`median`, `sdlog`).
 
     Raises
     ------
@@ -422,11 +423,12 @@ def draw_named(spec: dict[str, Any], rng: np.random.Generator) -> float:
     """
     dist = spec["dist"]
     if dist == "uniform":
-        return float(rng.uniform(spec["low"], spec["high"]))
+        return float(rng.uniform(spec["lower"], spec["upper"]))
     if dist == "beta":
-        return float(rng.beta(spec["a"], spec["b"]))
+        lower, upper = spec.get("lower", 0.0), spec.get("upper", 1.0)
+        return float(lower + (upper - lower) * rng.beta(spec["a"], spec["b"]))
     if dist == "lognormal":
-        return float(rng.lognormal(spec["meanlog"], spec["sdlog"]))
+        return float(rng.lognormal(np.log(spec["median"]), spec["sdlog"]))
     raise ValueError(f"no named distribution {dist!r}")
 
 
