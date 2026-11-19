@@ -131,3 +131,17 @@ def test_notes_and_tables_may_be_remote(tmp_path):
         "h:review/notes.md",
         str(tmp_path / "m" / "extra-0-notes.md"),
     ] in src.commands()
+
+
+def test_a_dataset_that_may_be_empty_does_not_fail_the_mirror(tmp_path):
+    src = mirror.Source(
+        {"REMOTE": "host", "SCORE_CACHE": "/c"},
+        tmp_path,
+        datasets=[
+            {"key": "germany"},
+            {"key": "held_out", "missing": "none yet"},
+        ],
+    )
+    required = {n: r for n, (_, _, _, r) in src._items.items()}
+    assert required["dataset:germany"]
+    assert not required["dataset:held_out"]

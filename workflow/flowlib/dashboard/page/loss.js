@@ -16,16 +16,20 @@ function mark(shape,x,y,c,t){var tt='<title>'+t+'</title>';
  if(shape=="s")return '<rect x="'+(x-3)+'" y="'+(y-3)+'" width=6 height=6 fill="none" stroke="'+c+'" stroke-width=1.5>'+tt+'</rect>';
  return '<circle cx="'+x+'" cy="'+y+'" r=3.2 fill="'+c+'">'+tt+'</circle>'}
 function msw(shape){return '<svg width=12 height=10 viewBox="0 0 12 10">'+mark(shape,6,5,"var(--fg)","")+'</svg>'}
-function chart(o){
- var W=440,H=280,L=40,R=8,T=8,B=26,xs=[],ys=[];
+// A chart fills its card when the card is full screen (expand.js), else
+// draws at 440 x 280 and scales with the card's width.
+function size(el){var f=window.ftFull&&window.ftFull(el);if(!f)return [440,280];
+ return [Math.max(440,el.clientWidth-8),Math.max(280,f.clientHeight-140)]}
+function chart(o,el){
+ var wh=size(el),W=wh[0],H=wh[1],L=40,R=8,T=8,B=26,xs=[],ys=[];
  var ser=o.series.map(function(s){var p=s.pts.filter(function(q){return q[1]!=null&&q[1]>0&&(o.xmax==null||q[0]<=o.xmax)});return {label:s.label,color:s.color,kind:s.kind,dash:s.dash,shape:s.shape,pts:p}}).filter(function(s){return s.pts.length});
- if(!ser.length)return '<div class=card><h3>'+o.title+'</h3><p class=mut>no data for the selected runs</p></div>';
+ if(!ser.length)return '<h3>'+o.title+'</h3><p class=mut>no data for the selected runs</p>';
  ser.forEach(function(s){s.pts.forEach(function(q){xs.push(q[0]);ys.push(Math.log10(q[1]))})});
  var x1=o.xmax!=null?o.xmax:Math.max.apply(null,xs.concat([1])),y0=Math.min.apply(null,ys),y1=Math.max.apply(null,ys);
  if(o.hl){y0=Math.min(y0,0);y1=Math.max(y1,0)}
  var pd=(y1-y0)*0.06||0.1;y0-=pd;y1+=pd;
  var sx=function(x){return L+x/x1*(W-L-R)},sy=function(v){return T+(1-(Math.log10(v)-y0)/(y1-y0))*(H-T-B)};
- var h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
+ var h='<svg viewBox="0 0 '+W+' '+H+'" width="100%"'+(window.ftFull&&window.ftFull(el)?' height="'+H+'"':'')+'>';
  lticks(y0,y1).forEach(function(v){h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" class=grid /><text x="'+(L-4)+'" y="'+(sy(v)+3)+'" text-anchor=end class=ax>'+fmtT(v)+'</text>'});
  var st=Math.pow(10,Math.floor(Math.log10(x1/4)));st=[1,2,2.5,5,10].map(function(m){return m*st}).find(function(v){return v>=x1/5});
  for(var x=0;x<=x1;x+=st)h+='<text x="'+sx(x)+'" y="'+(H-B+12)+'" text-anchor=middle class=ax>'+(+x.toPrecision(6))+'</text>';
@@ -39,7 +43,13 @@ function chart(o){
    h+='<polyline points="'+pl+'" fill=none stroke="'+s.color+'" stroke-width=1.6'+d+(s.kind=="faint"?' opacity=".4"':'')+' />';
    if(s.kind=="pts")s.pts.forEach(function(q){h+='<circle cx="'+sx(q[0])+'" cy="'+sy(q[1])+'" r=2.2 fill="'+s.color+'"><title>'+s.label+' step '+q[0]+': '+(+q[1].toPrecision(4))+'</title></circle>'})}});
  var leg=o.leg||ser.map(function(s){return '<span><i style="background:'+s.color+'"></i>'+s.label+(s.dash?" (dashed)":"")+'</span>'}).join("");
- return '<div class=card><h3>'+o.title+ftInfo(o.info)+'</h3><div class=leg>'+leg+'</div>'+h+'</svg></div>'}
+ return '<h3>'+o.title+ftInfo(o.info)+'</h3><div class=leg>'+leg+'</div>'+h+'</svg>'}
+// The three cards persist across redraws, so a full-screen card stays open
+// and its expand button (expand.js) is kept.
+function cards(list){var box=$("lossplots");
+ while(box.children.length<list.length){var c=document.createElement("div");c.className="card";box.appendChild(c)}
+ list.forEach(function(o,i){var c=box.children[i],b=c.querySelector(":scope > .expand");
+  c.innerHTML=chart(o,c);if(b)c.insertBefore(b,c.firstChild)})}
 function draw(){
  var mode=window.ftMode||"start",rng=window.ftRng||"full",on=ftSel.get(),rel=mode!="raw";
  var xmax=rng=="zoom"?D.xlim:null,runs=D.runs.filter(function(r){return on.indexOf(r.key)>=0});
@@ -79,11 +89,13 @@ function draw(){
   +(mode=="start"&&has(function(h){return h.sub})?'<span class=mut>subset: relative to its first evaluation</span>':"");
  var trLeg=(runs.some(function(r){return r.live})?'<span><svg width=12 height=10><circle cx=6 cy=5 r=1.8 fill="var(--fg)" opacity=".35"/></svg> logged values (live run)</span>':"")+'<span>'+sw("var(--fg)","")+' rolling mean of 20</span>';
  var ttl="Held-out pooled loss, subset and full set";
- $("lossplots").innerHTML=chart({title:"Training loss"+suf,info:"train",series:tr,xmax:xmax,hl:hl,leg:trLeg})+chart({title:ttl+suf,info:"held",series:held,xmax:xmax,hl:hl,leg:heldLeg})+chart({title:"Held-out loss by source (colour source, style run)"+suf,info:"bysrc",series:by,xmax:xmax,hl:hl,leg:byLeg});
+ cards([{title:"Training loss"+suf,info:"train",series:tr,xmax:xmax,hl:hl,leg:trLeg},{title:ttl+suf,info:"held",series:held,xmax:xmax,hl:hl,leg:heldLeg},{title:"Held-out loss by source (colour source, style run)"+suf,info:"bysrc",series:by,xmax:xmax,hl:hl,leg:byLeg}]);
  var refs=ftSel.refsOn();
  $("lossrefs").innerHTML=refs.map(function(r){return '<span class="tog dis" title="'+r.label+' is a reference with no training or held-out loss">'+r.label+'</span>'}).join("");
 }
 window.addEventListener("ftsel",draw);
+// Full screen and window size changes redraw at the new size, same state.
+var rsz=null;window.addEventListener("resize",function(){clearTimeout(rsz);rsz=setTimeout(draw,120)});
 // New data from the server (live.js): redraw with the same state.
 window.addEventListener("ftdata",function(e){if(e.detail!=="loss")return;D=JSON.parse($("ldata").textContent);draw()});window.addEventListener("ftmode",draw);
 draw();

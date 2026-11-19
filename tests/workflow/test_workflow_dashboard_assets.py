@@ -46,3 +46,34 @@ def test_the_expand_script_is_keyboard_accessible():
         ".focus()",
     ):
         assert needle in js
+
+
+def test_charts_redraw_to_the_full_screen_size_and_keep_their_cards():
+    # Sam 11:10: entering and leaving full screen redraws each chart at
+    # the new size, keeping zoom and selections.
+    expand = (PAGE / "expand.js").read_text()
+    assert "ResizeObserver" in expand
+    assert "fullscreenchange" in expand
+    assert "window.ftFull=" in expand
+    for name, card in (("loss.js", "cards("), ("bias.js", "biaslinecard")):
+        js = (PAGE / name).read_text()
+        assert 'addEventListener("resize"' in js, name
+        assert "ftFull" in js, name
+        # Cards are filled in place, not rebuilt, so the open one stays.
+        assert card in js, name
+    nowcasts = (PAGE / "nowcasts.js").read_text()
+    assert "ftFull" in nowcasts
+
+
+def test_the_nowcasts_have_a_view_of_one_model_over_time():
+    # Sam 11:00: several origins of one model on one plot, each with its
+    # horizons, against the final truth; how many origins and which model.
+    html = (PAGE / "nowcasts.html").read_text()
+    for control in ("id=gmode", "id=gmod", "id=gnd", "id=gstep", "id=gsl"):
+        assert control in html, control
+    js = (PAGE / "nowcasts.js").read_text()
+    assert "S.mode==1" in js
+    # Over time, the latest release is the truth drawn.
+    assert "pts=lat" in js
+    # The score card still compares every ticked model.
+    assert "wisChart(all[0],ticked())" in js

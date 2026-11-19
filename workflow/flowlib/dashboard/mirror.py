@@ -77,11 +77,14 @@ class Source:
             key = ds["key"]
             # A samples dataset's copy is kept apart from its summaries.
             local = f"{key}-samples" if ds.get("format") == "samples" else key
+            # A dataset that says why it may have no nowcasts (`missing`)
+            # does not fail the mirror while it has none.
             self._add(
                 f"dataset:{key}",
                 ds.get("source") or f"{cache}/{key}",
                 local,
                 folder=True,
+                required=not ds.get("missing"),
             )
             if ds.get("truth_source"):
                 self._add(
