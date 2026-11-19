@@ -26,7 +26,7 @@ Low level, any output file, for example:
 ```sh
 uv run --group paper snakemake <ROOT>/rounds/r4/sims/counts-30421.csv.gz  # one batch
 uv run --group paper snakemake <RUN>/train/n1000/settings.json            # one checkpoint
-uv run --group paper snakemake <SCORE_CACHE>/germany/slots-<hash>.done    # one checkpoint's German scores
+uv run --group paper snakemake <SCORE_CACHE>/germany-days/slots-<hash>.done    # one checkpoint's German scores
 ```
 
 Helpers: `task dag` draws the rule graph, `task progress` lists what exists and what would run, `task report` writes Snakemake's HTML report, and `task workflow:check` runs the tests and dry runs CI runs.

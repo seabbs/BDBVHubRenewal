@@ -479,7 +479,10 @@ def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
 def test_units_make_the_rows_folder_a_worker_brings_back(tmp_path):
     blocks = score_jobs(tmp_path, {"score": {"labels": ["aaa"]}})
     shells = "".join(blocks)
-    assert f"mkdir -p {tmp_path}/scores/germany/aaa/" in shells
+    # The folder the shared evaluation writes German rows to.
+    from bdbvhubrenewal.evaluation.checkpoint import GERMANY_UNIT
+
+    assert f"mkdir -p {tmp_path}/scores/{GERMANY_UNIT}/aaa/" in shells
 
 
 def test_skipped_checkpoints_are_not_scored(tmp_path):
@@ -502,7 +505,7 @@ def test_a_checkpoint_released_after_the_tables_is_scored(tmp_path):
     # 2026-11-19).
     cache = tmp_path / "scores"
     for unit, labels in (
-        ("germany", ["reference", "slots-aaa"]),
+        ("germany-days", ["reference", "slots-aaa"]),
         ("heldout", ["slots-aaa"]),
     ):
         (cache / unit).mkdir(parents=True)
@@ -534,8 +537,8 @@ def test_score_takes_checkpoints_from_the_release_list(tmp_path):
 
 
 def test_finished_units_are_kept(tmp_path):
-    (tmp_path / "scores" / "germany").mkdir(parents=True)
-    (tmp_path / "scores" / "germany" / "reference.done").write_text("")
+    (tmp_path / "scores" / "germany-days").mkdir(parents=True)
+    (tmp_path / "scores" / "germany-days" / "reference.done").write_text("")
     config = {"score": {"labels": ["aaa"]}}
     jobs = dry(tmp_path, "score", config=config)
     assert jobs["score_germany"] == 1
@@ -684,11 +687,11 @@ def _scored(tmp_path):
     import time
 
     cache = tmp_path / "scores"
-    for study in ("germany", "heldout"):
+    for study in ("germany-days", "heldout"):
         (cache / study).mkdir(parents=True, exist_ok=True)
     stamps = [
-        cache / "germany" / "reference.done",
-        cache / "germany" / "aaa.done",
+        cache / "germany-days" / "reference.done",
+        cache / "germany-days" / "aaa.done",
         cache / "heldout" / "aaa.done",
     ]
     for f in stamps:
@@ -910,7 +913,7 @@ def test_newer_checkpoints_are_scored_first(tmp_path):
 def test_one_unit_runs_before_the_release_list_exists(tmp_path):
     # A unit's priority reads the list if it is there, else takes its band's
     # base: it never waits on the release_list checkpoint.
-    jobs = dry(tmp_path, str(tmp_path / "scores" / "germany" / "aaa.done"))
+    jobs = dry(tmp_path, str(tmp_path / "scores" / "germany-days" / "aaa.done"))
     assert jobs["score_germany"] == 1
 
 
