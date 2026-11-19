@@ -150,3 +150,58 @@ datasets:
     assert ctx.source.truth("bdbv") == tmp_path / "output/dashboard/mirror" / (
         "bdbv-truth.csv"
     )
+
+
+def test_bdbv_is_held_out_of_every_panel_even_from_the_local_file(tmp_path):
+    # Sam 11:20: BDBV (Ebola) is entirely held out for the paper; no panel,
+    # selector, table or mailbox line shows it.
+    from pathlib import Path
+
+    import yaml
+    from flowlib.dashboard import page
+
+    shipped = yaml.safe_load(
+        (Path(__file__).parents[2] / "workflow" / "config.yaml").read_text()
+    )["dashboard"]
+    assert [d["key"] for d in shipped["datasets"]] == ["germany", "held_out"]
+    assert "ebola" not in shipped["studies"]
+    box = tmp_path / "box.md"
+    box.write_text(
+        "slots BDBV unit scored, CRPS 1.2\n"
+        "slots ebola rows\n"
+        "slots [archie bdbv-scoring] German unit 286 s\n"
+    )
+    cfg = {
+        **BASE,
+        "dashboard": {
+            **BASE["dashboard"],
+            "studies": {"germany": "Germany", "ebola": "BDBV"},
+            "held_out": shipped["held_out"],
+            "mail_filter": "slots",
+        },
+    }
+    local = _local(
+        tmp_path,
+        f"""
+runs:
+  - key: r
+    source: {tmp_path}/run
+datasets:
+  - key: bdbv
+    label: BDBV (Ebola)
+    format: samples
+  - key: germany
+    label: Germany
+    format: quantiles
+""",
+    )
+    local["MAILBOX"] = str(box)
+    ctx = context.build(cfg, local, root=tmp_path)
+    assert [d["key"] for d in ctx.datasets] == ["germany"]
+    assert "ebola" not in ctx.view["studies"]
+    assert ctx.hidden_studies == {"ebola"}
+    mail = page.mail_section(ctx)
+    assert "BDBV unit" not in mail
+    assert "ebola rows" not in mail
+    # Agent names are not BDBV lines.
+    assert "bdbv-scoring" in mail

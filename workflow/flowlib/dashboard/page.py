@@ -58,6 +58,8 @@ class Context:
     datasets: Sequence[Mapping[str, Any]] = ()
     mailbox: Path | None = None
     mail_filter: str = ""
+    mail_hide: str = ""
+    hidden_studies: set = field(default_factory=set)
     mail_lines: int = 400
     once: bool = False
     view: Mapping[str, Any] = field(default_factory=dict)
@@ -650,7 +652,7 @@ def checkpoint_table(
     by_head = "".join(f"<th>{html.escape(src)}" for src in sources)
     out = [
         f"<table><tr><th>run<th>ckpt<th>hash<th>{head}<th>held-out "
-        f"start<th>real-val{by_head}<th>saved</tr>"
+        f"start{by_head}<th>saved</tr>"
     ]
     for name, s, mtime in rows:
         by = s.get("held_out_loss_by_source") or {}
@@ -661,7 +663,6 @@ def checkpoint_table(
             html.escape(str(s.get("hash", ""))),
             _fmt(ho / den if ho and den else None) or "n/a",
             _fmt(s.get("held_out_loss_start")),
-            _fmt(s.get("real_validation_loss")),
             *(_fmt(by.get(src)) or "n/a" for src in sources),
             datetime.fromtimestamp(mtime).strftime("%m-%d %H:%M")
             if mtime
@@ -715,9 +716,10 @@ def nowcasts_section(
 ) -> str:
     """Return the nowcast panels of every dataset, behind a selector.
 
-    Every configured dataset is listed (Germany, BDBV, the held-out
-    simulations); one with no nowcasts yet is listed as empty, with why
-    (its `missing`), so the selector always offers it.
+    Every configured dataset is listed (Germany's development half and
+    the held-out simulations; BDBV is held out, Sam 11:20). One with no
+    nowcasts yet is listed as empty, with why (its `missing`), so the
+    selector always offers it.
     """
     datasets, sources = [], set()
     for ds in ctx.datasets:
@@ -821,9 +823,15 @@ def mail_section(ctx: Context) -> str:
     if not ctx.mailbox.exists():
         return "<p class=mut>no notes yet</p>"
     rx = re.compile(ctx.mail_filter, re.I) if ctx.mail_filter else None
+    # Lines about a held-out study (BDBV) are never shown.
+    hide = re.compile(ctx.mail_hide, re.I) if ctx.mail_hide else None
     with ctx.mailbox.open(errors="replace") as f:
         tail = deque(f, maxlen=ctx.mail_lines)
-    lines = [x.rstrip("\n") for x in tail if not rx or rx.search(x)]
+    lines = [
+        x.rstrip("\n")
+        for x in tail
+        if (not rx or rx.search(x)) and not (hide and hide.search(x))
+    ]
     if not lines:
         return "<p class=mut>no matching lines</p>"
 
@@ -960,7 +968,11 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     for r in ctx.runs:
         base = info.get(r.base or r.key, info[r.key])
         info[r.key]["bfull"] = base["full0"]
-    score_rows = scores.read(ctx.source.scores)
+    score_rows = [
+        r
+        for r in scores.read(ctx.source.scores)
+        if r.get("study") not in ctx.hidden_studies
+    ]
     sizes = checkpoint_sizes(ctx, info, score_rows)
     mail = mail_section(ctx)
     builts = {ds["key"]: ctx.nowcasts(ds["key"]) for ds in ctx.datasets}
