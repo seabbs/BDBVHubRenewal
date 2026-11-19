@@ -63,52 +63,97 @@ DAYS_PER_STEP = {
 """Days in a step of each source."""
 
 
-SOURCE_SHARES = {
-    "daily": 0.25,
-    "weekly": 0.25,
-    "3day": 0.15,
-    "daily+weekly": 0.125,
-    "daily+rolling7": 0.125,
-    "daily+3day": 0.05,
-    "daily+rolling3": 0.05,
-}
-"""Share of blocks of each layout, for one model of every frequency:
-daily, weekly and 3-day blocks, and daily blocks with each place's weekly
-or 3-day totals, either on period-end days only (`finetune.MIXED`) or as
-rolling sums on every day (`finetune.ROLLING`). r6 splits r5's mixed
-shares (25% and 10%) evenly between the two."""
+NATIVE_CADENCE = {1: "daily", 3: "3day", 7: "weekly"}
+"""The regular release cadence of each step width, in days."""
 
+
+DESIGNS = {
+    "r5": {
+        "source_shares": {
+            "daily": 0.25,
+            "weekly": 0.25,
+            "3day": 0.15,
+            "daily+weekly": 0.25,
+            "daily+3day": 0.10,
+        },
+        "cadences": {c: {"weekly": 1.0} for c in NATIVE_CADENCE.values()},
+    },
+    "r6": {
+        "source_shares": {
+            "daily": 0.25,
+            "weekly": 0.25,
+            "3day": 0.15,
+            "daily+weekly": 0.125,
+            "daily+rolling7": 0.125,
+            "daily+3day": 0.05,
+            "daily+rolling3": 0.05,
+        },
+        "cadences": {
+            "daily": {
+                "daily": 0.6,
+                "weekly": 0.2,
+                "daily_gaps": 0.1,
+                "weekdays": 0.1,
+            },
+            "3day": {"3day": 0.8, "3day_gaps": 0.2},
+            "weekly": {"weekly": 0.8, "weekly_gaps": 0.2},
+        },
+    },
+}
+"""Block designs by training grid: each layout's share of blocks
+(`source_shares`), and the release cadences of each step width with their
+shares (`cadences`, `finetune.release_days`).
+
+r5: every block has weekly releases.
+r6: releases follow the layout's steps, daily, every 3 days or weekly.
+Daily layouts also get weekly releases (the BDBV hub's daily data), daily
+releases on weekdays only, and missed releases (`_gaps`); 3-day and weekly
+layouts get missed releases. Daily blocks with weekly or 3-day totals have
+them either on period-end days only (`finetune.MIXED`) or as rolling sums
+on every day (`finetune.ROLLING`). Overall, 36% of blocks have daily
+releases, 32% weekly (12% daily blocks, 20% weekly blocks), 12% 3-day,
+6% daily with gaps, 6% weekdays only, 5% weekly with gaps and 3% 3-day
+with gaps."""
+
+DESIGN = "r6"
+"""The design in use (`use_design`)."""
+
+SOURCE_SHARES = dict(DESIGNS[DESIGN]["source_shares"])
+"""Share of blocks of each layout (`DESIGNS`)."""
+
+CADENCES = {k: dict(v) for k, v in DESIGNS[DESIGN]["cadences"].items()}
+"""Release cadences of each step width and their shares (`DESIGNS`)."""
 
 SOURCES = tuple(SOURCE_SHARES)
 """Sources blocks are cut from, drawn at `SOURCE_SHARES`."""
 
 
-CADENCES = {
-    "daily": {"daily": 0.6, "weekly": 0.2, "daily_gaps": 0.1, "weekdays": 0.1},
-    "3day": {"3day": 0.8, "3day_gaps": 0.2},
-    "weekly": {"weekly": 0.8, "weekly_gaps": 0.2},
-}
-"""Release cadences of the blocks of each step width
-(`finetune.release_days`), and their shares. A layout's releases follow its
-data: daily layouts get daily releases, as Germany's, 3-day layouts one
-every 3 days, weekly layouts weekly ones. A share has irregular cadences:
-missed releases (`_gaps`), daily releases on weekdays only, and for daily
-layouts weekly releases, as the BDBV hub's daily data come. Up to r5 every
-block had weekly releases, so a daily block's lag series were filled one
-cell in seven."""
+def use_design(grid: str) -> str:
+    """Set the block design of a training grid, r5's for any but r6.
+
+    Grids before r6 keep r5's design, so a run of one keeps its blocks.
+
+    Returns
+    -------
+    str
+        The design used.
+    """
+    global DESIGN, SOURCE_SHARES, CADENCES
+    DESIGN = grid if grid in DESIGNS else "r5"
+    SOURCE_SHARES = dict(DESIGNS[DESIGN]["source_shares"])
+    CADENCES = {k: dict(v) for k, v in DESIGNS[DESIGN]["cadences"].items()}
+    return DESIGN
 
 
 def native_cadence(source: str) -> str:
-    """Return the regular cadence of a source's step: daily, 3-day or weekly."""
-    return {1: "daily", 3: "3day", 7: "weekly"}[DAYS_PER_STEP[source]]
+    """Return the regular cadence of a source's steps (`NATIVE_CADENCE`)."""
+    return NATIVE_CADENCE[DAYS_PER_STEP[source]]
 
 
 def draw_cadence(source: str, rng: np.random.Generator) -> str:
     """Draw a block's release cadence at its source's shares (`CADENCES`)."""
     mix = CADENCES[native_cadence(source)]
-    names = list(mix)
-    p = np.array([mix[n] for n in names])
-    return str(rng.choice(names, p=p / p.sum()))
+    return str(rng.choice(list(mix), p=list(mix.values())))
 
 
 def check_sources(sources: tuple[str, ...]) -> None:
@@ -613,5 +658,6 @@ def real_blocks(
         padded["places"] = tuple(places)
         padded["mix"] = "real"
         padded["source"] = "weekly"
+        padded["cadence"] = "weekly"
         out.append(padded)
     return out

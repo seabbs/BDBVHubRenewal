@@ -17,21 +17,13 @@ DESIGN = {
     "holdout": 90,
     "outbreaks": 8400,
     "prefixes": [250, 500, 750, 1000, 2000, 4000, 8400],
-    "grid": "r6",
+    "grid": "r5",
     "draws": 1,
     "cuts": 32,
     "learning_rate": 1e-5,
     "bias_lr": 1e-3,
     "series_bias": True,
-    "sources": [
-        "daily",
-        "weekly",
-        "3day",
-        "daily+weekly",
-        "daily+rolling7",
-        "daily+3day",
-        "daily+rolling3",
-    ],
+    "sources": ["daily", "weekly", "3day", "daily+weekly", "daily+3day"],
     "univariate_share": 0.2,
     "chunk": 250,
     "subset_seed": 1,
@@ -124,7 +116,7 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
 
     args = fs.build_parser().parse_args(_trainer_args(tmp_path))
     assert args.until == 250
-    assert args.grid == "r6"
+    assert args.grid == "r5"
     # The held-out round 9, every batch: seeds 30900 to 30939.
     assert args.held_out_seeds == [30900, 30939]
     assert args.holdout == 90

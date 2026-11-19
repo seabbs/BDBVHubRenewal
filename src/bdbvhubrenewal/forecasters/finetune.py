@@ -21,6 +21,7 @@ from bdbvhubrenewal.forecasters.foundation import (
     HubTriangle,
     hub_triangle,
     layout_block,
+    rolling_totals,
 )
 
 __all__ = [
@@ -31,7 +32,6 @@ __all__ = [
     "final_counts",
     "release_days",
     "releases",
-    "rolling_totals",
     "training_block",
     "weekly_cutoffs",
 ]
@@ -334,29 +334,6 @@ the days each sums, a value on every day, as the German target's 7-day
 sums are."""
 
 
-def rolling_totals(days: np.ndarray, k: int) -> np.ndarray:
-    """Return each place's `k`-day sums ending on each day.
-
-    Parameters
-    ----------
-    days : numpy.ndarray
-        Daily counts, `[L, T]`.
-    k : int
-        Days in each sum.
-
-    Returns
-    -------
-    numpy.ndarray
-        `[L, T]`, the sum of days `t - k + 1` to `t` on day `t`, NaN on
-        the first `k - 1` days.
-    """
-    out = np.full(days.shape, np.nan)
-    if days.shape[1] >= k:
-        sums = np.cumsum(np.pad(days, ((0, 0), (1, 0))), axis=1)
-        out[:, k - 1 :] = sums[:, k:] - sums[:, :-k]
-    return out
-
-
 CADENCE_DAYS: Final = {"daily": 1, "3day": 3, "weekly": 7}
 """Days between releases of each regular cadence."""
 
@@ -365,7 +342,7 @@ GAP_SHARE: Final = 0.2
 
 
 def release_days(
-    first: str, cut: str, cadence: str, rng: np.random.Generator | None
+    first: str, cut: str, cadence: str, rng: np.random.Generator
 ) -> list[str]:
     """Return the release cut-offs of a block, the last on its cut.
 
@@ -381,7 +358,7 @@ def release_days(
         The first day a release may fall on, and the block's cut, ISO.
     cadence : str
         `daily`, `3day`, `weekly`, each with `_gaps`, or `weekdays`.
-    rng : numpy.random.Generator or None
+    rng : numpy.random.Generator
         Draws the gaps; unused by the other cadences.
 
     Returns
@@ -392,7 +369,7 @@ def release_days(
     Raises
     ------
     ValueError
-        If the cadence is none of these.
+        If the cadence is none of these, or `cut` is before `first`.
     """
     base = cadence.removesuffix("_gaps")
     gaps = base != cadence
@@ -402,6 +379,8 @@ def release_days(
         raise ValueError(f"unknown release cadence {cadence!r}")
     step = dt.timedelta(days=CADENCE_DAYS[base])
     start, day = as_date(first), as_date(cut)
+    if day < start:
+        raise ValueError(f"cut {cut} is before the first day {first}")
     out = []
     while day >= start:
         out.append(day)
@@ -410,7 +389,6 @@ def release_days(
     if cadence == "weekdays":
         out = [d for d in out[:-1] if d.weekday() < 5] + out[-1:]
     if gaps:
-        assert rng is not None
         miss = rng.random(len(out) - 1) < GAP_SHARE
         out = [d for d, m in zip(out[:-1], miss, strict=True) if not m]
         out.append(as_date(cut))

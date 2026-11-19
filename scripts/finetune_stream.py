@@ -504,9 +504,11 @@ def init_worker(
     univariate: float = ft.UNIVARIATE_SHARE,
     draws: int | None = None,
     subset_seed: int = 0,
+    grid: str = ft.DESIGN,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     global DRAWS_PER_PASS, SUBSET_SEED
+    ft.use_design(grid)
     ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
     ft.UNIVARIATE_SHARE = univariate
     DRAWS_PER_PASS, SUBSET_SEED = draws, subset_seed
@@ -1184,7 +1186,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     # Sources to train on: weekly, daily, and 3-day blocks summed from the
     # daily triangle; one of them trains an adapter for it alone.
-    parser.add_argument("--sources", nargs="+", default=list(ft.SOURCES))
+    # Every layout of the grid's design (`ft.DESIGNS`) by default.
+    parser.add_argument("--sources", nargs="+")
     # Draws of each simulation this pass trains on, all 16 snapshots
     # each, picked by --subset-seed; all draws if not given.
     parser.add_argument("--draws-per-simulation", type=int)
@@ -1291,7 +1294,9 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
     CHUNK = args.chunk
-    ft.SOURCES = tuple(args.sources)
+    # The grid picks the block design; grids before r6 keep r5's blocks.
+    ft.use_design(args.grid)
+    ft.SOURCES = tuple(args.sources or ft.SOURCE_SHARES)
     ft.check_sources(ft.SOURCES)
     ft.check_package(Path(__file__).parents[1])
     ft.UNIVARIATE_SHARE = args.univariate_share
@@ -1365,6 +1370,7 @@ def main() -> None:
             ft.UNIVARIATE_SHARE,
             DRAWS_PER_PASS,
             SUBSET_SEED,
+            args.grid,
         ),
     )
     held_pairs, empty = cut_in_workers(
@@ -1418,7 +1424,7 @@ def main() -> None:
         "univariate_share": ft.UNIVARIATE_SHARE,
         "parent_mix": list(ft.PARENT_MIX),
         "source_shares": ft.SOURCE_SHARES,
-        "release_cadences": ft.CADENCES,
+        **({"release_cadences": ft.CADENCES} if ft.DESIGN != "r5" else {}),
         "aggregate_end": ft.AGGREGATE_END,
         **(
             {
@@ -1772,8 +1778,7 @@ def main() -> None:
             kind = block.get("parent", "exact")
             parents[kind] = parents.get(kind, 0) + 1
             cadences = seen.setdefault("cadences", {})
-            source = block.get("source", "weekly")
-            cell = f"{source}:{block.get('cadence', 'weekly')}"
+            cell = f"{block['source']}:{block['cadence']}"
             cadences[cell] = cadences.get(cell, 0) + 1
         # Blocks of strata with no cases by their cut are not laid out.
         mix["empty"] = mix.get("empty", 0) + len(empty)
@@ -1796,7 +1801,11 @@ def main() -> None:
                 "blocks": seen["blocks"],
                 "series": seen["series"],
                 "level_mix": seen.get("mix", {}),
-                "cadence_mix": seen.get("cadences", {}),
+                **(
+                    {"cadence_mix": seen.get("cadences", {})}
+                    if ft.DESIGN != "r5"
+                    else {}
+                ),
                 "tokens": seen.get("tokens", 0),
                 "skipped_blocks": skipped,
                 "memory_gb": args.memory_gb,

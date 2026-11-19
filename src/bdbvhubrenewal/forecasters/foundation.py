@@ -508,18 +508,39 @@ def week_rows(tri: HubTriangle) -> PeriodRows:
     return PeriodRows(ends, totals)
 
 
+def rolling_totals(days: np.ndarray, k: int) -> np.ndarray:
+    """Return each place's `k`-day sums ending on each day.
+
+    Parameters
+    ----------
+    days : numpy.ndarray
+        Daily counts, `[L, T]`.
+    k : int
+        Days in each sum.
+
+    Returns
+    -------
+    numpy.ndarray
+        `[L, T]`, the sum of days `t - k + 1` to `t` on day `t`, NaN on
+        the first `k - 1` days.
+    """
+    out = np.full(days.shape, np.nan)
+    if days.shape[1] >= k:
+        sums = np.cumsum(np.pad(days, ((0, 0), (1, 0))), axis=1)
+        out[:, k - 1 :] = sums[:, k:] - sums[:, :-k]
+    return out
+
+
 def rolling_rows(tri: HubTriangle, k: int = 7) -> PeriodRows:
     """Return each place's `k`-day sums of a daily triangle's counts.
 
     Every day from the grid's `k`-th holds the sum of its `k` days at the
-    latest release, so a Saturday holds its week's total, as `week_rows`
-    gives, and every other day its own 7-day sum, as the German target.
+    latest release (`rolling_totals`), so a Saturday holds its week's
+    total, as `week_rows` gives, and every other day its own 7-day sum, as
+    the `daily+rolling7` training blocks have.
     """
     ends = np.arange(len(tri.times)) >= k - 1
-    totals = np.full(tri.final.shape, np.nan)
-    for t in np.flatnonzero(ends):
-        totals[:, t] = tri.final[:, t - k + 1 : t + 1].sum(axis=1)
-    return PeriodRows(ends, totals)
+    return PeriodRows(ends, rolling_totals(tri.final, k))
 
 
 def hub_triangle(
@@ -1165,10 +1186,6 @@ class FoundationModel:
         For the daily source: give each place a row of its weekly totals,
         summed from its daily counts (`week_rows`), and read the weekly
         forecast from that row. As the fine-tuned model was trained.
-    rolling_totals : bool
-        With `weekly_totals`, make that row each day's 7-day sum
-        (`rolling_rows`), as the `daily+rolling7` training blocks have,
-        rather than a total on Saturdays only.
     sample : Sampler or None
         Draws the trajectories, Chronos-2 with `checkpoint` by default.
     stream : str or None
@@ -1185,7 +1202,6 @@ class FoundationModel:
     layout: str
     checkpoint: Checkpoint | None = None
     weekly_totals: bool = False
-    rolling_totals: bool = False
     sample: Sampler | None = field(default=None, repr=False)
     stream: str | None = field(default=None, repr=False)
     known: Known | None = field(default=None, repr=False, compare=False)
@@ -1278,9 +1294,7 @@ class FoundationModel:
         horizon = len(tri.times) - start
         seed = int(task.rng(self.stream or self.name).integers(0, 2**31 - 1))
         period = None
-        if self.weekly_totals and self.rolling_totals:
-            period = rolling_rows(tri)
-        elif self.weekly_totals:
+        if self.weekly_totals:
             period = week_rows(tri)
         group = layout_block(tri, self.layout, places, start, period)
         if self.checkpoint is None:

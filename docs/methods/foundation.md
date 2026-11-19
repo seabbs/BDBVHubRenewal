@@ -104,14 +104,15 @@ Four or more flat places are grouped into regions, with region totals.
 One block in five is a single series, the national total or one leaf.
 The other blocks' targets are all levels, leaves and the national total, or leaves only, in equal shares.
 Each simulation is cut at 32 cut-offs, one block each, with up to 364 steps of context.
-A block is daily (25%), weekly (25%) or 3-day (15%).
-Or it is daily with a weekly row per place (12.5%), a 7-day rolling-sum row per place (12.5%), a 3-day row per place (5%) or a 3-day rolling-sum row per place (5%).
-A weekly or 3-day row has a value on each period's last day only; a rolling-sum row has one on every day, as the German target's 7-day sums do.
-A block's releases run up to its cut-off at a cadence that follows its steps (`CADENCES` in `scripts/finetune_chronos.py`).
+The block design follows the training grid (`DESIGNS` in `scripts/finetune_chronos.py`, set from the trainer's `--grid`).
+Under `r5`, the current run's, a block is daily (25%), weekly (25%), 3-day (15%), daily with a weekly row per place (25%), or daily with a 3-day row per place (10%), and every block has weekly releases.
+Under `r6`, on the same simulations, the daily rows with weekly and 3-day totals each split in two (12.5% and 5% each).
+One half has the totals on each period's last day only, the other has rolling sums on every day, as the German target's 7-day sums do.
+Each `r6` block's releases run up to its cut-off at a cadence that follows its steps (`finetune.release_days`).
 Daily blocks have daily releases (60%), weekly releases as the BDBV hub's (20%), daily releases with one in five missed (10%), or weekday releases only (10%).
 3-day and weekly blocks have releases every 3 or 7 days (80%), or the same with one in five missed (20%).
-This is training design `r6`, on grid `r5`'s simulations.
-Up to `r5` every block had weekly releases, so a daily block's lag series had a value in one cell in seven.
+Overall, 36% of `r6` blocks have daily releases, 32% weekly, 12% every 3 days, 6% daily with gaps, 6% weekdays only, 5% weekly with gaps and 3% every 3 days with gaps.
+A run switches to `r6` by setting `finetune.grid: r6` in `workflow/config.yaml`, with the seven sources in `finetune.sources`.
 
 Round 9, the first round of grid `r5`, is the held-out block.
 Training runs in one pass over the next ten rounds, ten whole blocks of 8,400 simulations, in seed order while they are simulated (`scripts/finetune_stream.py`, `workflow/rules/finetune.smk`).
