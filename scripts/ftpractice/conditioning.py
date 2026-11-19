@@ -206,6 +206,11 @@ def main() -> None:
             s.insert(0, "part", part)
             s.insert(0, "checkpoint", name)
             per_sim.append(s)
+            # Row level: does width follow the row's own error, and are
+            # the narrowest and widest tenths of rows equally covered?
+            err = (w["final"] - w["q0.5"]).abs() / w["final"]
+            decile = pd.qcut(w["width90"], 10, labels=False, duplicates="drop")
+            by_decile = w.groupby(decile)["cover90"].mean()
             rec = {
                 "checkpoint": name,
                 "part": part,
@@ -213,6 +218,9 @@ def main() -> None:
                 "width90": w["width90"].median(),
                 "cover90": w["cover90"].mean(),
                 "cover50": w["cover50"].mean(),
+                "rho_abs_err": w["width90"].corr(err, "spearman"),
+                "cover90_narrow10": by_decile.iloc[0],
+                "cover90_wide10": by_decile.iloc[-1],
                 "rho_sqrt_phi": s["width90"].corr(s["sqrt_phi"], "spearman"),
                 "rho_own_spread": s["width90"].corr(
                     s["own_spread"], "spearman"
