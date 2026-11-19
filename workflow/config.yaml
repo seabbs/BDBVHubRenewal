@@ -77,7 +77,7 @@ finetune:
   # Steps between the trainer's held-out evaluations: the monitor on the
   # first 100 held-out blocks, and by source (100 blocks a source) on a
   # multiple of it. They only score: the steps trained are the same.
-  eval_every: 100
+  eval_every: 200
   by_source_every: 200
   # Where the trainer's held-out evaluation runs: `local` (in the trainer,
   # as before) or `offload` (the trainer saves adapter snapshots for

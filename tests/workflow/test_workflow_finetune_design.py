@@ -25,7 +25,7 @@ DESIGN = {
     "chunk": 250,
     "subset_seed": 1,
     # Held-out evaluation, which never changes the steps trained.
-    "eval_every": 100,
+    "eval_every": 200,
     "by_source_every": 200,
 }
 
