@@ -48,13 +48,32 @@ Nothing in the workflow needs a notes file. As an optional local extra, setting 
 
 Task reads `config/local.env` itself, not `$LOCAL_CONFIG`.
 
-Every target runs with one profile, `workflow/profiles/default`, and this machine's cores, memory and GPU less its headroom (`workflow/flowlib/machine.py`, which the Taskfile and the tick call; `python3 workflow/flowlib/machine.py device` prints the device). `workflow/profiles/ci` is for CI.
+Every target runs with one profile, `workflow/profiles/default`, and this machine's cores, memory and GPU less its headroom (`workflow/flowlib/machine.py`, through `workflow/flowlib/compute.py`, which the Taskfile and the tick call; `python3 workflow/flowlib/machine.py device` prints the device). `workflow/profiles/ci` is for CI.
+
+### Where jobs run (`COMPUTE`)
+
+`COMPUTE=single` (the default) runs every job on this machine, as above.
+`COMPUTE=ssh` makes this machine the coordinator: it holds the one Snakemake run and places each job on a worker (`workflow/profiles/ssh`, the cluster-generic executor with `workflow/scripts/remote/`).
+
+- `WORKERS` lists the workers as `name=host:ROOT:CHECKOUT`: the host as ssh names it (or `local`, which may leave out ROOT and CHECKOUT for this machine's), its rounds folder and its checkout of this repository.
+- `WORKER_GROUPS` places rule groups on a worker, for example `WORKER_GROUPS="train=laptop score=archie"`. The groups are `simulate`, `train`, `publish` and `score` (`flowlib.compute.RULE_GROUPS`); a group left out, or `any`, runs on the first worker with room. Local rules (listings, records, publishing) always run on the coordinator.
+- The pool is the sum of the workers' budgets, each read from the worker's own local config at launch (`machine.py budget`); a worker that does not answer is left out, and its jobs fail at submit until it does. A GPU rule placed by its group also takes that worker's own `gpu_<worker>`, so one worker's jobs never hold another's GPU. The submit script holds a job until it fits beside the jobs already on its worker.
+- A job on another root or checkout: the worker must answer over ssh at submit, or the job fails at once (no other worker takes it); its checkout must be at the coordinator's commit; the job's inputs are pushed by rsync, its worker's Snakemake (`WORKER_SNAKEMAKE`) runs it with the coordinator's run settings (paths moved to the worker's ROOT) and the worker's own machine settings (device, headroom, caches); then its log, and on success its outputs and `params.copy_back`, are pulled back before the job counts as done. A worker silent for 10 minutes fails the job, and its retry resumes from the saved state.
+- The trainer's own state stays on its worker, so `train` stays on one worker.
+
+Only `single` and `ssh` ship. Rules declare only their needs (`threads`, `mem_mb`, `gpu`), placement lives only in the local config, and any other `COMPUTE=<name>` runs with `workflow/profiles/<name>` and nothing else from `flowlib.compute`, so a cluster or cloud profile needs no code:
+
+- a cluster with a shared filesystem: add the executor plugin to the `paper` group (for SLURM, `snakemake-executor-plugin-slurm`) and a `workflow/profiles/<name>/config.yaml` with `executor: slurm`, `jobs`, the settings of `workflow/profiles/default` (`rerun-triggers: [mtime]`, `default-resources`, `set-threads`), the account and partition in `default-resources` (`slurm_account`, `slurm_partition`, `runtime`), and in `set-resources` where groups go (for example the GPU partition for `train_segment`, `score_bdbv` and `score_germany`; the rules' `gpu: 1` is the plugin's GPU request). No files move: every job sees ROOT;
+- a cloud batch service: add an executor plugin (`snakemake-executor-plugin-googlebatch` or `-kubernetes`) and a storage plugin (`snakemake-storage-plugin-gcs` or `-s3`), and in the profile `executor`, `default-storage-provider`, `default-storage-prefix` (the bucket), `shared-fs-usage: none` and the executor's project, region and machine settings. Files then move through the bucket, not rsync, and ROOT must be a path the storage prefix maps (see the plugin's docs).
+
+Neither is tested here.
+
 A machine that needs more can name an untracked profile of its own with `SNAKEMAKE_PROFILE` (see `config/profile.example`), never one in the repository.
 All of them rerun a step only when an input is newer (`rerun-triggers: mtime`), so editing a script does not reschedule finished work.
 Settings that are the same on every machine are in `workflow/config.yaml`; override them with `--config` or `--configfile`.
 
 Two machines share only GitHub releases: simulation batches (`sims-r<N>`, one asset per batch) and checkpoints (`chronos-slots-<hash>`, `chronos-ft-<hash>`).
-Each machine reruns its task on a timer as releases land.
+Each machine reruns its task as releases land, in its coordinator run (`task run`).
 
 ## 1. Simulate (`rules/simulate.smk`)
 
@@ -136,7 +155,7 @@ uv run --group paper python workflow/scripts/dashboard.py --port 8765
 
 ## Scheduled runs
 
-The workflow updates itself as results come in. Each machine runs its own targets on a timer; Snakemake reruns only what changed.
+The workflow updates itself as results come in. Each machine runs its own targets in one persistent coordinator run, one tick after another; Snakemake reruns only what changed. With `COMPUTE=ssh` one coordinator runs every machine's jobs.
 
 | Where | `SCHEDULE_TARGETS` | Does, each tick |
 |---|---|---|
@@ -155,7 +174,8 @@ Work that appears during a run, such as a new checkpoint or a landed round, wait
 Snakemake locks the worktree it runs in, so each machine has one driver worktree.
 A tick is skipped when another tick is still running (a lock in `output/`) or when less than `MIN_FREE_GB` of memory or `MIN_DISK_GB` of disk is free. Its log is `output/workflow-tick.log`.
 
-`task schedule ACTION=install` installs a timer that runs the tick every `SCHEDULE_EVERY` minutes (default 60): a systemd user timer on Linux with systemd, else a cron line; a launchd agent on macOS; or the one `SCHEDULE_KIND` names. The unit is written from where the checkout is and the `PATH` it is installed from, so nothing machine-specific is committed. `ACTION=show` prints it, `ACTION=uninstall` removes it.
+`task run` (`workflow/scripts/coordinate.py`) is the coordinator run: it runs a tick, and as soon as one ends starts the next, after `COORDINATE_PAUSE` seconds (60), or `COORDINATE_BACKOFF` (600) after a failed tick. No timer runs it: start it once, under nohup or tmux, and stop it with `touch output/coordinator.stop` (it ends after the running tick) or by its pid.
+The timer that ran ticks before is not installed any more; `task schedule` shows an old one (`ACTION=show`) and removes it (`ACTION=uninstall`).
 
 On CI, the site and the paper (`.github/workflows/pages.yml`) rebuild every 6 hours (`43 */6 * * *`, after the fit store's run) and whenever `evidence/` changes on main, so new checkpoint scores reach the docs and the paper without a manual step.
 

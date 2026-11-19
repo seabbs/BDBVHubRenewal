@@ -1,6 +1,9 @@
-"""Install, show or remove the timer that runs workflow ticks.
+"""Show or remove the old timer that ran workflow ticks.
 
-    python3 workflow/scripts/schedule.py show|install|uninstall
+    python3 workflow/scripts/schedule.py show|uninstall
+
+The persistent coordinator run (`task run`, workflow/scripts/coordinate.py)
+replaces the timer, so `install` is refused.
 
 The timer runs workflow/scripts/tick.py every `SCHEDULE_EVERY` minutes
 from this checkout: a cron line or a systemd user timer on Linux, a
@@ -26,6 +29,13 @@ AGENTS = Path.home() / "Library" / "LaunchAgents"
 def main() -> int:
     """Show, install or remove the timer."""
     action = sys.argv[1] if len(sys.argv) > 1 else "show"
+    if action == "install":
+        # The persistent coordinator run replaces the timer.
+        print(
+            "no timer is installed any more: run `task run` once (under"
+            " nohup or tmux); `ACTION=uninstall` removes an old timer"
+        )
+        return 2
     cfg = localconfig.read()
     every = int(cfg.get("SCHEDULE_EVERY") or 60)
     path = shutil.which("uv") and str(Path(shutil.which("uv")).parent)

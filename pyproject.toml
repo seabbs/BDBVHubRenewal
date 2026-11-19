@@ -84,6 +84,7 @@ docs = [
 paper = [
   "snakefmt>=0.10",
   "snakemake>=9.27,<10",
+  "snakemake-executor-plugin-cluster-generic>=1.0.9",
 ]
 
 [tool.uv]

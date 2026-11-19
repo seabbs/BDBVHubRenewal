@@ -226,8 +226,7 @@ tasks:
       - >-
         {{.SNAKEMAKE}} {{.WF_TARGET}}
         {{if .SNAKEMAKE_PROFILE}}--workflow-profile {{.SNAKEMAKE_PROFILE}}
-        {{else}}--workflow-profile workflow/profiles/default
-        $(python3 workflow/flowlib/machine.py args){{end}}
+        {{else}}$(python3 workflow/flowlib/compute.py){{end}}
         {{.CLI_ARGS}}
 
   all:
@@ -300,12 +299,17 @@ tasks:
       - python3 workflow/scripts/monitor.py
 
   tick:
-    desc: Run this machine's scheduled workflow targets once (SCHEDULE_TARGETS in config/local.env), with the lock and room checks a timer uses
+    desc: Run this machine's scheduled workflow targets once (SCHEDULE_TARGETS in config/local.env), with the lock and room checks the coordinator run uses
     cmds:
       - python3 workflow/scripts/tick.py
 
+  run:
+    desc: The persistent coordinator run, one tick after another until `touch output/coordinator.stop` (run it once, under nohup or tmux)
+    cmds:
+      - python3 workflow/scripts/coordinate.py
+
   schedule:
-    desc: Show, install or remove the timer that runs `task tick` every SCHEDULE_EVERY minutes (ACTION=show|install|uninstall)
+    desc: Show or remove the old timer that ran `task tick` (ACTION=show|uninstall); `task run` replaces it
     cmds:
       - python3 workflow/scripts/schedule.py {{.ACTION | default "show"}}
 

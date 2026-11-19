@@ -77,10 +77,23 @@ DEFAULTS = (
     ("MONITOR_PORT", "8766"),
     ("MONITOR_REFRESH", "30"),
     ("SCHEDULE_EVERY", "60"),
+    # The coordinator run's pause between ticks, and after a failed one
+    # (seconds; workflow/scripts/coordinate.py).
+    ("COORDINATE_PAUSE", "60"),
+    ("COORDINATE_BACKOFF", "600"),
     ("SCHEDULE_KIND", ""),
     # Dashboard runs with a local folder (flowlib.dashboard.runs specs,
     # separated by `;`).
     ("DASHBOARD_RUNS", ""),
+    # Where jobs run (flowlib.compute): single (this machine) or ssh
+    # (this machine coordinates its WORKERS, name=host:ROOT:CHECKOUT,
+    # with rule groups placed on them, group=worker; not GROUPS, which
+    # the shells keep for themselves), and the command running
+    # Snakemake in a worker's checkout.
+    ("COMPUTE", "single"),
+    ("WORKERS", ""),
+    ("WORKER_GROUPS", ""),
+    ("WORKER_SNAKEMAKE", "uv run --group paper snakemake"),
     # Memory and disk a job leaves free when it starts (GB).
     ("MIN_FREE_GB", "20"),
     ("MIN_DISK_GB", "16"),
