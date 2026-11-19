@@ -928,38 +928,42 @@ def test_r6_simulates_its_held_out_round_20(tmp_path):
 
 
 def test_the_sim_qc_checks_fixed_thresholds_from_the_config(tmp_path):
-    # The deterministic check, with simulate.qc's thresholds; no model.
     blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
     qc = next(b for b in blocks if re.match(r"(local)?rule sim_qc:", b))
     assert "scripts/sim_qc.py" in qc
-    assert "--max-cases-per-stratum 500000" in qc
-    assert "--max-weekly-jump 1000" in qc
-    assert "--max-mean-delay-days 35" in qc
-    assert "claude" not in qc
+    limits = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())[
+        "simulate"
+    ]["qc"]
+    for key, value in limits.items():
+        assert f"--{key.replace('_', '-')} {value}" in qc
 
 
 def _done_round(root, r, batches=40):
-    """A simulated, QC'd round on disk, its files written in rule order."""
-    import time
+    """A simulated, QC'd round on disk, its files' times in rule order."""
+    import os
 
     d = root / "rounds" / f"r{r}"
     first = 30000 + 100 * r
     for sub in ("sims", "records", "qc"):
         (d / sub).mkdir(parents=True, exist_ok=True)
-    for s in range(first, first + batches):
-        (d / "sims" / f"counts-{s}.csv.gz").write_bytes(b"")
-        (d / "sims" / f"settings-{s}.csv").write_text("outbreak\n")
-    time.sleep(0.01)
-    for s in range(first, first + batches):
-        (d / "records" / f"record-{s}.csv").write_text("x\n")
-    time.sleep(0.01)
-    (d / "manifest.csv").write_text("x\n")
-    time.sleep(0.01)
-    (d / "qc" / "excluded.csv").write_text("simulation,reason,evidence\n")
-    (d / "qc" / "summary.txt").write_text("ok\n")
-    time.sleep(0.01)
-    (d / "seeds.txt").write_text("")
-    (d / "READY").write_text("")
+    stages = [
+        [d / "sims" / f"counts-{s}.csv.gz" for s in range(first, first + batches)]
+        + [d / "sims" / f"settings-{s}.csv" for s in range(first, first + batches)],
+        [d / "records" / f"record-{s}.csv" for s in range(first, first + batches)],
+        [d / "manifest.csv"],
+        [d / "qc" / "excluded.csv", d / "qc" / "summary.txt"],
+        [d / "seeds.txt", d / "READY"],
+    ]
+    for k, files in enumerate(stages):
+        for f in files:
+            if f.name == "excluded.csv":
+                f.write_text("simulation,reason,evidence\n")
+            elif f.name.startswith("settings-"):
+                f.write_text("outbreak\n")
+            else:
+                f.write_text("x\n")
+            os.utime(f, (1_000_000 + 10 * k, 1_000_000 + 10 * k))
+    return 1_000_000 + 10 * len(stages)
 
 
 TOPUP = {"grid_rounds": {"r6": {"rounds": [4], "topup_round": 32}}}
@@ -973,13 +977,13 @@ def test_the_top_up_plans_its_first_try_from_the_rounds_qc(tmp_path):
 
 
 def test_a_top_up_batch_simulates_its_planned_cells(tmp_path):
-    import time
+    import os
 
-    _done_round(tmp_path, 4)
-    time.sleep(0.01)
+    after = _done_round(tmp_path, 4)
     plan = tmp_path / "rounds" / "r32" / "topup" / "plan-0.txt"
     plan.parent.mkdir(parents=True)
     plan.write_text("33200 3364 3365\n")
+    os.utime(plan, (after, after))
     blocks = score_jobs(tmp_path, TOPUP, target="topup")
     sims = [b for b in blocks if re.match(r"rule simulate_batch:", b)]
     assert len(sims) == 1

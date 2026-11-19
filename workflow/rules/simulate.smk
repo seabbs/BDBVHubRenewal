@@ -195,11 +195,9 @@ rule sim_qc:
         TOOLS_ENV
     params:
         round_dir=lambda wc, input: Path(input[0]).parent,
-        # Fixed plausibility thresholds (scripts/sim_qc.py); a round
-        # already checked keeps its exclusions.
-        limits=" ".join(
-            f"--{k.replace('_', '-')} {v}" for k, v in SIM["qc"].items()
-        ),
+        # The thresholds (simulate.qc). The profiles rerun on mtime only,
+        # so a round already checked keeps its exclusions.
+        limits=SIM_QC_ARGS,
     shell:
         "uv run python scripts/sim_qc.py {params.round_dir} {params.limits} "
         "> {log} 2>&1"

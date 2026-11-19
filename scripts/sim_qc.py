@@ -1,25 +1,19 @@
 """Check one round of simulations against fixed plausibility thresholds.
 
 Summarises each simulation of `ROUND_DIR/sims` (`summaries`) and excludes
-those past a fixed threshold (`check`), each with its reason and evidence:
-
-- cases per stratum (the median total over draws, over the strata with
-  cases) above `--max-cases-per-stratum`: past the size the grid's
-  sampling distribution allows a stratum (5e5);
-- weekly cases rising more than `--max-weekly-jump`-fold in one week with
-  no reporting shock: the grid caps daily growth at 0.2 (at most about
-  4-fold in a week), and only a backlog or an outage releases reports in
-  bulk;
-- a mean reporting delay above `--max-mean-delay-days`: the grid's mean
-  delay is at most 21 days.
+those past a threshold (`check`), each with its reason and evidence: cases
+per stratum (the median total over draws, over the strata with cases),
+the largest week-on-week rise in weekly cases by reference date, and the
+mean reporting delay. The thresholds and why they are set as they are
+live in workflow/config.yaml (`simulate.qc`); the workflow passes them.
 
 Records the input table, the exclusions (`excluded.csv`: simulation,
 reason, evidence), the thresholds (`decisions.json`) and a one-line
 summary in `ROUND_DIR/qc/`. Simulations are never deleted; the trainer
 skips the excluded ones. Run from the repo root:
 
-    uv run python scripts/sim_qc.py ROUND_DIR [--max-cases-per-stratum N]
-        [--max-weekly-jump N] [--max-mean-delay-days N]
+    uv run python scripts/sim_qc.py ROUND_DIR --max-cases-per-stratum N
+        --max-weekly-jump N --max-mean-delay-days N
 """
 
 from __future__ import annotations
@@ -32,15 +26,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-LIMITS = {
-    "max_cases_per_stratum": 5e5,
-    "max_weekly_jump": 1000,
-    "max_mean_delay_days": 35,
-}
-"""The thresholds, as workflow/config.yaml's simulate.qc sets them."""
+LIMITS = ("max_cases_per_stratum", "max_weekly_jump", "max_mean_delay_days")
+"""The thresholds `check` takes, each a required option."""
 
-SHOCKS = {"backlog", "outage"}
-"""Reporting shocks that release reports in bulk."""
 CELL = [
     "strata",
     "n_places",
@@ -122,13 +110,10 @@ def check(table: pd.DataFrame, limits: dict[str, float]) -> pd.DataFrame:
     thresholds is listed once per threshold.
     """
     table = table.reset_index(drop=True)
-    if "shocks" not in table:
-        table = table.assign(shocks="none")
     per_stratum = table["cases_median"] / table["strata_with_cases"].clip(
         lower=1
     )
     jump = math.log(limits["max_weekly_jump"])
-    no_shock = ~table["shocks"].isin(SHOCKS)
     rules = [
         (
             per_stratum > limits["max_cases_per_stratum"],
@@ -139,13 +124,12 @@ def check(table: pd.DataFrame, limits: dict[str, float]) -> pd.DataFrame:
             ),
         ),
         (
-            (table["max_weekly_log_growth"] > jump) & no_shock,
+            table["max_weekly_log_growth"] > jump,
             f"weekly cases rise more than {limits['max_weekly_jump']:,.0f}-"
-            "fold in one week with no reporting shock",
+            "fold in one week",
             lambda i: (
                 "max_weekly_fold="
-                f"{math.exp(table['max_weekly_log_growth'][i]):.0f}, "
-                f"shocks={table['shocks'][i]}"
+                f"{math.exp(table['max_weekly_log_growth'][i]):.0f}"
             ),
         ),
         (
@@ -172,9 +156,9 @@ def main() -> None:
     """Check the round and record everything in its qc/ directory."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("round_dir", type=Path)
-    for key, value in LIMITS.items():
+    for key in LIMITS:
         parser.add_argument(
-            "--" + key.replace("_", "-"), type=float, default=value
+            "--" + key.replace("_", "-"), type=float, required=True
         )
     args = parser.parse_args()
     limits = {k: getattr(args, k) for k in LIMITS}

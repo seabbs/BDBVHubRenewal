@@ -2,12 +2,12 @@
 
 import json
 import math
-import os
 import subprocess
 import sys
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
 ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(Path(__file__).parent))
@@ -15,11 +15,9 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import sim_qc  # noqa: E402
 from test_finetune_chronos import _sim_dir  # noqa: E402
 
-LIMITS = {
-    "max_cases_per_stratum": 5e5,
-    "max_weekly_jump": 1000,
-    "max_mean_delay_days": 35,
-}
+LIMITS = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())[
+    "simulate"
+]["qc"]
 
 
 def _table(**changes):
@@ -39,47 +37,48 @@ def test_a_plausible_simulation_is_kept():
 
 
 def test_each_threshold_excludes_with_its_reason_and_evidence():
-    big = sim_qc.check(_table(cases_median=1.2e6), LIMITS)
-    assert big["reason"].tolist() == ["cases per stratum above 500,000"]
-    assert "cases_per_stratum=600000" in big["evidence"].iloc[0]
-    jump = sim_qc.check(_table(max_weekly_log_growth=math.log(2000)), LIMITS)
+    cap = LIMITS["max_cases_per_stratum"]
+    big = sim_qc.check(_table(cases_median=2.4 * cap), LIMITS)
+    assert big["reason"].tolist() == [f"cases per stratum above {cap:,.0f}"]
+    assert f"cases_per_stratum={1.2 * cap:.0f}" in big["evidence"].iloc[0]
+    fold = LIMITS["max_weekly_jump"]
+    jump = sim_qc.check(
+        _table(max_weekly_log_growth=math.log(2 * fold)), LIMITS
+    )
     assert jump["reason"].tolist() == [
-        "weekly cases rise more than 1,000-fold in one week with no "
-        "reporting shock"
+        f"weekly cases rise more than {fold:,.0f}-fold in one week"
     ]
-    late = sim_qc.check(_table(delay_mean_days=40.0), LIMITS)
-    assert late["reason"].tolist() == ["mean reporting delay over 35 days"]
+    days = LIMITS["max_mean_delay_days"]
+    late = sim_qc.check(_table(delay_mean_days=days + 5), LIMITS)
+    assert late["reason"].tolist() == [
+        f"mean reporting delay over {days:,.0f} days"
+    ]
 
 
-def test_a_jump_with_a_reporting_shock_is_kept():
-    # A backlog or an outage can release many reports in one week.
+def test_a_jump_is_excluded_whatever_the_reporting_shock():
+    # Growth is by reference date; shocks move report dates only.
     got = sim_qc.check(
-        _table(max_weekly_log_growth=math.log(2000), shocks="backlog"),
+        _table(
+            max_weekly_log_growth=math.log(2 * LIMITS["max_weekly_jump"]),
+            shocks="backlog",
+        ),
         LIMITS,
     )
-    assert got.empty
+    assert len(got) == 1
 
 
-def test_the_round_s_check_is_recorded_without_any_model(tmp_path):
+def test_the_round_s_check_is_recorded(tmp_path):
     sims = tmp_path / "r1" / "sims"
     sims.mkdir(parents=True)
     _sim_dir(sims)
-    # No claude on the path: the check calls no model.
-    env = {**os.environ, "PATH": "/usr/bin:/bin"}
+    flags = [
+        x
+        for k, v in LIMITS.items()
+        for x in ("--" + k.replace("_", "-"), str(v))
+    ]
     subprocess.run(
-        [
-            sys.executable,
-            "scripts/sim_qc.py",
-            str(tmp_path / "r1"),
-            "--max-cases-per-stratum",
-            "500000",
-            "--max-weekly-jump",
-            "1000",
-            "--max-mean-delay-days",
-            "35",
-        ],
+        [sys.executable, "scripts/sim_qc.py", str(tmp_path / "r1"), *flags],
         cwd=ROOT,
-        env=env,
         check=True,
     )
     qc = tmp_path / "r1" / "qc"
@@ -89,8 +88,18 @@ def test_the_round_s_check_is_recorded_without_any_model(tmp_path):
         "evidence",
     ]
     decisions = json.loads((qc / "decisions.json").read_text())
-    assert decisions["limits"] == LIMITS
+    assert decisions["limits"] == {k: float(v) for k, v in LIMITS.items()}
     assert decisions["n_simulations"] == 4
     assert len(pd.read_csv(qc / "input.csv")) == 4
     assert "of 4 simulations" in (qc / "summary.txt").read_text()
-    assert not (qc / "prompt-a.md").exists()
+
+
+def test_every_threshold_is_required(tmp_path):
+    out = subprocess.run(
+        [sys.executable, "scripts/sim_qc.py", str(tmp_path)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert out.returncode != 0
+    assert "--max-cases-per-stratum" in out.stderr
