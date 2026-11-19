@@ -10,17 +10,10 @@ with `rule` = `RULE`:
 - `germany`: the development half of the German benchmark
   (config/germany.toml), quantile WIS and log WIS on each model's own
   quantiles (`evaluation.germany.germany_forecasts`), by level.
-- `ebola`: the BDBV release backtest's development origins
-  (config/backtest.toml), fair CRPS, log CRPS and coverage of 1,000
-  draws per forecast, one seed for every model and one random stream
-  for the Chronos-2 models, against each week's count in the first
-  release D days on (`rolling_truth`), by level. Unit `bdbv` forecasts
-  the provinces and the country; unit `zones` forecasts the task
-  with the health zones in Chronos-2's block, as a submission does, and
-  gives the `zones` level, scored on each zone-week's count in the
-  first release D days on (`zone_truth`).
 - `held_out`: the trainer's held-out loss from the release's
   settings.json (unit `release`).
+
+BDBV is held out for the paper, so no BDBV rows are scored here.
 
 Relative scores divide by randomwalknowcast's on the cells every model
 and checkpoint of a level made. Every score comes from
@@ -29,8 +22,6 @@ keyed by checkpoint hash and run, with the checkpoint's outbreaks and
 grid.
 
 Usage:
-  python -m bdbvhubrenewal.evaluation.checkpoint bdbv CACHE LABEL
-  python -m bdbvhubrenewal.evaluation.checkpoint zones CACHE LABEL
   python -m bdbvhubrenewal.evaluation.checkpoint germany CACHE LABEL
   python -m bdbvhubrenewal.evaluation.checkpoint release CACHE HASH
   python -m bdbvhubrenewal.evaluation.checkpoint table CACHE EVIDENCE \\
@@ -55,7 +46,6 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.evaluation.sidecar import SIDECAR, with_sidecar
-from nowcasteval.scoring import scale_of, score_cells
 
 RULE: Final = "own-quantile-wis_crps-1000-common"
 """The scoring rule of 2026-11-16."""
@@ -69,9 +59,6 @@ ZERO_SHOT: Final = ("fm_chronos_daily_ragged", "fm_chronos_weekly_ragged")
 FINETUNED: Final = tuple(f"{m}_ft" for m in ZERO_SHOT)
 COMPLETE: Final = ("fm_chronos_daily_complete", "fm_chronos_weekly_complete")
 """Zero-shot Chronos-2 given complete data points only, a reference."""
-N_DRAWS: Final = 1000
-SCORED_FROM: Final = "2026-11-21"
-"""The first scored BDBV round; origins from it are never scored here."""
 GERMANY_UNIT: Final = "germany-days"
 """The cache folder of the German units, which score every one of the
 hub's 29 target days."""
@@ -87,7 +74,6 @@ CURRENT_RUNS: Final = frozenset({"one-model"})
 """Runs whose adapters this code loads (series bias, mixed layouts)."""
 HELD_OUT_LEVELS: Final = ("leaf", "national", "intermediate")
 GERMANY_CELL: Final = ["origin", "location", "target_end_date"]
-BDBV_CELL: Final = ["origin", "truth_vintage", "location", "target_end_date"]
 COVERAGE: Final = (50, 90)
 """Central intervals scored for coverage: 50% and 90%."""
 GERMANY_COVERAGE: Final = (50, 95)
@@ -229,15 +215,6 @@ def held_out_rows(checkpoint: str, settings: Mapping[str, Any]) -> pd.DataFrame:
     return out.reindex(columns=COLUMNS)
 
 
-def development_origins(
-    vintages: Sequence[str],
-    skip: Sequence[str] = (),
-    scored_from: str = SCORED_FROM,
-) -> list[str]:
-    """Return the origins: releases with a later one, before `scored_from`."""
-    return [v for v in vintages[:-1] if v not in skip and v < scored_from]
-
-
 def unit_done(root: Path, wanted: Sequence[str]) -> bool:
     """Whether a unit's folder holds a file for every date or origin."""
     have = {p.name.removesuffix(".csv.gz") for p in root.glob("*.csv.gz")}
@@ -245,105 +222,6 @@ def unit_done(root: Path, wanted: Sequence[str]) -> bool:
 
 
 # Scores ----------------------------------------------------------------
-
-
-def cell_scores(samples: pd.DataFrame, truth: pd.DataFrame) -> pd.DataFrame:
-    """Score each forecast cell's draws by CRPS, log CRPS, WIS and coverage.
-
-    WIS comes with its components (`WIS_PARTS`), from the draws'
-    quantiles.
-
-    All cells at once (`score_cells`); a cell's `level` is its location's
-    scale (`scale_of`).
-    """
-    keys = ["model", "origin", "location", "target_end_date"]
-    rows = samples.merge(truth, on=["location", "target_end_date"])
-    rows = rows.sort_values(keys, kind="stable")
-    group = rows.groupby(keys, sort=True)
-    cells = group.agg(
-        truth_vintage=("truth_vintage", "first"),
-        truth=("truth", "first"),
-        m=("value", "size"),
-    ).reset_index()
-    parts = []
-    start = np.concatenate([[0], np.cumsum(cells["m"].to_numpy())])
-    values = rows["value"].to_numpy(dtype=np.float64)
-    for m, idx in cells.groupby("m").groups.items():
-        sub = cells.loc[idx]
-        draws = np.stack([values[start[i] : start[i] + m] for i in idx])
-        scores = score_cells(sub["truth"].to_numpy(), draws, coverage=COVERAGE)
-        parts.append(
-            sub.assign(
-                crps=scores["crps"],
-                log_crps=scores["log_crps"],
-                wis=scores["wis"],
-                **{c: scores[c] for c in WIS_PARTS},
-                **{f"coverage_{p}": scores[f"coverage_{p}"] for p in COVERAGE},
-            )
-        )
-    cols = [*keys, "truth_vintage", "truth", "crps", "log_crps", "wis"]
-    cols += list(WIS_PARTS)
-    cols += [f"coverage_{p}" for p in COVERAGE]
-    if not parts:
-        return pd.DataFrame(columns=[*cols, "level"])
-    out = pd.concat(parts).sort_index()[cols].reset_index(drop=True)
-    out["level"] = scale_of(out["location"])
-    return out
-
-
-def zone_truth(
-    daily_zones: pd.DataFrame,
-    cutoffs: Mapping[str, str],
-    zones: Sequence[str],
-    delay: int,
-) -> pd.DataFrame:
-    """Return each zone-week's count in the first release `delay` days on.
-
-    Each release counts every forecast zone and week from the zone's
-    first report (its earliest week with an onset in any release), 0
-    where it reports no onset (`weekly_counts` lists weeks with
-    one). Earlier weeks are left out: no release reports the zone yet,
-    and a 0 there would score every model as exact.
-
-    Parameters
-    ----------
-    daily_zones : pandas.DataFrame
-        The daily zone table (`load_daily_zones`).
-    cutoffs : mapping
-        Each release's cut-off, by vintage.
-    zones : sequence of str
-        The zones forecast.
-    delay : int
-        $D$, the days from a week's end to the release giving its truth.
-
-    Returns
-    -------
-    pandas.DataFrame
-        As `rolling_truth`.
-    """
-    from nowcasteval.nowcast import rolling_truth
-    from nowcastutils.snapshots import weekly_counts
-
-    counts = {v: weekly_counts(daily_zones, v) for v in cutoffs}
-    weeks = sorted(
-        set().union(*(set(c["target_end_date"]) for c in counts.values()))
-    )
-    grid = pd.MultiIndex.from_product(
-        [sorted(zones), weeks], names=["location", "target_end_date"]
-    )
-    frames = [
-        c.set_index(["location", "target_end_date"])["total"]
-        .reindex(grid, fill_value=0)
-        .reset_index()
-        .assign(vintage=v, cutoff=cutoffs[v])
-        for v, c in counts.items()
-    ]
-    every = pd.concat(counts.values())
-    first = every.loc[every["total"] > 0].groupby("location")["target_end_date"]
-    start = first.min()
-    rows = pd.concat(frames, ignore_index=True)
-    begun = rows["target_end_date"] >= rows["location"].map(start)
-    return rolling_truth(rows.loc[begun.fillna(False)], delay)
 
 
 def tag(rows: pd.DataFrame, label: str) -> pd.DataFrame:
@@ -469,92 +347,6 @@ def _write(frame: pd.DataFrame, path: Path) -> None:
     tmp.rename(path)
 
 
-def _common(model: Any) -> Any:
-    """Return the model drawing from the stream every Chronos-2 shares."""
-    from nowcasteval.marginals import COMMON_STREAM
-
-    if hasattr(model, "stream"):
-        return dataclasses.replace(model, stream=COMMON_STREAM)
-    return model
-
-
-def bdbv_origins(data: Path = Path("data")) -> list[str]:
-    """Return the release backtest's development origins."""
-    from nowcasteval import backtest as bt
-
-    config = bt.load_config()
-    target = pd.read_csv(data / "target.csv", dtype={"kind": str})
-    return development_origins(bt.real_vintages(target), config.skip_origins)
-
-
-def bdbv_unit(
-    cache: Path, label: str, zones: bool = False, data: Path = Path("data")
-) -> None:
-    """Draw `N_DRAWS` final counts per origin for each of a label's models.
-
-    With `zones`, the task holds the health zones in Chronos-2's block
-    beside the provinces and the country (`load_zone_data`), as a
-    submission does; unit `zones`, else `bdbv`.
-    """
-    from bdbvhubrenewal.data import load_daily
-    from bdbvhubrenewal.data.zones import load_zone_data
-    from bdbvhubrenewal.evaluation import store
-    from bdbvhubrenewal.forecasters import get_model
-    from bdbvhubrenewal.forecasters.foundation import FoundationModel, prefetch
-    from nowcasteval import backtest as bt
-    from nowcastutils.base import ModelUnavailableError, add_national
-
-    _pin(label)
-    config = bt.load_config()
-    target = pd.read_csv(data / "target.csv", dtype={"kind": str})
-    tasks = store.origin_tasks(
-        target,
-        pd.read_csv(data / "delays.csv.gz"),
-        config,
-        load_daily(data),
-        zones=load_zone_data(data) if zones else None,
-    )
-    root = cache / ("zones" if zones else "bdbv") / label
-    root.mkdir(parents=True, exist_ok=True)
-    record_precision(root)
-    todo = {
-        o: dataclasses.replace(tasks[o], n_samples=N_DRAWS, seed=config.seed)
-        for o in bdbv_origins(data)
-        if not (root / f"{o}.csv.gz").exists()
-    }
-    # Chronos-2 is predicted for every origin in a few batched passes.
-    models = [
-        prefetch(m, list(todo.values()))
-        if isinstance(m, FoundationModel)
-        else m
-        for m in (_common(get_model(m)) for m in label_models(label))
-    ]
-    for origin, task in todo.items():
-        path = root / f"{origin}.csv.gz"
-        start = time.monotonic()
-        frames = []
-        for model in models:
-            try:
-                drawn = model.forecast(task)
-            except ModelUnavailableError as err:
-                print(f"{model.name} at {origin}: {err}", flush=True)
-                continue
-            if drawn is None:
-                continue
-            if "as_of" in drawn:
-                drawn = drawn.loc[drawn["as_of"].isna()].drop(columns="as_of")
-            frames.append(add_national(drawn).assign(model=model.name))
-        cols = ["location", "target_end_date", "sample", "value", "model"]
-        out = pd.concat(frames, ignore_index=True) if frames else None
-        out = (out if out is not None else pd.DataFrame(columns=cols))[cols]
-        out = out.assign(origin=origin, value=out["value"].astype("float32"))
-        _write(out, path)
-        _free()
-        took = time.monotonic() - start
-        print(f"{root.parent.name} {label} {origin}: {took:.0f} s", flush=True)
-    print(f"{root.parent.name} {label} done", flush=True)
-
-
 def german_tasks_dir(
     cache: Path, triangle: Path, n_samples: int, seed: int
 ) -> Path:
@@ -565,7 +357,6 @@ def german_tasks_dir(
     the fields of the `ForecastTask` they are pickled as, and the draws
     and seed.
     """
-    import dataclasses
     import hashlib
     import inspect
 
@@ -717,60 +508,6 @@ def germany_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
     return _with_precision(out, cache / GERMANY_UNIT, labels)
 
 
-def bdbv_rows(
-    cache: Path, labels: Sequence[str], data: Path = Path("data")
-) -> pd.DataFrame:
-    """Return the BDBV backtest's rule rows.
-
-    National and provinces from unit `bdbv`, zones from `zones` for the
-    labels whose zone unit has finished.
-    """
-    from bdbvhubrenewal.data.tidy import load_daily_zones
-    from nowcasteval import backtest as bt
-    from nowcasteval.nowcast import resolve_truth_delay, rolling_truth
-
-    config = bt.load_config()
-    target = pd.read_csv(data / "target.csv", dtype={"kind": str})
-    real = target.loc[target["kind"] == "real"]
-    delay = resolve_truth_delay(config, target)
-    truth = rolling_truth(real, delay)
-    cutoffs = dict(
-        real[["vintage", "cutoff"]].drop_duplicates().astype(str).to_numpy()
-    )
-    daily_zones = None
-    parts = []
-    for label in labels:
-        for unit in ("bdbv", "zones"):
-            if (
-                unit == "zones"
-                and not (cache / unit / f"{label}.done").exists()
-            ):
-                # A zone unit's rows count once it is finished: part of one
-                # would narrow the zone cells every label is matched on.
-                continue
-            draws = _cached(cache / unit / label)
-            if draws is None:
-                continue
-            draws = draws.loc[draws["origin"] < SCORED_FROM]
-            zone = scale_of(draws["location"]) == "zones"
-            if unit == "bdbv":
-                draws, at = draws.loc[~zone], truth
-            else:
-                draws = draws.loc[zone]
-                if daily_zones is None:
-                    daily_zones = load_daily_zones(data)
-                at = zone_truth(
-                    daily_zones, cutoffs, sorted(set(draws["location"])), delay
-                )
-            at = at.astype({"target_end_date": str, "truth_vintage": str})
-            parts.append(tag(cell_scores(draws, at), label))
-    if not parts:
-        return pd.DataFrame(columns=COLUMNS)
-    sc = pd.concat(parts, ignore_index=True)
-    out = relative(matched(sc, BDBV_CELL), "ebola", ("crps", "log_crps"))
-    return _with_precision(out, cache / "bdbv", labels)
-
-
 def _existing(path: Path, columns: Sequence[str]) -> pd.DataFrame:
     if not Path(path).exists():
         return pd.DataFrame(columns=list(columns))
@@ -792,8 +529,8 @@ def table(
         )
         meta[h] = (settings, *outbreaks_and_grid(settings, release))
     labels = [REFERENCE, *hashes]
-    # BDBV is held out for the paper (Sam, 2026-11-19): no BDBV rows are
-    # computed, and those already in `evidence` are kept.
+    # BDBV is held out for the paper: no BDBV rows are computed, and
+    # those already in `evidence` are kept.
     new = pd.concat(
         [
             germany_rows(cache, labels),
@@ -827,9 +564,7 @@ def main(argv: Sequence[str]) -> None:
     if len(argv) < 3:
         raise SystemExit(__doc__)
     study, cache = argv[0], Path(argv[1])
-    if study in ("bdbv", "zones"):
-        bdbv_unit(cache, argv[2], zones=study == "zones")
-    elif study == "germany":
+    if study == "germany":
         germany_unit(cache, argv[2])
     elif study == "release":
         release_unit(cache, argv[2])

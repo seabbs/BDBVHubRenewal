@@ -5,12 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 
 from bdbvhubrenewal.evaluation import checkpoint as ck
-from nowcasteval.scoring import coverage_sample, crps_sample
 
 
 def test_german_dates_forecast_together_come_from_the_environment(
@@ -74,106 +72,6 @@ def test_outbreaks_and_grid_from_settings_or_release_text():
     assert ck.outbreaks_and_grid({}, {}) == (0, "unknown")
 
 
-def test_development_origins_stop_before_the_scored_rounds():
-    vintages = ["2026-10-01", "2026-10-08", "2026-11-21", "2026-11-28"]
-    got = ck.development_origins(vintages, skip=["2026-10-08"])
-    assert got == ["2026-10-01"]
-
-
-def _draws(rng, cells, m=200):
-    rows = []
-    for model, loc, week in cells:
-        rows.append(
-            pd.DataFrame(
-                {
-                    "model": model,
-                    "origin": "2026-10-01",
-                    "location": loc,
-                    "target_end_date": week,
-                    "sample": np.arange(m),
-                    "value": rng.poisson(10, m).astype(float),
-                }
-            )
-        )
-    return pd.concat(rows, ignore_index=True)
-
-
-def test_cell_scores_equal_scoring_each_cell():
-    rng = np.random.default_rng(0)
-    cells = [
-        (m, loc, w)
-        for m in ("a", "b")
-        for loc in ("CD", "CD-IT", "CD-IT-10")
-        for w in ("2026-10-03", "2026-10-10")
-    ]
-    draws = _draws(rng, cells)
-    truth = draws[["location", "target_end_date"]].drop_duplicates()
-    truth = truth.assign(truth=rng.poisson(10, len(truth)).astype(float))
-    truth["truth_vintage"] = "2026-10-20"
-    got = ck.cell_scores(draws, truth)
-    assert len(got) == len(cells)
-    for _, row in got.iterrows():
-        x = draws.loc[
-            (draws["model"] == row["model"])
-            & (draws["location"] == row["location"])
-            & (draws["target_end_date"] == row["target_end_date"]),
-            "value",
-        ].to_numpy()
-        y = row["truth"]
-        assert row["crps"] == pytest.approx(crps_sample(y, x))
-        assert row["log_crps"] == pytest.approx(
-            crps_sample(np.log1p(y), np.log1p(x))
-        )
-        assert row["coverage_90"] == float(coverage_sample(y, x, 0.9))
-    # 50% and 90% coverage only (spec): no 95% column for BDBV.
-    assert "coverage_95" not in got
-    assert set(got["level"]) == {"national", "provinces", "zones"}
-
-
-def test_zone_truth_is_each_zone_week_in_the_first_release_d_days_on():
-    # CD-IT-10: first onset in the week ending 26 Sep, then the week ending
-    # 3 Oct; CD-IT-11: first onset in the week ending 3 Oct.
-    daily_zones = pd.DataFrame(
-        {
-            "vintage": ["2026-10-10"] * 2 + ["2026-10-17"] * 4,
-            "location": ["CD-IT-10", "CD-IT-10", "CD-IT-10", "CD-IT-10",
-                         "CD-IT-10", "CD-IT-11"],
-            "onset_date": ["2026-09-22", "2026-10-01", "2026-09-22",
-                           "2026-10-01", "2026-10-02", "2026-10-01"],
-            "observed": [1, 1, 1, 1, 1, 1],
-            "imputed": [0, 0, 0, 0, 0, 0],
-        }
-    )  # fmt: skip
-    cutoffs = {"2026-10-10": "2026-10-09", "2026-10-17": "2026-10-16"}
-    got = ck.zone_truth(daily_zones, cutoffs, ["CD-IT-10", "CD-IT-11"], 7)
-    week = got.set_index(["location", "target_end_date"])
-    # The week ending 3 Oct is due on 10 Oct: the 17 Oct release, 2 cases.
-    assert week.loc[("CD-IT-10", "2026-10-03"), "truth"] == 2
-    assert week.loc[("CD-IT-10", "2026-10-03"), "truth_vintage"] == "2026-10-17"
-    assert week.loc[("CD-IT-11", "2026-10-03"), "truth"] == 1
-    # Weeks before a zone's first report are not scored: no release
-    # reports the zone yet, so a 0 there would score every model as exact.
-    assert ("CD-IT-11", "2026-09-26") not in week.index
-    assert ("CD-IT-10", "2026-09-26") in week.index
-
-
-def test_zone_truth_counts_0_after_a_zones_first_report():
-    # CD-IT-10 reports in the week ending 26 Sep and nothing the week after.
-    daily_zones = pd.DataFrame(
-        {
-            "vintage": ["2026-10-17", "2026-10-17"],
-            "location": ["CD-IT-10", "CD-IT-11"],
-            "onset_date": ["2026-09-22", "2026-10-01"],
-            "observed": [1, 1],
-            "imputed": [0, 0],
-        }
-    )
-    cutoffs = {"2026-10-17": "2026-10-16"}
-    got = ck.zone_truth(daily_zones, cutoffs, ["CD-IT-10", "CD-IT-11"], 7)
-    week = got.set_index(["location", "target_end_date"])
-    assert week.loc[("CD-IT-10", "2026-10-03"), "truth"] == 0
-
-
 def _scores(models, checkpoints, levels, base=1.0):
     rows = []
     for model, chk in zip(models, checkpoints, strict=True):
@@ -206,7 +104,7 @@ def test_relative_divides_by_the_baseline_by_level():
         ["national", "zones"],
     )
     got = ck.relative(
-        ck.matched(rows, ck.BDBV_CELL), "ebola", ("crps", "log_crps")
+        ck.matched(rows, ck.GERMANY_CELL), "ebola", ("crps", "log_crps")
     )
     mine = got.loc[got["checkpoint"] == "abc"]
     assert list(mine["rel_crps"]) == [0.5, 0.5]
@@ -378,20 +276,6 @@ def test_cached_draws_keep_the_7day_target(tmp_path):
     assert "target" not in got
 
 
-def test_tables_carry_wis_and_its_components():
-    for c in ("wis", "dispersion", "overprediction", "underprediction"):
-        assert c in ck.COLUMNS
-    rng = np.random.default_rng(1)
-    draws = _draws(rng, [("a", "CD", "2026-10-03")])
-    truth = pd.DataFrame(
-        {"location": ["CD"], "target_end_date": ["2026-10-03"],
-         "truth": [10.0], "truth_vintage": ["v"]}
-    )  # fmt: skip
-    got = ck.cell_scores(draws, truth).iloc[0]
-    parts = got["dispersion"] + got["overprediction"] + got["underprediction"]
-    assert parts == pytest.approx(got["wis"])
-
-
 def test_relative_rows_mean_the_wis_components():
     rows = _scores(
         ["randomwalknowcast", "fm_chronos_daily_ragged"],
@@ -410,12 +294,8 @@ def test_relative_rows_mean_the_wis_components():
 def test_tables_score_no_bdbv_held_out_for_the_paper(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # BDBV is held out entirely (Sam, 2026-11-19): the tables compute no
-    # BDBV rows; rows already in them stay.
-    def no_bdbv(*_a, **_k):
-        raise AssertionError("BDBV rows computed")
-
-    monkeypatch.setattr(ck, "bdbv_rows", no_bdbv)
+    # BDBV is held out: the tables compute no BDBV rows, and rows already
+    # in them stay.
     monkeypatch.setattr(
         ck, "germany_rows", lambda *_a: pd.DataFrame(columns=ck.COLUMNS)
     )

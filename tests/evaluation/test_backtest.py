@@ -213,6 +213,82 @@ def test_score_tasks_scores_vintage_matched_rows() -> None:
     assert plain["complete"].all()
 
 
+def test_each_scored_week_is_the_truth_of_its_own_week() -> None:
+    import datetime as dt
+
+    from bdbvhubrenewal.forecasters import ForecastTask, FoundationModel
+
+    # Weekly totals rise by a known step and each week is reported one
+    # week on, so the last week and the weeks ahead are forecast. A week
+    # out of place is off by one step. The weeks cross ISO 2020's week 53.
+    weeks = pd.date_range("2020-09-05", "2021-02-27", freq="7D")
+    total = pd.Series(10.0 + 4 * np.arange(len(weeks)), index=weeks)
+    ref = pd.Timestamp("2020-12-19")
+    releases = [
+        pd.DataFrame(
+            {
+                "kind": "real",
+                "vintage": v.strftime("%Y-%m-%d"),
+                "location": loc,
+                "target_end_date": total.loc[
+                    : v - pd.Timedelta(days=7)
+                ].index.strftime("%Y-%m-%d"),
+                "total": share
+                * total.loc[: v - pd.Timedelta(days=7)].to_numpy(),
+                "cutoff": v.strftime("%Y-%m-%d"),
+            }
+        )
+        for v in weeks[weeks <= ref]
+        for loc, share in (("CD", 2.0), ("CD-KN", 1.0), ("CD-NK", 1.0))
+    ]
+    history = pd.concat(releases, ignore_index=True)
+    ahead = [ref + pd.Timedelta(days=7 * h) for h in range(-1, 8)]
+    task = ForecastTask(
+        vintage=ref.strftime("%Y-%m-%d"),
+        reference_date=ref.date(),
+        kind="real",
+        cutoff=ref.strftime("%Y-%m-%d"),
+        target=history.loc[history["vintage"] == ref.strftime("%Y-%m-%d")],
+        delays=None,
+        locations=("CD-KN", "CD-NK"),
+        target_end_dates=tuple(w.strftime("%Y-%m-%d") for w in ahead),
+        n_samples=5,
+        target_history=history,
+    )
+
+    def extrapolate(groups, horizon, n, _seed):
+        out = []
+        for g in groups:
+            t = np.atleast_2d(g["target"])
+            step = np.arange(1, horizon + 1)
+            path = t[:, -1:] + step * (t[:, -1:] - t[:, -2:-1])
+            out.append(np.broadcast_to(path, (n, *path.shape)))
+        return out
+
+    model = FoundationModel(
+        "chronos_extrapolate", "weekly", "ragged", None, sample=extrapolate
+    )
+    forecasts = run_forecasts([model], [task])
+    truth = pd.DataFrame(
+        {
+            "location": np.repeat(["CD", "CD-KN", "CD-NK"], len(weeks)),
+            "target_end_date": np.tile(weeks.strftime("%Y-%m-%d"), 3),
+            "truth": np.concatenate([2 * total, total, total]),
+        }
+    )
+    scores = score_tasks(forecasts, truth, "2021-03-06")
+    end = pd.to_datetime(scores["target_end_date"])
+    assert set(scores["horizon"]) == set(range(-1, 8))
+    assert (end == ref + pd.to_timedelta(7 * scores["horizon"], "D")).all()
+    share = scores["location"].map({"CD": 2.0, "CD-KN": 1.0, "CD-NK": 1.0})
+    np.testing.assert_array_equal(
+        scores["truth"], share * total.loc[end].to_numpy()
+    )
+    np.testing.assert_array_equal(scores["ae_median"], 0)
+    np.testing.assert_array_equal(scores["wis"], 0)
+    assert dt.date(2021, 1, 2) in set(end.dt.date)
+
+
 def test_make_tasks_asks_for_later_vintages(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
