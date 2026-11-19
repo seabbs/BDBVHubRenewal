@@ -2,9 +2,10 @@
 r"""Coherent sample trajectories from any model's quantile forecasts.
 
 A quantile forecast gives each series and step its own marginal and
-nothing about how they move together. `couple` draws trajectories that
-keep every cell's marginal exactly (each draw is the cell's quantile
-function read at a uniform level) and join the cells by a copula:
+nothing about how they move together. `couple` draws trajectories whose
+cells each follow the cell's quantile function, piecewise linear between
+the levels and flat beyond them (so the end quantiles carry the tail
+mass), and joins the cells by a copula:
 
 - `independent`: every cell draws its own level, as the foundation
   model's sampler does now;
@@ -12,7 +13,7 @@ function read at a uniform level) and join the cells by a copula:
   quantile-only analogue of ensemble copula coupling;
 - `gaussian`: levels from a Gaussian copula with AR(1) correlation `rho`
   between steps and exchangeable correlation `s` between series, given
-  in `fit` (estimated online in a later step, #356).
+  in `fit`.
 
 The parameters come from a `fit`; nothing is hard-coded. This module
 depends on numpy and scipy only, so any model can use it.
@@ -37,10 +38,9 @@ def read_quantiles(
 ) -> np.ndarray:
     """Read quantile functions at uniform draws.
 
-    Linear between the levels and flat beyond them, as
-    `forecasters.foundation.quantile_draws` reads them; that function moves
-    here when the packages are split (WP2b), where the stored fits' keys
-    move anyway.
+    Linear between the levels and flat beyond them, the same reading as
+    `forecasters.foundation.quantile_draws`. That copy is part of the
+    foundation model's stored-fit keys, so it is not imported here.
 
     Parameters
     ----------
@@ -120,12 +120,13 @@ def couple(
     -------
     numpy.ndarray
         Draws `[n_samples, series, steps]`, each cell's marginal its
-        quantiles'.
+        piecewise-linear quantile function.
 
     Raises
     ------
     ValueError
-        For an unknown method or a `gaussian` fit without `rho` and `s`.
+        For an unknown method, or a `gaussian` fit without `rho` and `s`
+        or with them out of range.
     """
     quantiles = np.asarray(quantiles, dtype=float)
     levels = np.asarray(levels, dtype=float)
@@ -140,9 +141,13 @@ def couple(
             raise ValueError(
                 "a gaussian coupling needs fit['rho'] and fit['s']"
             )
-        u = _gaussian_levels(
-            n_samples, series, steps, float(fit["rho"]), float(fit["s"]), rng
-        )
+        rho, s = float(fit["rho"]), float(fit["s"])
+        if not (-1 < rho < 1 and 0 <= s <= 1):
+            raise ValueError(
+                "a gaussian coupling needs -1 < rho < 1 and 0 <= s <= 1, "
+                f"got rho={rho}, s={s}"
+            )
+        u = _gaussian_levels(n_samples, series, steps, rho, s, rng)
     else:
         raise ValueError(f"unknown method {method!r}; one of {METHODS}")
     values = np.broadcast_to(quantiles, (n_samples, *quantiles.shape))
