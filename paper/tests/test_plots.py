@@ -42,10 +42,11 @@ def test_baselines_have_their_own_colours() -> None:
     assert len(colours) == 3
 
 
-def test_fine_tuned_and_zero_shot_share_a_colour_not_a_dash() -> None:
+def test_fine_tuned_and_zero_shot_differ_in_colour_and_dash() -> None:
+    # Bars show no dashes, so the main models differ in colour (Sam 00:15).
     ft = model_style("fm_chronos_daily_ragged_ft", [])
     zs = model_style("fm_chronos_daily_ragged", [])
-    assert ft[0] == zs[0]
+    assert ft[0] != zs[0]
     assert ft[1] != zs[1]
 
 
@@ -123,19 +124,21 @@ def test_synthetic_panel_shows_factors_and_weekly_horizons() -> None:
 
 
 @pytest.mark.parametrize("family", ["daily", "weekly"])
-def test_chronos_variants_share_a_colour_with_distinct_styles(family) -> None:
+def test_chronos_variants_have_distinct_styles(family) -> None:
     names = [
         f"fm_chronos_{family}_complete",
         f"fm_chronos_{family}_ragged",
         f"fm_chronos_{family}_ragged_ft",
     ]
     styles = [model_style(n, []) for n in names]
-    assert len({c for c, _ in styles}) == 1
+    # The daily models are the main figures' and differ in colour; the
+    # weekly ones (SI only) share one.
+    assert len({c for c, _ in styles}) == (3 if family == "daily" else 1)
     assert [d for _, d in styles] == ["dotted", "dashed", "solid"]
     # Bars are filled with the model's colour, never hatched (Sam, #367).
     bars = [bar_style(n, []) for n in names]
     assert all("hatch" not in b for b in bars)
-    assert len({b["color"] for b in bars}) == 1
+    assert [b["color"] for b in bars] == [c for c, _ in styles]
     points = [tuple(sorted(point_style(n, []).items())) for n in names]
     assert len(set(points)) == 3
     assert model_order(list(reversed(names))) == names
