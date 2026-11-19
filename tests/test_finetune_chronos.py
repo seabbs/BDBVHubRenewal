@@ -623,8 +623,9 @@ def test_workers_take_the_trainer_block_settings():
     )
     try:
         lags = {"daily": (28,)}
-        init_worker(100, lags, ("daily",), grid="r5")
+        init_worker(100, lags, ("daily",), grid="r5", loss_days=7)
         assert finetune_chronos.DESIGN == "r5"
+        assert finetune_chronos.LOSS_HORIZON_DAYS == 7
         assert finetune_chronos.CADENCES["daily"] == {"weekly": 1.0}
         assert finetune_chronos.MAX_SERIES == 100
         assert lags == finetune_chronos.MAX_LAGS
@@ -636,6 +637,7 @@ def test_workers_take_the_trainer_block_settings():
             finetune_chronos.SOURCES,
         ) = saved
         finetune_chronos.use_design("r6")
+        finetune_chronos.LOSS_HORIZON_DAYS = None
 
 
 def test_blocks_reach_deployed_sizes_on_many_places():
@@ -690,6 +692,35 @@ def test_blocks_predict_their_own_horizon_in_whole_patches(tmp_path):
         assert length % OUTPUT_PATCH == 0
         assert length - OUTPUT_PATCH < horizon <= length
         assert b["context"].shape[1] == CONTEXT + length
+
+
+def test_a_loss_horizon_stops_blocks_days_after_the_cut_off(
+    tmp_path, monkeypatch
+):
+    import finetune_chronos
+    from finetune_chronos import CONTEXT, DAYS_PER_STEP, OUTPUT_PATCH
+    from finetune_stream import cut
+
+    ids = _sim_dir(tmp_path)
+    full = [b for _, b in cut(tmp_path, ids, 1, 32)]
+    monkeypatch.setattr(finetune_chronos, "LOSS_HORIZON_DAYS", 7)
+    short = [b for _, b in cut(tmp_path, ids, 1, 32)]
+    assert len(short) == len(full)
+    shorter = 0
+    for a, b in zip(full, short, strict=True):
+        assert (a["source"], a["places"]) == (b["source"], b["places"])
+        # The nowcast steps, up to the cut-off's, then a week of steps.
+        week = -(-7 // DAYS_PER_STEP[b["source"]])
+        h_full = int((~np.isnan(a["context"][0, CONTEXT:])).sum())
+        h = int((~np.isnan(b["context"][0, CONTEXT:])).sum())
+        assert h == min(h_full, b["nowcast"] + week)
+        assert b["prediction_length"] == -(-h // OUTPUT_PATCH) * OUTPUT_PATCH
+        # The context and the steps kept are as without the horizon.
+        np.testing.assert_array_equal(
+            b["context"][:, : CONTEXT + h], a["context"][:, : CONTEXT + h]
+        )
+        shorter += b["prediction_length"] < a["prediction_length"]
+    assert shorter
 
 
 def test_batches_share_one_prediction_length():
