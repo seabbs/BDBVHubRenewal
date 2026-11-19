@@ -463,12 +463,12 @@ def test_the_fallback_fits_through_the_given_delay(daily: pd.DataFrame) -> None:
 
     def delay(
         snap: SnapshotArrays,
-        o: int,
+        r: int,
         settings: Settings,
         longer: bool = False,
     ) -> chain.DelayFit | None:
         calls.append(longer)
-        return fit_delay(snap, o, settings, longer=longer)
+        return fit_delay(snap, r, settings, longer=longer)
 
     chain._latest_fit(snap, Settings(), delay)
     assert calls == [False, True]
