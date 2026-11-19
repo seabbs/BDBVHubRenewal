@@ -233,3 +233,24 @@ def test_a_worker_that_does_not_answer_is_left_out(tmp_path, monkeypatch):
     assert got[got.index("--jobs") + 1] == "12"
     saved = json.loads((tmp_path / "budgets.json").read_text())
     assert list(saved) == ["archie"]
+
+
+def test_another_compute_names_its_profile_and_nothing_else(tmp_path):
+    # A cluster or cloud profile is configuration only: COMPUTE names
+    # workflow/profiles/<name>, whose executor brings its own resources.
+    (tmp_path / "workflow" / "profiles" / "hpc").mkdir(parents=True)
+    cfg = {"COMPUTE": "hpc"}
+    assert compute.mode(cfg, checkout=tmp_path) == "hpc"
+    got = compute.args(cfg, checkout=tmp_path)
+    assert got == ["--workflow-profile", "workflow/profiles/hpc"]
+    with pytest.raises(ValueError, match="workflow/profiles/nowhere"):
+        compute.mode({"COMPUTE": "nowhere"}, checkout=tmp_path)
+
+
+def test_only_the_profiles_this_setup_uses_ship():
+    profiles = ROOT / "workflow" / "profiles"
+    assert sorted(p.name for p in profiles.iterdir()) == [
+        "ci",
+        "default",
+        "ssh",
+    ]
