@@ -10,7 +10,8 @@ learning rates its history logs; the losses from its history
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -138,6 +139,45 @@ def steps_per_simulation(
     return 1.0
 
 
+def anchors(
+    checkpoints: Sequence[tuple[str, Mapping, Any]],
+    chunks: Mapping[int, tuple[int, int]],
+) -> list[tuple[int, int]]:
+    """Return a run's known (step, simulations trained) pairs, by step.
+
+    Step 0 is no simulations; each checkpoint records its steps and
+    simulations (`settings.json`); and a planned chunk (`logs.Log.chunks`)
+    that starts where a known pair ends adds its steps there. Only the
+    run's own files count.
+    """
+    known = {0: 0}
+    for _, s, _ in checkpoints:
+        if s.get("steps") is not None and s.get("n_outbreaks"):
+            known[int(s["n_outbreaks"])] = int(s["steps"])
+    for before in sorted(chunks):
+        last, steps = chunks[before]
+        if before in known and last not in known:
+            known[last] = known[before] + steps
+    return sorted((st, n) for n, st in known.items())
+
+
+def sims_at(
+    pairs: Sequence[tuple[int, int]], step: float, spo: float = 1.0
+) -> float:
+    """Return the simulations trained by `step`, from `anchors`.
+
+    Linear between known pairs, as the trainer's own schedule is within
+    a chunk (`sims_done`); past the last, at the run's mean rate so far,
+    or `spo` steps a simulation if no pair is known past step 0.
+    """
+    pairs = list(pairs) or [(0, 0)]
+    for (s0, n0), (s1, n1) in pairwise(pairs):
+        if step <= s1:
+            return n0 + (n1 - n0) * (step - s0) / ((s1 - s0) or 1)
+    s1, n1 = pairs[-1]
+    return n1 * step / s1 if s1 else step / spo
+
+
 def history(run: Run) -> list:
     """Return a run's logged history (`train/history.json`), if any."""
     if run.folder is None:
@@ -161,15 +201,17 @@ def loss_run(
     run: Run,
     rows: Sequence[Mapping[str, Any]],
     checkpoints: Sequence[tuple[str, Mapping, Any]],
-    spo: float,
+    sims: Callable[[float], float],
     base: Mapping[str, Any] | None,
     colour: str,
 ) -> dict[str, Any]:
-    """Return one run's loss plot data.
+    """Return one run's loss plot data, against simulations trained.
 
     Training losses from the history, else the log rows; held-out losses
     from the log rows and the checkpoints; held-out loss by source from
-    the history's evaluations, else the log rows. `base` is the step-0
+    the history's evaluations, else the log rows. `sims` gives the
+    simulations trained by a step (`sims_at`); checkpoints are at their
+    own simulations. `base` is the step-0
     references (`full0`, `src0`) of the run that stands for base
     Chronos-2, or None for the run's own.
     """
@@ -206,33 +248,40 @@ def loss_run(
         and h.get("step")
         and isinstance(h.get("by_source"), dict)
     ] or [(r["step"], r["src"]) for r in rows if r.get("src")]
+
+    def x(step: float) -> float:
+        return round(sims(step), 2)
+
+    def at(name: str, s: Mapping[str, Any]) -> int:
+        return int(s.get("n_outbreaks") or _size(name))
+
     by: dict[str, list[list[float]]] = {}
     for st, src in sorted(evals, key=lambda e: e[0]):
         for k, v in src.items():
-            by.setdefault(k, []).append([st, round(v, 5)])
+            by.setdefault(k, []).append([x(st), round(v, 5)])
     base = base or {"full0": full0, "src0": src0, "parts0": parts0}
     return {
         "key": run.key,
         "label": run.label,
         "color": colour,
         "live": run.live,
-        "train": [[x, round(y, 4)] for x, y in train],
+        "train": [[x(st), round(y, 4)] for st, y in train],
         "tr0": sum(v for _, v in train[:20]) / len(train[:20])
         if train
         else None,
-        "held": [[r["step"], r["held"]] for r in rows],
+        "held": [[x(r["step"]), r["held"]] for r in rows],
         "ck": [
-            [s.get("steps") or round(_size(nm) * spo), s["held_out_loss"]]
+            [at(nm, s), s["held_out_loss"]]
             for nm, s, _ in checkpoints
             if s.get("held_out_loss")
         ],
         "held_parts": {
-            p: [[r["step"], r["parts"][p]] for r in rows if r.get("parts")]
+            p: [[x(r["step"]), r["parts"][p]] for r in rows if r.get("parts")]
             for p in PARTS
         },
         "ck_parts": {
             p: [
-                [s.get("steps") or round(_size(nm) * spo), parts[p]]
+                [at(nm, s), parts[p]]
                 for nm, s, _ in checkpoints
                 if (parts := _parts(s, "held_out_loss"))
             ]

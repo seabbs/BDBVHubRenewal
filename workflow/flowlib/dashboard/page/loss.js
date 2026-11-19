@@ -22,8 +22,8 @@ function chart(o){
  var h='<svg viewBox="0 0 '+W+' '+H+'" width="100%">';
  lticks(y0,y1).forEach(function(v){h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(v)+'" y2="'+sy(v)+'" class=grid /><text x="'+(L-4)+'" y="'+(sy(v)+3)+'" text-anchor=end class=ax>'+fmtT(v)+'</text>'});
  var st=Math.pow(10,Math.floor(Math.log10(x1/4)));st=[1,2,2.5,5,10].map(function(m){return m*st}).find(function(v){return v>=x1/5});
- for(var x=0;x<=x1;x+=st)h+='<text x="'+sx(x)+'" y="'+(H-B+12)+'" text-anchor=middle class=ax>'+x+'</text>';
- h+='<text x="'+(W/2)+'" y="'+(H-2)+'" text-anchor=middle class=ax>step</text>';
+ for(var x=0;x<=x1;x+=st)h+='<text x="'+sx(x)+'" y="'+(H-B+12)+'" text-anchor=middle class=ax>'+(+x.toPrecision(6))+'</text>';
+ h+='<text x="'+(W/2)+'" y="'+(H-2)+'" text-anchor=middle class=ax>simulations trained</text>';
  if(o.hl)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(1)+'" y2="'+sy(1)+'" class=mark />';
  (D.marks||[]).forEach(function(m){if(m[0]<=x1)h+='<line x1="'+sx(m[0])+'" x2="'+sx(m[0])+'" y1="'+T+'" y2="'+(H-B)+'" class=mark /><text x="'+(sx(m[0])+2)+'" y="'+(T+9)+'" class=ax>'+m[1]+'</text>'});
  ser.forEach(function(s){var d=s.dash?' stroke-dasharray="'+s.dash+'"':"";
@@ -39,7 +39,7 @@ function draw(){
  var suf={raw:"",start:", relative to start",base:", relative to base Chronos-2"}[mode],hl=rel;
  var tr=[],held=[],by=[],byRuns=[];
  runs.forEach(function(r){var i=D.runs.indexOf(r);
-  var p=r.train.filter(function(q){return r.live||q[0]<=D.smax});if(rel&&r.tr0)p=p.map(function(q){return [q[0],q[1]/r.tr0]});
+  var p=r.train;if(rel&&r.tr0)p=p.map(function(q){return [q[0],q[1]/r.tr0]});
   if(r.live)tr.push({label:r.label+" raw",color:r.color,pts:p,kind:"dots"},{label:r.label+" rolling mean",color:r.color,pts:roll(p,20),kind:"line"});
   else tr.push({label:r.label+" rolling mean",color:r.color,pts:roll(p,20),kind:"faint"});
   if(!rel)held.push({label:r.label,color:r.color,pts:r.held,kind:"pts"});

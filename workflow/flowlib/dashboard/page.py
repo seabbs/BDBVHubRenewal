@@ -18,7 +18,7 @@ import json
 import math
 import re
 from collections import deque
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -70,14 +70,28 @@ class Context:
     delays: dict[str, int | None] = field(default_factory=dict)
     summarised: dict[str, tuple] = field(default_factory=dict)
 
+    def _runlog(self, run: Run) -> logs.RunLog:
+        key = str(run.folder)
+        if key not in self.logs:
+            self.logs[key] = logs.RunLog(run.folder)
+        return self.logs[key]
+
     def log(self, run: Run) -> list[dict[str, Any]]:
         """Return a run's logged steps (none for a run with no folder)."""
         if run.folder is None:
             return []
-        key = str(run.folder)
-        if key not in self.logs:
-            self.logs[key] = logs.RunLog(run.folder)
-        return self.logs[key].rows()
+        return self._runlog(run).rows()
+
+    def sims(self, run: Run) -> Callable[[float], float]:
+        """Return the simulations a run has trained by a step.
+
+        From its own checkpoints and logged chunks (`training.anchors`).
+        """
+        cks = _checkpoints(run)
+        chunks = self._runlog(run).chunks() if run.folder else {}
+        pairs = training.anchors(cks, chunks)
+        spo = training.steps_per_simulation(0, [], cks)
+        return lambda step: training.sims_at(pairs, step, spo)
 
     def dataset(self, key: str) -> Mapping[str, Any]:
         """Return a configured dataset by key (a quantiles one if unknown)."""
@@ -212,11 +226,14 @@ def live_status(
     live: Run,
     rows: list[dict[str, Any]],
     planned: Sequence[int],
+    sims: Callable[[float], float] | None = None,
 ) -> Status:
     """Return the live run's step, speed, schedule and checkpoints.
 
     `planned` are its checkpoints unless the trainer's command line names
-    them (`logs.prefixes`).
+    them (`logs.prefixes`). `sims` (`Context.sims`) gives the
+    simulations trained by its step, for a run that decays over
+    simulations, not steps.
     """
     step = rows[-1]["step"] if rows else None
     last_t = rows[-1]["t"] if rows else None
@@ -244,6 +261,8 @@ def live_status(
     spo = training.steps_per_simulation(
         params["lr_steps"], sizes, _checkpoints(live)
     )
+    if sims and step and not params["lr_steps"] and sims(step) > 0:
+        spo = step / sims(step)
     saved = {
         n
         for n in sizes
@@ -424,7 +443,7 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
     cks = {r.key: _checkpoints(r) for r in ctx.runs}
     own = {
         r.key: training.loss_run(
-            r, ctx.log(r), cks[r.key], st.spo, None, r.colour
+            r, ctx.log(r), cks[r.key], ctx.sims(r), None, r.colour
         )
         for r in ctx.runs
     }
@@ -435,20 +454,21 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
             {k: base[k] for k in ("full0", "src0", "parts0")} if base else None
         )
         out.append(
-            training.loss_run(r, ctx.log(r), cks[r.key], st.spo, refs, r.colour)
+            training.loss_run(
+                r, ctx.log(r), cks[r.key], ctx.sims(r), refs, r.colour
+            )
         )
+    # x is simulations trained: checkpoints sit at their own sizes.
     marks = [
-        (s.get("steps") or st.at(_size(nm)), nm) for nm, s, _ in cks[live.key]
-    ] + [(st.at(n), f"n{n}?") for n in st.pending]
-    train = own[live.key]["train"]
-    smax = max([x for x, _ in train] + [1000])
+        (int(s.get("n_outbreaks") or _size(nm)), nm)
+        for nm, s, _ in cks[live.key]
+    ] + [(n, f"n{n}?") for n in st.pending]
+    now = ctx.sims(live)(st.step) if st.step else 0
     next_ck = next(
         (n for n in st.params["prefixes"] if n not in st.saved), None
     )
-    xlim = max(
-        [1.2 * (st.step or 0), 300] + ([st.at(next_ck)] if next_ck else [])
-    )
-    data = _json({"runs": out, "marks": marks, "xlim": xlim, "smax": smax})
+    xlim = max([1.2 * now, 50] + ([next_ck] if next_ck else []))
+    data = _json({"runs": out, "marks": marks, "xlim": xlim})
     modebar = (
         '<div class="sctl modebar"><span class=mut>Loss scale</span>'
         "<button class=tog data-mode=raw>raw</button>"
@@ -472,7 +492,14 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
 
 def bias_section(ctx: Context, live: Run, st: Status) -> str:
     """Return the attention bias row and the live run's learning rates."""
-    data = _json(bias.payload(ctx.runs, st.step))
+    data = _json(
+        bias.payload(
+            ctx.runs,
+            st.step,
+            {r.key: ctx.log(r) for r in ctx.runs},
+            {r.key: ctx.sims(r) for r in ctx.runs},
+        )
+    )
     return (
         "<div id=biasrefs class=refnote></div><div class=biasrow>"
         f"<div id=biasdyn class=biasdyn></div>"
@@ -770,7 +797,9 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         raise ValueError("no runs to show: configure at least one run")
     live = next((r for r in ctx.runs if r.live), ctx.runs[0])
     rows = ctx.log(live)
-    st = live_status(live, rows, run_sizes(ctx.prefixes, ctx.outbreaks))
+    st = live_status(
+        live, rows, run_sizes(ctx.prefixes, ctx.outbreaks), ctx.sims(live)
+    )
     tiles, bar = status_tiles(st, live)
     status = (
         logs.CACHE.get(live.folder / "train/stream-status.json") or {}
@@ -785,7 +814,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     )
     info = {
         r.key: training.loss_run(
-            r, ctx.log(r), _checkpoints(r), st.spo, None, r.colour
+            r, ctx.log(r), _checkpoints(r), ctx.sims(r), None, r.colour
         )
         | {"ck": _checkpoints(r)}
         for r in ctx.runs
@@ -816,7 +845,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         (
             "learning",
             "What fine-tuning learns",
-            learning.section(live, tip),
+            learning.section(ctx.runs, tip),
             True,
         ),
         ("nowcasts", "Nowcasts", nowcasts_section(ctx, sizes, builts), True),

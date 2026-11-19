@@ -10,6 +10,7 @@ the trainer's own files are read.
 
 from __future__ import annotations
 
+import html
 import json
 import math
 import re
@@ -58,14 +59,20 @@ def by_level(
     history: Sequence[Mapping[str, Any]],
     checkpoints: Sequence[tuple[str, Mapping[str, Any]]],
 ) -> dict[str, list[tuple[int, float]]]:
-    """Return held-out loss by level at each checkpoint, relative to start."""
+    """Return held-out loss by level at each checkpoint, relative to start.
+
+    Against each checkpoint's simulations trained.
+    """
     start = _start(history)
     if start is None or not start.get("by_level"):
         return {}
     points = [(0, start["by_level"])] + [
-        (int(s["steps"]), s["held_out_loss_by_level"])
-        for _, s in checkpoints
-        if s.get("held_out_loss_by_level") and s.get("steps") is not None
+        (
+            int(s.get("n_outbreaks") or logs._size(name)),
+            s["held_out_loss_by_level"],
+        )
+        for name, s in checkpoints
+        if s.get("held_out_loss_by_level")
     ]
     return _relative(points)
 
@@ -182,45 +189,117 @@ def run_kinds(run: Run) -> dict[str, list[tuple[int, float]]]:
     return out
 
 
-def _series(curves: Mapping[str, Sequence[tuple[float, float]]], kind: str):
-    return [
-        (key, COLOURS[i % len(COLOURS)], list(pts), kind)
-        for i, (key, pts) in enumerate(sorted(curves.items()))
-    ]
+RUN_DASHES = (None, "dash", "dot", "dd")
+"""Line styles of runs, in configured order, where colour is another key."""
 
 
-def section(run: Run, tip: Callable[[str], str] = lambda _: "") -> str:
-    """Return the live run's three panels of what fine-tuning learns.
+def _dash(i: int) -> tuple[str, ...]:
+    d = RUN_DASHES[i % len(RUN_DASHES)]
+    return (d,) if d else ()
 
-    `tip` gives the info marker of an explainer key (`page.tip`).
-    """
-    history = training.history(run)
-    cks = (
-        [(n, s) for n, s, _ in logs.checkpoints(run.folder)]
-        if run.folder
-        else []
+
+def _swatch(colour: str, dash: str | None = None) -> str:
+    style = f' stroke-dasharray="{svg.DASHES[dash][0]}"' if dash else ""
+    return (
+        '<svg width=22 height=8 viewBox="0 0 22 8"><line x1=0 x2=22 y1=4 '
+        f'y2=4 stroke="{colour}" stroke-width=2{style} /></svg>'
     )
-    levels = svg.chart(
+
+
+def _legend(keys: Sequence[str], run_list: Sequence[tuple[int, Run]]) -> str:
+    """Return one legend: colour by key, then line style by run."""
+    esc = html.escape
+    out = [
+        f'<span><i style="background:{COLOURS[i % len(COLOURS)]}"></i>'
+        f"{esc(k)}</span>"
+        for i, k in enumerate(keys)
+    ]
+    if len(run_list) > 1:
+        out += [
+            f"<span>{_swatch('var(--fg)', RUN_DASHES[i % len(RUN_DASHES)])}"
+            f" {esc(r.label)}</span>"
+            for i, r in run_list
+        ]
+    return "".join(out)
+
+
+def _by_run(
+    curves: Mapping[str, Mapping[str, Sequence[tuple[float, float]]]],
+    run_list: Sequence[Run],
+) -> tuple[list[tuple[Any, ...]], str]:
+    """Return series coloured by key and styled by run, and their legend."""
+    keys = sorted({k for c in curves.values() for k in c})
+    shown = [(i, r) for i, r in enumerate(run_list) if curves.get(r.key)]
+    series = [
+        (
+            f"{k} ({r.label})",
+            COLOURS[keys.index(k) % len(COLOURS)],
+            list(curves[r.key][k]),
+            "pts",
+            *_dash(i),
+        )
+        for i, r in shown
+        for k in sorted(curves[r.key])
+    ]
+    return series, _legend(keys, shown)
+
+
+def _checkpoints(run: Run) -> list[tuple[str, Mapping[str, Any]]]:
+    if run.folder is None:
+        return []
+    return [(n, s) for n, s, _ in logs.checkpoints(run.folder)]
+
+
+def section(
+    run_list: Sequence[Run], tip: Callable[[str], str] = lambda _: ""
+) -> str:
+    """Return the three panels of what fine-tuning learns, for every run.
+
+    Each run's own history and checkpoints only, against simulations
+    trained. `tip` gives the info marker of an explainer key
+    (`page.tip`).
+    """
+    run_list = list(run_list)
+    levels, legend = _by_run(
+        {
+            r.key: by_level(training.history(r), _checkpoints(r))
+            for r in run_list
+        },
+        run_list,
+    )
+    level_card = svg.chart(
         "Held-out loss by level at each checkpoint, relative to the start",
-        _series(by_level(history, cks), "pts"),
+        levels,
         hlines=[1.0],
+        xlabel="simulations trained",
         info=tip("learnlevel"),
         note="All held-out blocks, each level scored with the others masked.",
+        legend=legend,
     )
+    # Each run's last checkpoint, in the run's colour.
+    layers = []
+    for r in run_list:
+        sizes = run_lora(r)
+        if sizes:
+            name = max(sizes, key=logs._size)
+            layers.append((f"{r.label} {name}", r.colour, sizes[name], "pts"))
     lora = svg.chart(
-        "Size of the LoRA update by encoder layer",
-        _series(run_lora(run), "pts"),
+        "Size of the LoRA update by encoder layer, at each run's last "
+        "checkpoint",
+        layers,
         xlabel="encoder layer",
         info=tip("learnlayer"),
         note="Frobenius norm of the scaled B·A, a layer's attention "
-        "modules in quadrature; one line per checkpoint.",
+        "modules in quadrature.",
     )
-    kinds = svg.chart(
+    kinds, legend = _by_run({r.key: run_kinds(r) for r in run_list}, run_list)
+    kind_card = svg.chart(
         "Size of the LoRA update by kind of module",
-        _series(run_kinds(run), "pts"),
-        xlabel="simulations",
+        kinds,
+        xlabel="simulations trained",
         info=tip("learnkind"),
         note="Time attention, group attention and the output layer, "
         "each in quadrature over its modules.",
+        legend=legend,
     )
-    return f"<div class=plots3>{levels}{lora}{kinds}</div>"
+    return f"<div class=plots3>{level_card}{lora}{kind_card}</div>"

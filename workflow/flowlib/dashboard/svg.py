@@ -59,15 +59,17 @@ def chart(
     xlabel: str = "step",
     note: str = "",
     info: str = "",
+    legend: str | None = None,
 ) -> str:
-    """Return a card with an SVG line chart and its legend.
+    """Return a card with its legend on top of an SVG line chart.
 
     Each series is (label, colour, points, kind[, dash]): `kind` is
     `line`, `faint` (a line at low opacity), `dots` or `pts` (a line
     with labelled points); `dash` is a key of `DASHES`. `xticks` puts x
     on a log2 axis with those ticks; `marks` are labelled vertical lines
     and `hlines` horizontal ones. Text and colours are escaped; `note`
-    and `info` (a marker after the title) are HTML, put in as they are.
+    and `info` (a marker after the title) are HTML, put in as they are,
+    as is `legend`, which replaces the one made from the series.
     """
     esc = html.escape
     title, xlabel = esc(title) + info, esc(xlabel)
@@ -167,13 +169,17 @@ def chart(
                 f"stroke-width=1.6{dash}{op} />"
             )
     o.append("</svg>")
-    leg = "".join(
-        f'<span><i style="background:{s[1]}'
-        f'{";opacity:.4" if s[3] == "faint" else ""}"></i>{s[0]}'
-        f"{' (' + DASHES[s[4]][1] + ')' if len(s) > 4 else ''}</span>"
-        for s in series
+    leg = (
+        legend
+        if legend is not None
+        else "".join(
+            f'<span><i style="background:{s[1]}'
+            f'{";opacity:.4" if s[3] == "faint" else ""}"></i>{s[0]}'
+            f"{' (' + DASHES[s[4]][1] + ')' if len(s) > 4 else ''}</span>"
+            for s in series
+        )
     )
     return (
-        f"<div class=card><h3>{title}</h3>{''.join(o)}"
-        f"<div class=leg>{leg}</div>{note}</div>"
+        f"<div class=card><h3>{title}</h3><div class=leg>{leg}</div>"
+        f"{''.join(o)}{note}</div>"
     )
