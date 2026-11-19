@@ -24,7 +24,7 @@ if [ -f "$LOCAL_CONFIG" ]; then
   _local_export=$(LOCAL_CONFIG=$LOCAL_CONFIG \
     python3 "$_local_root/workflow/flowlib/localconfig.py" --export) || {
     echo "cannot read $LOCAL_CONFIG" >&2
-    return 1 2> /dev/null || exit 1
+    return 1
   }
   eval "$_local_export"
   unset _local_export
