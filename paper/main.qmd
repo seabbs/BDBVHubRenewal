@@ -129,7 +129,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - We held out a test set of simulations from development, and monitored training on a separate validation set (SI).
 - The fine-tune never trained on the held-out set's seeds (SI).
 - We set each tuned choice on development data, apart from every scored set (SI).
-- We score each model's quantiles with WIS and log-scale WIS, bias, and 50% and 90% coverage, relative to `randomwalknowcast`, and split WIS into dispersion, overprediction and underprediction [@bracherEvaluatingEpidemicForecasts2021].
+- We score each model's quantiles with WIS and log-scale WIS, bias, and 50% and 90% coverage (95% for Germany, whose hub quantiles have no 5% or 95% level), relative to `randomwalknowcast`, and split WIS into dispersion, overprediction and underprediction [@bracherEvaluatingEpidemicForecasts2021].
 - In the SI we also score samples with the fair CRPS and the fair energy score, which correct for the number of samples, so forecasts with different numbers of samples, ours and the hub teams', compare fairly [@Ferro2014; @Zamo2018; @zanetta_scoringrules_2024].
 - We score against the data as reported $D$ days later, with $D$ each outbreak's 98% reporting delay.
 - Key references: [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx; @gneitingStrictlyProperScoring2007; @gneitingProbabilisticForecastsCalibration2007; @sherrattPredictivePerformanceMultimodel2023].
@@ -140,7 +140,10 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 ::: {.callout-note title="Plan"}
 - We compare with the hub's models, relative to the hub's baseline, and evaluate as the hub did.
 - We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, against the data as reported 40 days later [@Wolffram2023].
-- We score each model on its own quantiles at the hub's seven levels, interpolated linearly where it lacks one.
+- We score the hub's target, 7-day sums, ending on each nowcast date and 7, 14, 21 and 28 days before it.
+- Hub weeks end on Saturdays, so every date of a nowcast moves forward to the next Saturday and back again for scoring.
+- We score each model on its own quantiles at the hub's seven levels, and the weekly Chronos-2 models, which lack some, are interpolated linearly.
+- As @Wolffram2023 did, we replace one team's erroneous values by its nowcast of the day before, and fill another's missing 10% quantiles from a normal through its 2.5% and 25% quantiles.
 - We score models that give samples, and sums over days, on the quantiles of 1,000 draws with common random numbers.
 - One fine-tuned Chronos-2 model forecasts daily, 3-day and weekly data.
 - For both case studies, we also score our models' daily counts directly from the daily rows, against `randomwalknowcast` (SI).
