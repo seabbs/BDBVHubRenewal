@@ -67,6 +67,7 @@ rule score_bdbv:
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=unit_env,
+        copy_back=unit_rows("bdbv"),
     shell:
         unit_shell("bdbv")
 
@@ -87,6 +88,7 @@ rule score_zones:
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=cpu_env,
+        copy_back=unit_rows("zones"),
     shell:
         unit_shell("zones")
 
@@ -106,6 +108,7 @@ rule score_germany:
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=unit_env,
+        copy_back=unit_rows("germany"),
     shell:
         unit_shell("germany")
 

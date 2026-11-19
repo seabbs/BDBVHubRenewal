@@ -290,9 +290,14 @@ def cpu_env(wc, threads):
 EVALUATE = "uv run --group chronos python -m bdbvhubrenewal.evaluation.checkpoint"
 
 
+def unit_rows(study):
+    """The unit's rows folder, which a worker brings back with its output."""
+    return lambda wc: f"{CACHE}/{study}/{wc.label}/"
+
+
 def unit_shell(study):
     return (
-        f"mkdir -p {CACHE} && {ROOM}{{params.prefix}} nice -n 19 "
+        f"mkdir -p {{params.copy_back}} && {ROOM}{{params.prefix}} nice -n 19 "
         f"env {{params.env}} {EVALUATE} {study} {CACHE} {{wildcards.label}} "
         "> {log} 2>&1 && touch {output}"
     )
