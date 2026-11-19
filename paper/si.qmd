@@ -206,18 +206,18 @@ $$
 where $s_t$ is the number of simulations trained by step $t$, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.
 - $\eta_0 = 10^{-5}$ for the LoRA adapter, the rate Chronos-2's fine-tuning recommends for LoRA and AutoGluon's default [@chronos_forecasting; @autogluon], and $\eta_0 = 10^{-3}$ for the attention biases.
 - We train with AdamW [@Loshchilov2019] in fp32 and clip the gradient norm at 1 [@Pascanu2013].
+- Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].
 - A step that runs out of GPU memory is run again in halves.
 - A single block that runs out is run once more and then skipped.
 - A step whose loss or gradients are not finite is skipped and counted.
 - We do not stop early.
-- Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].
 
 **Training blocks.**
 A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off.
 Releases follow the layout's steps, daily, every 3 days or weekly.
 Of the daily blocks, 20% have weekly releases, 10% releases on weekdays only and 10% daily releases with missed days.
 Of the 3-day and weekly blocks, 20% have missed releases.
-A missed release drops each release but the last with chance 0.2.
+In those blocks each release but the last is missed with chance 0.2.
 Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives up to 32 blocks.
 Each block has up to 364 steps of context, and its prediction length is its horizon.
 We train on 8,400 simulations, 10 balanced blocks of 840, with checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400.
@@ -237,7 +237,7 @@ The layouts of the training blocks and their shares.
 :::
 
 - We apply further options on top of the layout, each drawn independently.
-- In outbreaks with more than one place, 20% of the blocks hold a single series, the country or one place.
+- In outbreaks with more than one stratum, 20% of the blocks hold a single series, the country or one stratum.
 - Outbreaks with a single stratum give only blocks of the country.
 - The other blocks hold a random set of places, with or without the country.
 - Where a block holds the country and some of its places, a third each have a country equal to the sum of its places, above it (with cases not assigned to a place), or later than it (its own stream).
@@ -364,7 +364,7 @@ Simulated summaries (centiles over 1,000 drawn settings) against the range over 
 ![Six contrasting simulations of the grid, from pilot simulations: the final daily counts (black) and the counts known at releases 40%, 65% and 90% of the way through each outbreak (dashed), summed over strata.](build/figures/si/sim-examples.png){#fig-sim-examples}
 
 Outbreaks run 16 to 52 weeks.
-A simulation that fails, or has fewer than 10 cases or more than $10^6$ cases per stratum, is redrawn up to five times, and its grid cell is skipped if every draw fails.
+A simulation that fails, has fewer than 10 cases in the outbreak or has more than $10^6$ cases per stratum is redrawn up to five times, and its grid cell is skipped if every draw fails.
 Before training, a language model reviews each round's simulations for implausible outbreaks with a fixed prompt, and the trainer skips those it flags.
 The prompt defaults to keeping a simulation, and no simulation is deleted.
 
