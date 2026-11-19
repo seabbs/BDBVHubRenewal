@@ -282,7 +282,7 @@ def checkpoint_labels(wc=None):
 
 ROOM = (
     f"workflow/scripts/wait_for_room.sh {LOCAL['MIN_FREE_GB']} "
-    f"{LOCAL['MIN_DISK_GB']} {CACHE} && "
+    f"{LOCAL['MIN_DISK_GB']} {CACHE} {LOCAL['MAX_LOAD']} && "
 )
 
 
@@ -318,9 +318,14 @@ def unit_env(wc, threads):
 EVALUATE = "uv run --group chronos python -m bdbvhubrenewal.evaluation.checkpoint"
 
 
+def unit_rows(study):
+    """The unit's rows folder, which a worker brings back with its output."""
+    return lambda wc: f"{CACHE}/{study}/{wc.label}/"
+
+
 def unit_shell(study):
     return (
-        f"mkdir -p {CACHE} && {ROOM}{{params.prefix}} nice -n 19 "
+        f"mkdir -p {{params.copy_back}} && {ROOM}{{params.prefix}} nice -n 19 "
         f"env {{params.env}} {EVALUATE} {study} {CACHE} {{wildcards.label}} "
         "> {log} 2>&1 && touch {output}"
     )
@@ -503,16 +508,16 @@ def listed_batches():
 
 
 def check_report(input, output, params, wildcards):
-    """Report whether checkpoint `check_at` beats zero-shot, and say so."""
+    """Report whether checkpoint `check_at` beats zero-shot, and say so.
+
+    On the held-out simulations only: BDBV is held out for the paper.
+    """
     s = json.loads(Path(input[0]).read_text())
-    real = s.get("real_validation_loss", float("inf"))
-    held = s["held_out_loss"] < s["held_out_loss_start"]
-    ok = held and real < params.zero_shot
+    ok = s["held_out_loss"] < s["held_out_loss_start"]
     text = (
         f"n{CHECK} {'beats' if ok else 'does NOT beat'} zero-shot: "
         f"held-out {s['held_out_loss']:.4f} vs "
-        f"{s['held_out_loss_start']:.4f}, real {real:.4f} vs "
-        f"{params.zero_shot}"
+        f"{s['held_out_loss_start']:.4f}"
     )
     Path(output[0]).write_text(f"{text}\n")
     nxt = f", check before n{AFTER[0]}" if AFTER else ""

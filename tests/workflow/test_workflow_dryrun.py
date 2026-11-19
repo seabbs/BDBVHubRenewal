@@ -437,6 +437,16 @@ def test_score_runs_each_unit_for_a_checkpoint_and_the_reference(tmp_path):
     assert "land" not in jobs
 
 
+def test_units_wait_below_the_load_ceiling(tmp_path):
+    blocks = score_jobs(
+        tmp_path, {"score": {"labels": ["aaa"]}}, "MAX_LOAD=12\n"
+    )
+    units = [b for b in blocks if re.match(r"rule score_germany:", b)]
+    assert units
+    for block in units:
+        assert f"wait_for_room.sh 20 16 {tmp_path}/scores 12 " in block
+
+
 def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
     blocks = score_jobs(tmp_path, {"score": {"labels": ["aaa"]}})
     units = [b for b in blocks if re.match(r"(local)?rule score_\w+:", b)]
@@ -445,6 +455,12 @@ def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
         assert "scripts/checkpoint_scores.py" not in block
     shells = "".join(units)
     assert "-m bdbvhubrenewal.evaluation.checkpoint germany" in shells
+
+
+def test_units_make_the_rows_folder_a_worker_brings_back(tmp_path):
+    blocks = score_jobs(tmp_path, {"score": {"labels": ["aaa"]}})
+    shells = "".join(blocks)
+    assert f"mkdir -p {tmp_path}/scores/germany/aaa/" in shells
 
 
 def test_skipped_checkpoints_are_not_scored(tmp_path):

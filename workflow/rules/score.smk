@@ -47,6 +47,7 @@ rule score_germany:
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=unit_env,
+        copy_back=unit_rows("germany"),
     shell:
         unit_shell("germany")
 
