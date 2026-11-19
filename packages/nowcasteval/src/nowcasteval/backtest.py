@@ -401,7 +401,7 @@ def make_tasks(
     >>> from bdbvhubrenewal.data import (
     ...     delays_for_vintage, load_daily, load_delays, load_target
     ... )
-    >>> from bdbvhubrenewal.evaluation import backtest as bt
+    >>> from nowcasteval import backtest as bt
     >>> target = load_target()
     >>> real = target.loc[target["kind"] == "real"]
     >>> config = dataclasses.replace(

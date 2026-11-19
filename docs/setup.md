@@ -54,7 +54,7 @@ from bdbvhubrenewal.data import (
     load_delays,
     load_target,
 )
-from bdbvhubrenewal.evaluation import backtest as bt
+from nowcasteval import backtest as bt
 from nowcasteval.nowcast import relative_crps, release_backtest
 from bdbvhubrenewal.forecasters import NATIONAL
 from bdbvhubrenewal.forecasters.chain import Settings

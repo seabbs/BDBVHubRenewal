@@ -26,7 +26,7 @@ from bdbvhubrenewal.data import (
     load_delays,
     load_target,
 )
-from bdbvhubrenewal.evaluation import backtest as bt
+from nowcasteval import backtest as bt
 from nowcasteval.nowcast import release_backtest
 from bdbvhubrenewal.forecasters import get_model
 from nowcasteval.plots import plot_location_grid
