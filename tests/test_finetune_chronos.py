@@ -1342,3 +1342,50 @@ def test_the_trainer_takes_its_design_from_the_grid():
         )
     finally:
         finetune_chronos.use_design("r6")
+
+
+def test_parents_follow_the_design_s_shares(monkeypatch):
+    from finetune_chronos import NATIONAL, outbreak_blocks
+
+    monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 0.0)
+    monkeypatch.setattr(ft, "DESIGN", "r7")
+    r7 = ft.PARENT_DRAWS["r7"]
+    # Named distributions for the share and the lag, and the shares of
+    # each kind of parent, in the design.
+    assert r7["unallocated_share"]["dist"] == "beta"
+    assert r7["parent_lag_days"]["dist"] == "lognormal"
+    assert sum(r7["shares"].values()) == pytest.approx(1)
+    monkeypatch.setitem(
+        ft.PARENT_DRAWS,
+        "r7",
+        {
+            **r7,
+            "shares": {"exact": 0.0, "unallocated": 1.0, "late_parent": 0.0},
+        },
+    )
+    places = [f"P{p}-A{a}" for p in range(1, 3) for a in range(1, 3)]
+    counts = _counts_of(places)
+    parents = {
+        b["parent"]
+        for seed in range(3)
+        for b in outbreak_blocks(counts, places, np.random.default_rng(seed), 3)
+        if len(b["places"]) > 1 and b["places"][0] == NATIONAL
+    }
+    assert parents == {"unallocated"}
+
+
+def _counts_of(places, days=140):
+    import pandas as pd
+
+    rows = [
+        (p, onset, onset + pd.Timedelta(days=d), 3)
+        for p in places
+        for onset in pd.date_range("2026-01-03", periods=days)
+        for d in (0, 3, 9)
+    ]
+    counts = pd.DataFrame(
+        rows, columns=["location", "reference_date", "report_date", "count"]
+    )
+    for col in ("reference_date", "report_date"):
+        counts[col] = counts[col].dt.date.astype(str)
+    return counts
