@@ -1,15 +1,16 @@
 """Machine settings from `config/local.env`.
 
-The file is the source of truth. The shell scripts read it with
-`scripts/local_config.sh` (with the fine-tuning scripts), and this must
-read it the same way. The file is untracked and holds `KEY=VALUE` lines (see
+The file is untracked and holds `KEY=VALUE` lines (see
 `config/local.env.example`). Blank lines, comments and lines whose key
-is not upper case are skipped. A value may use `$NAME` or `${NAME}` of
-the environment or of an earlier line, and one pair of surrounding
-quotes is dropped. A variable set in the environment wins over the
-file. With no file everything runs on this machine.
+is not upper case are skipped, and one pair of surrounding quotes is
+dropped. A value may use `$NAME` or `${NAME}` of another setting, in any
+order, or of the environment; a line that uses itself (`ROOT=$ROOT/x`)
+takes the environment's value, empty if unset. Nothing else of the
+shell's syntax is read (no `~`, `${X:-y}` or `$(...)`). A variable set in
+the environment wins over the file. With no file everything runs on this
+machine.
 
-Shell scripts without `scripts/local_config.sh` read one setting with
+Shell scripts read one setting with
 `python3 workflow/flowlib/localconfig.py KEY`.
 """
 
@@ -103,7 +104,7 @@ DEFAULTS = (
     # Logs of the paper's detached jobs (paper/scripts).
     ("PAPER_LOGS", "$HOME/paper-jobs"),
 )
-"""Each setting and its default, in order, as later ones use earlier."""
+"""Each setting and its default."""
 
 
 def _unquote(value: str) -> str:
@@ -112,11 +113,18 @@ def _unquote(value: str) -> str:
     return value
 
 
-def _expand(value: str, names: Mapping[str, str], quoted: bool) -> str:
-    # Single quotes keep a value as written, as the shell does.
-    if quoted:
-        return value
-    return Template(value).safe_substitute(names)
+def _lines(path: Path) -> list[tuple[str, str]]:
+    """Return the file's settings as written, as (key, value) pairs."""
+    if not path.is_file():
+        return []
+    out = []
+    for line in path.read_text().splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        key, sep, value = line.partition("=")
+        if sep and KEY.match(key):
+            out.append((key, value))
+    return out
 
 
 def read(
@@ -136,37 +144,65 @@ def read(
     -------
     dict
         Every key of the file and of `DEFAULTS`.
+
+    Raises
+    ------
+    ValueError
+        If settings use each other in a loop.
     """
     env = dict(os.environ if environ is None else environ)
     if path is None:
         path = env.get("LOCAL_CONFIG") or DEFAULT
-    names = dict(env)
-    out: dict[str, str] = {}
-    path = Path(path)
-    if path.is_file():
-        for line in path.read_text().splitlines():
-            if not line.strip() or line.lstrip().startswith("#"):
-                continue
-            key, sep, raw = line.partition("=")
-            if not sep or not KEY.match(key):
-                continue
-            if key in env:
-                out[key] = env[key]
-                continue
-            single = raw.startswith("'") and raw.endswith("'")
-            value = _expand(_unquote(raw), names, single)
-            names[key] = out[key] = value
+    # Each setting as written, and whether it is filled in: the
+    # environment's values and single-quoted ones are kept as they are,
+    # as the shell does.
+    raw: dict[str, tuple[str, bool]] = {}
+    for key, value in _lines(Path(path)):
+        single = value.startswith("'") and value.endswith("'")
+        raw[key] = (_unquote(value), not single)
     for key, default in DEFAULTS:
-        if key in out:
-            continue
+        if key not in raw:
+            if default is None:
+                default = socket.gethostname().split(".")[0]
+            raw[key] = (default, True)
+    for key in raw:
         if key in env:
-            value = env[key]
-        elif default is None:
-            value = socket.gethostname().split(".")[0]
-        else:
-            value = _expand(default, names, quoted=False)
-        names[key] = out[key] = value
-    return out
+            raw[key] = (env[key], False)
+    return _resolve(raw, env)
+
+
+def _resolve(
+    raw: dict[str, tuple[str, bool]], env: Mapping[str, str]
+) -> dict[str, str]:
+    """Fill each setting's `$NAME`s in, so a value may use any other."""
+    done: dict[str, str] = {}
+    open_: list[str] = []
+
+    class Names(dict):
+        def __missing__(self, key: str) -> str:
+            return value(key)
+
+    def value(key: str) -> str:
+        if key in done:
+            return done[key]
+        if key not in raw:
+            return env[key]
+        if open_ and open_[-1] == key:
+            # A line that uses itself, as the shell reads it: the
+            # environment has no value, or it would have won.
+            return env.get(key, "")
+        if key in open_:
+            loop = " -> ".join([*open_[open_.index(key) :], key])
+            raise ValueError(f"local config settings use each other: {loop}")
+        text, fill = raw[key]
+        open_.append(key)
+        if fill:
+            text = Template(text).safe_substitute(Names())
+        open_.pop()
+        done[key] = text
+        return text
+
+    return {key: value(key) for key in raw}
 
 
 def expand(value: str, settings: Mapping[str, str] | None = None) -> str:
