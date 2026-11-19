@@ -68,3 +68,11 @@ test_that("late places are among the places with cases", {
     expect_false(1L %in% v$late_places)
   }
 })
+
+test_that("a draw is redrawn if it reports fewer than the grid's minimum", {
+  grid <- r7()
+  expect_equal(grid$floors$min_cases, 10)
+  expect_equal(redraw_reason(9.5, grid), "fewer than 10 cases")
+  expect_equal(redraw_reason(0, grid), "fewer than 10 cases")
+  expect_true(is.na(redraw_reason(10, grid)))
+})
