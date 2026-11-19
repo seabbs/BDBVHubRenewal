@@ -757,20 +757,31 @@ def test_a_block_with_no_recent_reports_is_quiet_whatever_follows():
 
 def test_quiet_cut_offs_are_not_cut_when_set(tmp_path, monkeypatch):
     import finetune_chronos
-    from finetune_chronos import CONTEXT, DAYS_PER_STEP
     from finetune_stream import cut
 
     ids = _sim_dir(tmp_path)
+    full = [b for _, b in cut(tmp_path, ids, 1, 32)]
+    # Unset, `quiet` is not asked.
+    monkeypatch.setattr(finetune_chronos, "quiet", None)
+    assert len([b for _, b in cut(tmp_path, ids, 1, 32)]) == len(full)
+    # Set, exactly the blocks it calls quiet are dropped, with the days
+    # per step of their source; the others are cut as before.
+    asked = []
+
+    def weekly_is_quiet(_block, days_per_step, days):
+        asked.append((days_per_step, days))
+        return days_per_step == 7
+
+    monkeypatch.setattr(finetune_chronos, "quiet", weekly_is_quiet)
     monkeypatch.setattr(finetune_chronos, "QUIET_DAYS", 28)
-    blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
-    assert blocks
-    for b in blocks:
-        x, t, now = b["context"], b["n_targets"], b["nowcast"]
-        k = -(-28 // DAYS_PER_STEP[b["source"]])
-        cut_at = CONTEXT + now
-        lo = cut_at - k
-        reported = np.nansum(x[:t, lo:CONTEXT]) + np.nansum(x[t:, lo:cut_at])
-        assert reported > 0
+    kept = [b for _, b in cut(tmp_path, ids, 1, 32)]
+    assert {d for d, _ in asked} >= {1, 7}
+    assert {d for _, d in asked} == {28}
+    rest = [b for b in full if b["source"] != "weekly"]
+    assert len(kept) == len(rest) < len(full)
+    for a, b in zip(rest, kept, strict=True):
+        assert (a["source"], a["places"]) == (b["source"], b["places"])
+        np.testing.assert_array_equal(a["context"], b["context"])
 
 
 def test_batches_share_one_prediction_length():
