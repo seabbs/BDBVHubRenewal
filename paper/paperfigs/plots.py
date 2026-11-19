@@ -70,6 +70,7 @@ __all__ = [
     "PANEL_LETTERS",
     "STUDY_HORIZON_BIN",
     "nowcast_panels",
+    "outer_band",
     "results_panel",
     "rows_of_target",
     "si_place_dots",
@@ -198,6 +199,18 @@ def _quantile_table(one: pd.DataFrame) -> pd.DataFrame:
     return one.groupby("target_date")["value"].quantile(levels).unstack()
 
 
+def outer_band(levels: Sequence[float]) -> tuple[float, float] | None:
+    """Return the outer interval to draw: 90%, else 95%, else none.
+
+    Bands and coverage are 50% and 90%. Forecasts at the German hub's
+    quantiles have no 0.05 or 0.95, so they draw their 95% interval.
+    """
+    for band in ((0.05, 0.95), (0.025, 0.975)):
+        if all(any(np.isclose(b, levels)) for b in band):
+            return band
+    return None
+
+
 def _main_stratum(df: pd.DataFrame) -> str:
     """Return `all` if present, else the first stratum."""
     strata = sorted(df["stratum"].unique())
@@ -307,7 +320,9 @@ def plot_nowcasts(
                 continue
             wide = _quantile_table(one)
             colour = line_style(model, all_models)["color"]
-            for lo, hi, alpha in ((0.05, 0.95, 0.15), (0.25, 0.75, 0.3)):
+            outer = outer_band(list(wide.columns))
+            bands = [(*outer, 0.15)] if outer else []
+            for lo, hi, alpha in [*bands, (0.25, 0.75, 0.3)]:
                 if lo in wide.columns and hi in wide.columns:
                     ax.fill_between(
                         wide.index,
@@ -1212,8 +1227,8 @@ def si_scores_by_finetune_size(
     return fig
 
 
-NOWCAST_LEVELS: Final = (0.025, 0.25, 0.5, 0.75, 0.975)
-"""Quantiles of the nowcast panels: the median and the 50% and 95% bands."""
+NOWCAST_LEVELS: Final = (0.05, 0.25, 0.5, 0.75, 0.95)
+"""Quantiles of sample nowcasts: the median and the 50% and 90% bands."""
 
 _PANEL_INK: Final = {
     "series": "#2a78d6",
@@ -1234,7 +1249,8 @@ def _panel_quantiles(one: pd.DataFrame) -> pd.DataFrame:
     wide = one.pivot_table(
         index="target_date", columns="quantile_level", values="value"
     ).sort_index()
-    return wide[[q for q in NOWCAST_LEVELS if q in wide.columns]]
+    keep = [0.25, 0.5, 0.75, *(outer_band(list(wide.columns)) or ())]
+    return wide[sorted(q for q in keep if q in wide.columns)]
 
 
 def nowcast_panels(
@@ -1249,9 +1265,10 @@ def nowcast_panels(
 
     Every panel of a row shows the same truth (black) and the data as of
     its origin (grey, dashed), and one model's median with its 50% and
-    95% bands in one colour, so no two models' lines overlap. Each
-    column is titled with the model and its relative score. The truth and
-    data lines are labelled in the first column, and there is no legend.
+    90% bands (95% where the quantiles stop there, `outer_band`) in one
+    colour, so no two models' lines overlap. Each column is titled with
+    the model and its relative score, and one legend above the panels
+    names the lines and bands.
 
     Parameters
     ----------
@@ -1273,6 +1290,7 @@ def nowcast_panels(
         The panels.
     """
     ink = _PANEL_INK
+    drawn: tuple[float, float] | None = None
     fig, axes = plt.subplots(
         len(rows),
         len(models),
@@ -1317,8 +1335,10 @@ def nowcast_panels(
             )
             q = _panel_quantiles(fc.loc[fc["model"] == model])
             if not q.empty:
-                bands = (((0.025, 0.975), 0.15), ((0.25, 0.75), 0.3))
-                for (a, b), alpha in bands:
+                outer = outer_band(list(q.columns))
+                drawn = drawn or outer
+                bands = [(outer, 0.15)] if outer else []
+                for (a, b), alpha in [*bands, ((0.25, 0.75), 0.3)]:
                     if a in q and b in q:
                         ax.fill_between(
                             q.index,
@@ -1343,23 +1363,32 @@ def nowcast_panels(
                 ax.set_title(model_label(model) + sub, fontsize=9)
             if j == 0:
                 ax.set_ylabel(label, fontsize=8, color=ink["text"])
-                for frame, col, name, colour in (
-                    (t, "truth", "truth", ink["truth"]),
-                    (seen, "value", "data", ink["text"]),
-                ):
-                    if len(frame):
-                        ax.annotate(
-                            name,
-                            (
-                                frame["target_date"].iloc[-1],
-                                frame[col].iloc[-1],
-                            ),
-                            xytext=(4, 0),
-                            va="center",
-                            textcoords="offset points",
-                            fontsize=7,
-                            color=colour,
-                        )
+    width = {(0.05, 0.95): "90%", (0.025, 0.975): "95%"}.get(drawn, "")
+    handles = [
+        Line2D([], [], color=ink["truth"], lw=1.5, label="Truth"),
+        Line2D(
+            [],
+            [],
+            color=ink["data"],
+            lw=1.2,
+            ls="--",
+            label="Data as of origin",
+        ),
+        Line2D(
+            [], [], color=ink["series"], lw=2, marker="o", ms=3, label="Median"
+        ),
+        Patch(color=ink["series"], alpha=0.3, lw=0, label="50% interval"),
+    ]
+    if width:
+        handles.append(
+            Patch(
+                color=ink["series"],
+                alpha=0.15,
+                lw=0,
+                label=f"{width} interval",
+            )
+        )
+    shared_legend(fig, [], extra=handles, fontsize=7)
     return fig
 
 

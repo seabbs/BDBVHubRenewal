@@ -299,6 +299,12 @@ def test_nowcast_panels_have_a_column_per_model_and_a_row_per_origin_or_place():
     assert fig.axes[1].get_title() == "Fine-tuned (delays)"
     assert fig.axes[0].get_ylabel().startswith("origin ")
     assert fig.axes[4].get_ylabel() == "DE, 80+"
+    # One legend above the panels names the lines and the 50%/90% bands
+    # (the dummy samples have the 5% and 95% quantiles).
+    assert len(fig.legends) == 1
+    labels = [t.get_text() for t in fig.legends[0].get_texts()]
+    assert {"Truth", "50% interval", "90% interval"} <= set(labels)
+    assert not any(ax.texts for ax in fig.axes)
     plt.close(fig)
 
 
@@ -470,5 +476,6 @@ def test_outer_band_is_90_unless_the_quantiles_stop_at_95() -> None:
 def test_sample_nowcast_panels_draw_90_percent_bands() -> None:
     from paperfigs.plots import NOWCAST_LEVELS
 
-    assert 0.05 in NOWCAST_LEVELS and 0.95 in NOWCAST_LEVELS
+    assert 0.05 in NOWCAST_LEVELS
+    assert 0.95 in NOWCAST_LEVELS
     assert 0.025 not in NOWCAST_LEVELS

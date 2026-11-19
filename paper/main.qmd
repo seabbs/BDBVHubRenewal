@@ -214,7 +214,7 @@ Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: na
 ::: {#fig-synthetic-nowcasts}
 ![](build/figures/main/synthetic-nowcasts.png)
 
-Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workflow's seed, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's score relative to `randomwalknowcast`. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workflow's seed, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's score relative to `randomwalknowcast`. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic}
@@ -245,13 +245,13 @@ Held-out synthetic data: mean scores, coverage and number of forecasts of each m
 ::: {#fig-germany-nowcasts}
 ![](build/figures/main/germany-nowcasts.png)
 
-German nowcast hub: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals (95% rather than 90%, as the hub's quantiles have no 5% or 95% level); each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#fig-germany}
 ![](build/figures/main/germany-results.png)
 
-German nowcast hub. (A, B) WIS relative to `KIT-frozen_baseline` on the natural and log scales, as stacked dispersion, overprediction and underprediction; (C) bias; (D) 50% and 95% coverage; (E) relative WIS by location; (F) by age group; (G) by horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub. (A, B) WIS relative to `KIT-frozen_baseline` on the natural and log scales, as stacked dispersion, overprediction and underprediction; (C) bias; (D) 50% and 95% coverage (95% as the hub's quantiles have no 5% or 95% level); (E) relative WIS by location; (F) by age group; (G) by horizon. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 On the {{< meta results.germany.scope >}}, the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}, and {{< meta results.germany.best_rel_score_randomwalknowcast >}} against `randomwalknowcast`, as the hub's baseline is a point forecast with no coverage.
@@ -274,7 +274,7 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 ::: {#fig-ebola-nowcasts}
 ![](build/figures/main/ebola-nowcasts.png)
 
-Ebola: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola}

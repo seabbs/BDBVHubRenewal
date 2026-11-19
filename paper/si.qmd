@@ -526,7 +526,7 @@ The share of evaluated outbreaks in each level of each grid factor, as each simu
 ::: {#fig-synthetic-si-nowcasts}
 ![](build/figures/si/synthetic-si-nowcasts.png)
 
-Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-factors}
@@ -576,7 +576,7 @@ Held-out synthetic data scores by location and stratum. {{< meta results.synthet
 ::: {#fig-germany-si-nowcasts}
 ![](build/figures/si/germany-si-nowcasts.png)
 
-German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals (95% rather than 90%, as the hub's quantiles have no 5% or 95% level). {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#fig-germany-si-places}
@@ -627,7 +627,7 @@ Ebola hub submissions: mean energy score of each model's trajectories on log(x +
 ::: {#fig-ebola-si-nowcasts}
 ![](build/figures/si/ebola-si-nowcasts.png)
 
-Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola-si-places}
