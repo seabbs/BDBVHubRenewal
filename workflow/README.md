@@ -34,7 +34,8 @@ Helpers: `task dag` draws the rule graph, `task progress` lists what exists and 
 ## Machine settings
 
 Paths and host details are in `config/local.env`, which git ignores; `config/local.env.example` lists every key.
-The same file is read by the Taskfile (`dotenv`), by the shell scripts (`scripts/local_config.sh`) and by the workflow (`workflow/flowlib/localconfig.py`).
+The file is read by `workflow/flowlib/localconfig.py`, which the Taskfile and shell scripts call (`python3 workflow/flowlib/localconfig.py KEY`).
+A value may use another setting, `$ROOT` say, in any order.
 A variable in the environment wins, and with no file everything runs on this machine.
 The workflow uses:
 

@@ -185,7 +185,15 @@ def test_one_location_has_truth_and_latest_by_target(tmp_path):
     rs, refs = _setup()
     built = nowcasts.build(tmp_path, rs, refs, levels=PAGE)
     got = nowcasts.location(built, "DE")
-    assert set(got) == {"series", "score", "parts", "stats", "truth", "latest"}
+    assert set(got) == {
+        "series",
+        "score",
+        "parts",
+        "split",
+        "stats",
+        "truth",
+        "latest",
+    }
     assert got["truth"]["7day"] == {"t": ["2022-02-01"], "y": [10.0]}
 
 
@@ -370,3 +378,42 @@ def test_summaries_from_before_the_90_interval_are_written_again(tmp_path):
         levels = {r["quantile"] for r in csv.DictReader(f)}
     assert {"0.05", "0.95"} <= levels
     assert (out / ".levels").exists()
+
+
+def test_wis_splits_into_nowcast_and_forecast_weeks_ahead():
+    # Target dates up to the nowcast date are the nowcast part; later ones
+    # the forecast part, by week ahead (days 1 to 7 are week 1).
+    q = [8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0]
+    scored = [
+        ("2022-02-09", q, 10.0),
+        ("2022-02-02", q, 9.0),
+        ("2022-02-10", q, 12.0),
+        ("2022-02-16", q, 13.0),
+        ("2022-02-17", q, 11.0),
+    ]
+    got = nowcasts.wis_split(scored, "2022-02-09")
+    w = {d: nowcasts.wis(qs, y) for d, qs, y in scored}
+    assert got["nowcast"] == pytest.approx(
+        [(w["2022-02-09"] + w["2022-02-02"]) / 2, 2], abs=1e-4
+    )
+    assert got["forecast"] == {
+        "1": pytest.approx(
+            [(w["2022-02-10"] + w["2022-02-16"]) / 2, 2], abs=1e-4
+        ),
+        "2": pytest.approx([w["2022-02-17"], 1], abs=1e-4),
+    }
+
+
+def test_the_split_reaches_each_location_s_page_data(tmp_path):
+    _quantiles(
+        tmp_path / "reference" / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged",
+        truth=9.5,
+        week="2022-02-16",
+    )
+    rs, refs = _setup()
+    built = nowcasts.build(tmp_path, rs, refs, levels=nowcasts.LEVELS)
+    split = nowcasts.location(built, "DE")["split"]
+    got = split["zero"]["7day"]["daily"]["2022-02-09"]
+    assert got["nowcast"] == [None, 0]
+    assert list(got["forecast"]) == ["1"]
