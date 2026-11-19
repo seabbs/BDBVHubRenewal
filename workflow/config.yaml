@@ -11,8 +11,8 @@ rounds: []
 # the validation round; the test round is fresh seeds, never trained on
 # or monitored, and scored only for the final model. A round's number
 # sets its seeds and its release `sims-r<N>`, so no two grids share a
-# round (flowlib.grids): r6 validates on round 20, trains on 21 to 30 and
-# tests on 31, and never overwrites r5's.
+# round (flowlib.grids): r7 validates on round 33, trains on 34 to 37 and
+# tests on 38, and never overwrites r5's or r6's.
 grid_rounds:
   r5:
     rounds: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
@@ -44,11 +44,12 @@ next_segment_only: false
 
 simulate:
   # Round r is `batches` batches from seed `seed_base` + 100 r, each
-  # `batch` outbreaks with exactly `draws` observation draws: 40 of 21 are
-  # grid block r, 840 simulations (scripts/finetune_simulate.R).
+  # `batch` outbreaks with exactly `draws` observation draws: 40 of 20, 800
+  # simulations a round. A simulation the sim QC excludes is drawn again
+  # with a new seed in its batch, so each round keeps its 800.
   seed_base: 30000
   batches: 40
-  batch: 21
+  batch: 20
   draws: 1
   # A batch's memory, and its one retry's (MB).
   mem_mb: 16384
@@ -72,9 +73,8 @@ simulate:
 finetune:
   # The continuous run, one training
   # segment per prefix (`--until`), in <RUN>/train/n<N>/. Every
-  # fine-tuned setting trains on the same 3,200 simulations, so they
-  # compare fairly (about 11.5 hours on the laptop with the loss horizon
-  # and quiet rule below and evaluation offloaded), with checkpoints
+  # fine-tuned setting trains on the same 3,200 simulations, its grid's
+  # four training rounds, so they compare fairly, with checkpoints
   # doubling from 100.
   prefixes: [100, 200, 400, 800, 1600, 3200]
   outbreaks: 3200
@@ -125,9 +125,8 @@ finetune:
   # same either way.
   eval: offload
   series_bias: true
-  # The live r6 run's checkpoints carry this note, and the note is part of
-  # the settings hash, so it stays as written to reproduce them.
-  note: continuous r5
+  # Part of the settings hash: changing it changes every checkpoint's hash.
+  note: r7 run, 3,200 simulations
   # Real validation blocks the trainer scores each checkpoint on, or null.
   # Null: BDBV is held out for the paper, so no BDBV blocks are scored in
   # development, and there is no other real-data set yet.

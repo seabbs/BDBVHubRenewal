@@ -53,10 +53,14 @@ def test_rounds_are_simulated_with_one_draw():
     assert CONFIG["simulate"]["seed_base"] == 30000
 
 
-def test_a_round_is_one_grid_block_of_840():
+def test_a_round_is_800_simulations():
     sim = CONFIG["simulate"]
-    assert sim["batches"] * sim["batch"] == 840
-    assert (sim["batches"], sim["batch"]) == (40, 21)
+    assert (sim["batches"], sim["batch"]) == (40, 20)
+    # The r7 run trains on its grid's four rounds, exactly.
+    r7 = CONFIG["grid_rounds"]["r7"]
+    per_round = sim["batches"] * sim["batch"]
+    assert len(r7["rounds"]) * per_round == CONFIG["finetune"]["outbreaks"]
+    assert r7["topup_round"] is None
     assert "held_batches" not in sim
     # A grid's training rounds hold at least the run's simulations. The
     # run's rounds are its grid's.

@@ -156,6 +156,8 @@ def test_only_generic_profiles_ship():
 
 FT = {
     "rounds": [1, 2],
+    # The fixtures' own batches, whatever the run's.
+    "simulate": {"batch": 21},
     "finetune": {
         "prefixes": [250, 500],
         "outbreaks": 500,
@@ -1065,4 +1067,4 @@ def test_a_round_s_batch_names_no_cells(tmp_path):
     text = " ".join("".join(blocks).replace("\\\n", " ").split())
     shell = text[text.index("finetune_simulate.R") - 400 :]
     assert 'ENW_CELLS=""' in shell
-    assert "finetune_simulate.R 21 " in shell
+    assert "finetune_simulate.R 20 " in shell
