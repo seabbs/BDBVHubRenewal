@@ -61,7 +61,8 @@ Each machine reruns its task on a timer as releases land.
 Round r is 40 batches of 21 outbreaks, seeds from 30000 + 100 r, each with exactly one observation draw.
 A round is grid block r, 840 simulations, and is used whole for training or as the held-out block.
 
-- `simulate_batch`: one batch of `scripts/finetune_simulate.R`, under `JOB_PREFIX` at nice 19, once there is memory and disk to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one.
+- `epinowcast_lib`: installs the epinowcast the simulator is pinned to (`epinowcast_sha` in `scripts/finetune_simulate.R`) from GitHub into `ROOT/rlib/epinowcast-<sha>`, once a machine.
+- `simulate_batch`: one batch of `scripts/finetune_simulate.R`, under `JOB_PREFIX` at nice 19, once there is memory and disk to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one, and runs with that library and the system's tools ahead of PATH (R puts the system libraries on `LD_LIBRARY_PATH`, under which a bash from another prefix fails).
 - `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
 - `sim_qc`: the recorded sim-QC review (`scripts/sim_qc.py`), whose exclusions (`qc/excluded.csv`) the trainer skips. Nothing is deleted.

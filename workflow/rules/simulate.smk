@@ -24,7 +24,58 @@ wildcard_constraints:
     n=r"\d+",
 
 
+# The epinowcast the simulator is pinned to (finetune_simulate.R's
+# `epinowcast_sha`), installed once a machine under ROOT.
+ENW_SHA = re.search(
+    r'epinowcast_sha <- "([0-9a-f]+)"',
+    Path("scripts/finetune_simulate.R").read_text(),
+)[1]
+ENW_LIB = f"{LOCAL['ROOT']}/rlib/epinowcast-{ENW_SHA}"
+
+
+def batch_lib(wc):
+    """The pinned epinowcast, for a batch not yet simulated only.
+
+    Installing it, as a job of the same run, would otherwise make every
+    batch already simulated out of date.
+    """
+    sims = Path(f"{ROUNDS_DIR}/r{wc.round}/sims")
+    done = all(
+        (sims / f"{kind}-{wc.seed}.{ext}").exists()
+        for kind, ext in (("counts", "csv.gz"), ("settings", "csv"))
+    )
+    return [] if done else ancient(f"{ENW_LIB}/.installed")
+
+
+rule epinowcast_lib:
+    output:
+        f"{ENW_LIB}/.installed",
+    log:
+        f"{ENW_LIB}.log",
+    params:
+        lib=ENW_LIB,
+        sha=ENW_SHA,
+    shell:
+        # R CMD INSTALL of the archive GitHub serves for the commit, with
+        # the system's tools first, as the simulator runs.
+        """
+        exec >{log} 2>&1
+        r=$(dirname "$(command -v Rscript)")
+        src=$(mktemp -d)
+        trap 'rm -rf "$src"' EXIT
+        curl -fsSL \
+            https://github.com/epinowcast/epinowcast/archive/{params.sha}.tar.gz \
+            | tar -xz -C "$src" --strip-components 1
+        mkdir -p {params.lib}
+        PATH="$(getconf PATH):$PATH" "$r/R" CMD INSTALL \
+            --library={params.lib} "$src"
+        touch {output}
+        """
+
+
 rule simulate_batch:
+    input:
+        lib=batch_lib,
     output:
         counts=f"{ROUNDS_DIR}/r{{round}}/sims/counts-{{seed}}.csv.gz",
         settings=f"{ROUNDS_DIR}/r{{round}}/sims/settings-{{seed}}.csv",
@@ -48,6 +99,7 @@ rule simulate_batch:
         batch=SIM["batch"],
         draws=SIM["draws"],
         seed_base=SIM["seed_base"],
+        lib=ENW_LIB,
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         min_free=LOCAL["MIN_FREE_GB"],
         min_disk=LOCAL["MIN_DISK_GB"],
@@ -55,7 +107,10 @@ rule simulate_batch:
         # The simulator must be the committed one, as the manifest records
         # the commit. A retry keeps the first attempt's log. R and Stan
         # write temporary files to a folder of the batch's own, removed
-        # however the batch ends.
+        # however the batch ends. Rscript is the one on PATH, and the tools
+        # R starts (make, bash) are the system's: R puts the system
+        # libraries on LD_LIBRARY_PATH, under which a bash from another
+        # prefix (such as linuxbrew) fails.
         """
         if ! git diff --quiet HEAD -- scripts/finetune_simulate.R; then
             echo "scripts/finetune_simulate.R differs from HEAD" >{log}
@@ -67,10 +122,12 @@ rule simulate_batch:
         tmp={params.sims}/tmp/{wildcards.seed}
         rm -rf "$tmp" && mkdir -p "$tmp"
         trap 'rm -rf "$tmp"' EXIT
+        rscript=$(command -v Rscript)
         TMPDIR="$tmp" ENW_DRAWS={params.draws} \
-            ENW_SEED_BASE={params.seed_base} {params.prefix} \
+            ENW_SEED_BASE={params.seed_base} ENW_LIB={params.lib} \
+            PATH="$(getconf PATH):$PATH" {params.prefix} \
             workflow/scripts/timed.sh \
-            nice -n 19 Rscript scripts/finetune_simulate.R \
+            nice -n 19 "$rscript" scripts/finetune_simulate.R \
             {params.batch} {wildcards.seed} {params.sims} >{log} 2>&1
         gzip -t {output.counts}
         """
