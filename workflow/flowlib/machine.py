@@ -87,7 +87,7 @@ def torch_env(
     `bdbvhubrenewal.devices` keeps them). `CHRONOS_BATCH` in the local
     config, if set, is the series in one Chronos-2 forward pass, and
     `SCORE_DATES` the German dates a scoring unit forecasts together, and
-    `PRECISION` the precision Chronos-2 forecasts in.
+    `PRECISION` the precision Chronos-2 forecasts in, `auto` by default.
     """
     env = {"DEVICE": device or _device(cfg, path)}
     env |= dict.fromkeys(THREAD_VARS, str(threads))
@@ -95,9 +95,10 @@ def torch_env(
     if EIGEN not in flags:
         flags.append(EIGEN)
     env["XLA_FLAGS"] = " ".join(flags)
-    for key in ("CHRONOS_BATCH", "SCORE_DATES", "PRECISION"):
+    for key in ("CHRONOS_BATCH", "SCORE_DATES"):
         if cfg.get(key):
             env[key] = str(cfg[key])
+    env["PRECISION"] = str(cfg.get("PRECISION") or "auto")
     return env
 
 

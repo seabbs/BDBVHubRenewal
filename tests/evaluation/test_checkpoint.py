@@ -22,6 +22,17 @@ def test_german_dates_forecast_together_come_from_the_environment(
     assert ck.score_dates() == 40
 
 
+def test_a_unit_records_the_precision_it_forecast_in(tmp_path, monkeypatch):
+    # fp16, bf16 and fp32 rows must not pass for one another; a unit run
+    # before precisions were recorded ran in fp32.
+    assert ck.unit_precision(tmp_path) == "fp32"
+    monkeypatch.setenv("DEVICE", "cpu")
+    monkeypatch.setenv("PRECISION", "bf16")
+    ck.record_precision(tmp_path)
+    assert ck.unit_precision(tmp_path) == "bf16"
+    assert "precision" in ck.COLUMNS
+
+
 def test_each_label_runs_its_models():
     assert ck.label_models("reference") == (
         "randomwalknowcast",

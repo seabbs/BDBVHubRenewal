@@ -736,19 +736,20 @@ PRECISIONS: Final = ("fp32", "fp16", "bf16", "auto")
 def inference_precision(device: str, precision: str | None = None) -> str:
     """Return the precision Chronos-2 forecasts in on `device`.
 
-    `precision`, by default `PRECISION` (the local config's, `auto` if
-    unset). `auto` takes each device's half precision: fp16 on CUDA
-    before Ampere (Turing has fp16 tensor cores and no bf16), bf16 on
-    Ampere and later and on Apple GPUs, fp32 on the CPU (bf16 there ran
-    about 5 times slower on archie). Half precision moved relative WIS by
-    under 0.06% on archie's GPU, German and BDBV.
+    `precision`, by default `PRECISION`, fp32 if unset: stored fits and
+    submissions set none, so they stay fp32; the workflow gives scoring
+    units `auto` (`flowlib.machine.torch_env`). `auto` takes each device's
+    half precision: fp16 on CUDA before Ampere (Turing has fp16 tensor
+    cores and no bf16), bf16 on Ampere and later and on Apple GPUs, fp32
+    on the CPU (bf16 ran about 5 times slower on a CPU without native
+    bf16). fp16 moved relative WIS by under 0.06% on a Turing GPU.
 
     Raises
     ------
     ValueError
         If the precision is not one of `PRECISIONS`.
     """
-    precision = precision or os.environ.get("PRECISION") or "auto"
+    precision = precision or os.environ.get("PRECISION") or "fp32"
     if precision not in PRECISIONS:
         raise ValueError(f"precision {precision!r} is not one of {PRECISIONS}")
     if precision != "auto":
