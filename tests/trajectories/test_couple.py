@@ -63,3 +63,12 @@ def test_draws_are_reproducible_and_methods_are_checked():
         couple(q, LEVELS, "nope", None, n_samples=10, seed=3)
     with pytest.raises(ValueError, match="rho"):
         couple(q, LEVELS, "gaussian", None, n_samples=10, seed=3)
+
+
+@pytest.mark.parametrize(
+    "fit",
+    [{"rho": 0.5, "s": 1.2}, {"rho": 0.5, "s": -0.1}, {"rho": 1.0, "s": 0.3}],
+)
+def test_a_gaussian_fit_outside_its_range_is_an_error(fit):
+    with pytest.raises(ValueError, match="-1 < rho < 1"):
+        couple(_quantiles(), LEVELS, "gaussian", fit, n_samples=10, seed=1)
