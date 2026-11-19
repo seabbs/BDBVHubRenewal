@@ -18,13 +18,13 @@ The joint-model-informed renewal project compares renewal models fitted on their
 [![](assets/logos/fine-tuned-foundation/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/fine-tuned-foundation/logo-mark-dark.svg#only-dark){ width="96" height="96" } Fine-tuned foundation](foundation/index.md){ .quick-link }
 [![](assets/logos/joint-model-informed-renewal/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/joint-model-informed-renewal/logo-mark-dark.svg#only-dark){ width="96" height="96" } Joint-model-informed renewal](renewal/index.md){ .quick-link }
 [![](assets/logos/hub-submission/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/hub-submission/logo-mark-dark.svg#only-dark){ width="96" height="96" } Hub submission](hub/index.md){ .quick-link }
-[![](assets/logos/nowcastutils/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastutils/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastutils](reference/data.md){ .quick-link }
-[![](assets/logos/nowcasteval/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcasteval/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcasteval](methods/evaluation.md){ .quick-link }
-[![](assets/logos/nowcastworkflow/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastworkflow/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastworkflow](development/cli.md){ .quick-link }
-[![](assets/logos/nowcastbaselines/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastbaselines/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastbaselines](methods/baselines.md){ .quick-link }
-[![](assets/logos/nowcastfoundation/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastfoundation/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastfoundation](methods/finetuned-chronos.md){ .quick-link }
-[![](assets/logos/nowcastrenewal/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastrenewal/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastrenewal](methods/model.md){ .quick-link }
-[![](assets/logos/bdbvhub/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/bdbvhub/logo-mark-dark.svg#only-dark){ width="96" height="96" } bdbvhub](submission/workflow.md){ .quick-link }
+[![](assets/logos/nowcastutils/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastutils/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastutils](packages/index.md#nowcastutils){ .quick-link }
+[![](assets/logos/nowcasteval/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcasteval/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcasteval](packages/index.md#nowcasteval){ .quick-link }
+[![](assets/logos/nowcastworkflow/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastworkflow/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastworkflow](packages/index.md#nowcastworkflow){ .quick-link }
+[![](assets/logos/nowcastbaselines/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastbaselines/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastbaselines](packages/index.md#nowcastbaselines){ .quick-link }
+[![](assets/logos/nowcastfoundation/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastfoundation/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastfoundation](packages/index.md#nowcastfoundation){ .quick-link }
+[![](assets/logos/nowcastrenewal/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastrenewal/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastrenewal](packages/index.md#nowcastrenewal){ .quick-link }
+[![](assets/logos/bdbvhub/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/bdbvhub/logo-mark-dark.svg#only-dark){ width="96" height="96" } bdbvhub](packages/index.md#bdbvhub){ .quick-link }
 </div>
 
 <div class="grid cards" markdown>

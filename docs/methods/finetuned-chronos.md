@@ -1,4 +1,4 @@
-# Using the fine-tuned Chronos-2
+# Using the fine-tuned model
 
 How to nowcast your own reporting triangle with the Chronos-2 checkpoints we fine-tuned on simulated outbreaks.
 { .page-subtitle }

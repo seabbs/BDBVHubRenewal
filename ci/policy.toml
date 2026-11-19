@@ -11,13 +11,13 @@
 # never fits.
 
 # Minutes the chain plans with. On hosted runners (4 vCPU), with the two
-# chains of each fit in parallel, the zone fits of renewalbvd took 84 to
-# 107 min for 500 + 750 draws at 2026-11-01 and 2026-11-08, with no draw
-# at the maximum tree depth, and renewalsp about 68 min for 500 + 750.
-# The zone fits run 500 + 1500 draws and keep every other one, for bulk
-# ESS over 200 with the memory of 750 draws, so expect about 1.6 times
-# that. Every renewal candidate fits in its own job at the same time,
-# and random walk is built in `prepare`.
+# chains of each fit in parallel, the zone fits of renewal and renewalbvd
+# (500 + 1500 draws, keeping every other one) took 85 to 185 min at the
+# origins 2026-10-17 to 2026-11-15 (#185), with no draw at the maximum
+# tree depth, and renewalsp about 68 min for 500 + 750. The zone fits
+# grow with the zones fitted, so later origins take longer. Every renewal
+# candidate fits in its own job at the same time, and random walk is
+# built in `prepare`.
 [timing]
 # GitHub's 360-minute job cap, less a margin.
 fit_cap_minutes = 350

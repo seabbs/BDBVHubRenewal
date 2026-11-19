@@ -110,7 +110,11 @@ def test_the_page_payload_lists_each_run_with_bias(tmp_path):
     rs = runs.load_runs([], f"r={folder},live;x=x-", [])
     got = bias.payload(rs, live_step=None)
     assert [r["key"] for r in got["runs"]] == ["r"]
+    # Every relation a run may train; colours from the shared map.
     assert [p["key"] for p in got["pairs"]] == ["self", "same", "up", "down"]
+    from bdbvhubrenewal.evaluation import labels
+
+    assert got["col"] == labels.RELATION_COLOURS
     assert got["runs"][0]["pts"]["down"] == [[250, 1.0, 1.0, 1.0]]
 
 

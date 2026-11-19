@@ -23,7 +23,11 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from bdbvhubrenewal.evaluation.labels import WIS_PART_SHADES, model_label
+from bdbvhubrenewal.evaluation.labels import (
+    WIS_PART_FILLS,
+    WIS_PART_STACK,
+    model_label,
+)
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
@@ -94,10 +98,23 @@ _TITLES: Final = {
     "horizon": "Relative {m} by horizon",
 }
 
-PART_SHADES: Final[dict[str, float]] = WIS_PART_SHADES
-"""How much of a model's colour each WIS part's bar segment takes, the rest
-white: dispersion darkest, as in Wolffram et al. (2023). The shared
-`bdbvhubrenewal.evaluation.labels.WIS_PART_SHADES`."""
+HATCHES: Final[dict[str, str | None]] = {
+    "solid": None,
+    "hatch-up": "////",
+    "hatch-down": "\\\\\\\\",
+}
+"""Matplotlib hatch of each WIS part fill (`labels.WIS_PART_FILLS`)."""
+
+
+def _part_style(colour: str, part: str) -> dict:
+    """Return a WIS part segment's style: solid, or hatched on white."""
+    hatch = HATCHES[WIS_PART_FILLS[part]]
+    return {
+        "facecolor": colour if hatch is None else "white",
+        "edgecolor": colour,
+        "hatch": hatch,
+        "linewidth": 0.6,
+    }
 
 _RATIO_TICKS: Final = (0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5, 10)
 
@@ -448,26 +465,28 @@ def _bars_parts(
 
     Each part is over the baseline's WIS on the same forecasts, so the
     segments sum to the relative WIS and the baseline's bar ends at 1.
-    Every bar is its model's colour, the parts in the same order and
-    shades. Returns False, drawing nothing, when `rel` has no parts (CRPS).
+    Every bar is its model's colour, the parts stacked from the left in
+    the shared order (`labels.WIS_PART_STACK`) and filled solid or hatched
+    (`labels.WIS_PART_FILLS`), as on the dashboard. Returns False, drawing
+    nothing, when `rel` has no parts (CRPS).
     """
     cols = _part_columns(rel, col)
     if not cols:
         return False
     widths = np.column_stack([_at(rel, rows, c) for c in cols])
     ys, h = _bar_ys(rows, models), _bar_height(models)
+    at = {p: k for k, p in enumerate(WIS_PARTS)}
     for i, (m, _) in enumerate(rows):
         colour, _ = model_style(m, models)
         left = 0.0
-        for width, part in zip(widths[i], WIS_PARTS, strict=True):
+        for part in WIS_PART_STACK:
+            width = widths[i][at[part]]
             ax.barh(
                 ys[i],
                 width,
                 left=left,
                 height=h,
-                color=_tint(colour, PART_SHADES[part]),
-                edgecolor=colour,
-                linewidth=0.6,
+                **_part_style(colour, part),
             )
             left += width
     ax.axvline(1, color=INK["muted"], linestyle="--", linewidth=1, zorder=3)
@@ -477,14 +496,10 @@ def _bars_parts(
 
 
 def _part_handles() -> list[Patch]:
+    """Return the WIS parts' legend swatches, in stack order."""
     return [
-        Patch(
-            facecolor=_tint(INK["text"], PART_SHADES[p]),
-            edgecolor=INK["text"],
-            linewidth=0.6,
-            label=p.capitalize(),
-        )
-        for p in WIS_PARTS
+        Patch(**_part_style(INK["text"], p), label=p.capitalize())
+        for p in WIS_PART_STACK
     ]
 
 
