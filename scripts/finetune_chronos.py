@@ -308,6 +308,29 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+QUIET_DAYS: int | None = None
+"""Days up to a cut-off with no case reported across a block's places
+that make it quiet, and not trained on (`quiet`); None keeps every
+block."""
+
+
+def quiet(block: dict, days_per_step: int, days: int) -> bool:
+    """Return whether a block has no case reported in `days` up to its cut-off.
+
+    Only what is known at the cut-off counts: the targets' counts before
+    `start` and every lag series value up to the cut-off's step, never
+    the counts after it, so dropping quiet blocks does not depend on
+    what follows. `block` is `finetune.training_block`'s, before
+    padding.
+    """
+    x, t = block["context"], block["n_targets"]
+    start = block["start"]
+    cut = start + block["nowcast"]
+    lo = max(cut - -(-days // days_per_step), 0)
+    reported = np.nansum(x[:t, lo:start]) + np.nansum(x[t:, lo:cut])
+    return not reported > 0
+
+
 def _pad(
     block: dict,
     context: int,
@@ -559,6 +582,10 @@ def outbreak_blocks(
                     empty.append(f"{source} cut {j}: {', '.join(places)}")
                 continue
             if block["start"] < 2:
+                continue
+            if QUIET_DAYS is not None and quiet(
+                block, DAYS_PER_STEP[source], QUIET_DAYS
+            ):
                 continue
             padded = _pad(
                 block, CONTEXT, LOSS_HORIZON_DAYS, DAYS_PER_STEP[source]

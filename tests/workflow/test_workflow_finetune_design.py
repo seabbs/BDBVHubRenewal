@@ -160,6 +160,18 @@ def test_the_loss_horizon_comes_from_the_config(tmp_path):
     assert args.loss_horizon_days == 7
 
 
+def test_quiet_cut_offs_come_from_the_config(tmp_path):
+    pytest.importorskip("pandas")
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import finetune_stream as fs
+
+    assert CONFIG["finetune"]["quiet_days"] is None
+    args = fs.build_parser().parse_args(
+        _trainer_args(tmp_path, {"quiet_days": 28})
+    )
+    assert args.quiet_days == 28
+
+
 def test_an_r6_run_holds_out_round_20_and_trains_on_21_to_30(tmp_path):
     pytest.importorskip("pandas")
     sys.path.insert(0, str(ROOT / "scripts"))

@@ -129,6 +129,11 @@ rule train_segment:
             if FT.get("loss_horizon_days") is not None
             else ""
         ),
+        quiet=(
+            f"--quiet-days {FT['quiet_days']}"
+            if FT.get("quiet_days") is not None
+            else ""
+        ),
         note=FT["note"],
         chunk=FT["chunk"],
         eval_every=FT["eval_every"],
@@ -165,7 +170,7 @@ rule train_segment:
             --learning-rate {params.learning_rate} \
             --sources {params.sources} \
             --univariate-share {params.univariate_share} {params.real} \
-            {params.loss_horizon} \
+            {params.loss_horizon} {params.quiet} \
             --note "{params.note}" --chunk {params.chunk} \
             --eval-every {params.eval_every} \
             --by-source-every {params.by_source_every} \
