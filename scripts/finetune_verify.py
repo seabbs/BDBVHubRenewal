@@ -22,7 +22,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 FOUNDATION = "src/bdbvhubrenewal/forecasters/foundation.py"
-"""The module whose functions `code_sha256` names `foundation.<name>`."""
+"""The module whose functions `code_sha256` names `foundation.<name>`,
+for settings with no `code_paths`."""
 
 NOT_HASHED = (
     "hash",
@@ -39,6 +40,7 @@ NOT_HASHED = (
     "real_validation_loss",
     "real_validation_loss_nowcast",
     "real_validation_loss_forecast",
+    "code_paths",
 )
 """Settings written after the hash is taken."""
 
@@ -66,21 +68,23 @@ def problems(
     """Return the ways a checkpoint does not match its recorded commit."""
     settings = json.loads((where / "settings.json").read_text())
     commit = settings.get("code_commit", "")
+    # Each name's path at the commit; a name is the path where none is
+    # recorded (settings written before files could move).
+    paths = settings.get("code_paths", {})
     found = []
     for name, want in settings["code_sha256"].items():
         if name.startswith("foundation."):
-            text = read(commit, FOUNDATION).decode()
+            text = read(commit, paths.get("foundation", FOUNDATION)).decode()
             got = hashlib.sha256(
                 function_source(text, name.split(".", 1)[1]).encode()
             ).hexdigest()
         else:
-            got = hashlib.sha256(read(commit, name)).hexdigest()
+            got = hashlib.sha256(
+                read(commit, paths.get(name, name))
+            ).hexdigest()
         if got != want:
             found.append(f"{name} at {commit[:9]} is not the code hashed")
-    hashed = {k: v for k, v in settings.items() if k not in NOT_HASHED}
-    text = json.dumps(hashed, sort_keys=True).encode()
-    if hashlib.sha256(text).hexdigest()[:12] != settings["hash"]:
-        found.append("the settings do not give the hash")
+    found += settings_problems(settings)
     for name, key in (
         ("outbreaks.txt", "outbreaks_sha256"),
         ("consumed.txt", "consumed_sha256"),
@@ -93,8 +97,12 @@ def problems(
 
 
 def settings_problems(settings: dict) -> list[str]:
-    """Stub."""
-    raise NotImplementedError
+    """Return a problem if the hashed settings do not give the hash."""
+    hashed = {k: v for k, v in settings.items() if k not in NOT_HASHED}
+    text = json.dumps(hashed, sort_keys=True).encode()
+    if hashlib.sha256(text).hexdigest()[:12] != settings["hash"]:
+        return ["the settings do not give the hash"]
+    return []
 
 
 def main() -> None:
