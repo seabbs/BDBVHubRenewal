@@ -13,13 +13,13 @@ from test_series_bias import predict, toy_rows  # noqa: E402
 from bdbvhubrenewal.forecasters import series_bias  # noqa: E402
 
 
-def trained_bias(steps: int = 5):
-    """A tiny model whose bias and LoRA trained a few steps."""
+def trained_bias(steps: int = 5, pairs=series_bias.PAIRS):
+    """A tiny model whose bias (of `pairs`) and LoRA trained a few steps."""
     from chronos_toy import batch_of
     from peft import LoraConfig, get_peft_model
 
     model = tiny_model()
-    series_bias.attach(model)
+    series_bias.attach(model, pairs)
     config = LoraConfig(
         r=2,
         lora_alpha=4,
@@ -61,13 +61,12 @@ def test_germany_pairs_by_name():
     parents = series_bias.parents_of(places)
     assert parents == [-1, 0, 0, 0, 0]
     rows = series_bias.block_rows(range(len(places)), 2 * len(places), parents)
-    me, same, up, down = series_bias.pair_masks(
+    same, up, down = series_bias.pair_masks(
         torch.as_tensor(rows[0]), torch.as_tensor(rows[1])
-    )
+    ).values()
     place = rows[0]
     for q in range(len(place)):
         for k in range(len(place)):
-            assert bool(me[q, k]) == (q == k)
             assert bool(same[q, k]) == (place[q] == place[k] and q != k)
             assert bool(up[q, k]) == (place[q] != 0 and place[k] == 0)
             assert bool(down[q, k]) == (place[q] == 0 and place[k] != 0)
@@ -105,10 +104,9 @@ def test_bdbv_pairs_by_name_beyond_128_places(n):
             assert parents[i] == at[p.rsplit("-", 1)[0]]
     rows = series_bias.block_rows(range(n), 0, parents)
     assert rows[0].max() == n - 1
-    me, same, up, down = series_bias.pair_masks(
+    same, up, down = series_bias.pair_masks(
         torch.as_tensor(rows[0]), torch.as_tensor(rows[1])
-    )
-    assert int(me.sum()) == n
+    ).values()
     assert not same.any()
     # Each place with a parent points up to it, and it down to the place.
     assert int(up.sum()) == int(down.sum()) == sum(q >= 0 for q in parents)
@@ -140,9 +138,9 @@ def test_a_block_with_no_parents_links_nothing():
     parents = series_bias.parents_of(places)
     assert parents == [-1, -1, -1]
     rows = series_bias.block_rows(range(3), 6, parents)
-    _, _, up, down = series_bias.pair_masks(
+    _, up, down = series_bias.pair_masks(
         torch.as_tensor(rows[0]), torch.as_tensor(rows[1])
-    )
+    ).values()
     assert not up.any()
     assert not down.any()
 
@@ -229,7 +227,6 @@ def test_the_bias_survives_gradient_checkpointing(monkeypatch):
         model.train()
         module = getattr(model, series_bias.BIAS_MODULE)
         with torch.no_grad():
-            module.self_.fill_(0.2)
             module.same.fill_(0.5)
             module.up.fill_(-0.3)
             module.down.fill_(0.4)
@@ -253,3 +250,29 @@ def test_the_bias_survives_gradient_checkpointing(monkeypatch):
     plain, checked = grads(False), grads(True)
     for a, b in zip(plain, checked, strict=True):
         assert torch.allclose(a, b, atol=1e-6)
+
+
+def test_an_adapter_holds_and_states_its_pairs(tmp_path):
+    trained_bias(1).save_pretrained(tmp_path / "bias")
+    assert series_bias.adapter_pairs(tmp_path / "bias") == series_bias.PAIRS
+
+
+def test_an_adapter_loads_with_the_pairs_it_was_trained_with(tmp_path):
+    # Checkpoints already published hold one more kind of pair; they load
+    # as saved, so their scores do not change.
+    pairs = (series_bias._SAVED_ONLY, *series_bias.PAIRS)
+    model = trained_bias(pairs=pairs)
+    model.save_pretrained(tmp_path / "bias")
+    assert series_bias.adapter_pairs(tmp_path / "bias") == pairs
+    loaded = series_bias.load_adapter(tiny_model(), tmp_path / "bias")
+    assert series_bias.model_pairs(loaded) == pairs
+    block = toy_block()
+    want = predict(model, block, toy_rows())
+    assert torch.allclose(predict(loaded, block, toy_rows()), want, atol=1e-5)
+
+
+def test_an_unknown_kind_of_pair_is_refused():
+    with pytest.raises(ValueError, match="unknown series bias pairs"):
+        series_bias.pairs_in([f"m.{series_bias.BIAS_MODULE}.sideways"])
+    with pytest.raises(ValueError, match="unknown series bias pairs"):
+        series_bias.attach(tiny_model(), ("sideways",))

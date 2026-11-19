@@ -144,7 +144,7 @@ def main() -> None:
         fs.CHRONOS_MODEL, revision=fs.CHRONOS_REVISION, device_map=device
     )
     if series_bias.adapter_has_bias(adapter):
-        series_bias.attach(pipeline.model)
+        series_bias.attach(pipeline.model, series_bias.adapter_pairs(adapter))
     tick = time.perf_counter()
     losses = evaluate(adapter, pipeline.model, blocks, kinds, batch_size, real)
     result = {

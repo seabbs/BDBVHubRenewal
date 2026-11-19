@@ -183,6 +183,7 @@ def bias_settings(bias: bool, lr: float = 0.0) -> dict:
             "either way round",
             "per": "encoder layer and head, added to the group attention "
             "scores",
+            "relations": list(series_bias.PAIRS),
             "init": "zero",
             "learning_rate": lr,
             "parent_rule": "nearest '-' prefix in the block, else the "
@@ -234,6 +235,24 @@ def set_learning_rates(optimiser, sims: float, outbreaks: int) -> None:
         group["lr"] = learning_rate(sims, group["base_lr"], outbreaks)
 
 
+def check_pairs(model, pairs: tuple[str, ...], source) -> None:
+    """Refuse to continue from `source` unless it holds `model`'s pairs.
+
+    A run continues only with the series bias it was trained with.
+
+    Raises
+    ------
+    ValueError
+        If `source` holds bias pairs other than `model`'s.
+    """
+    have = series_bias.model_pairs(model)
+    if have and pairs and tuple(pairs) != tuple(have):
+        raise ValueError(
+            f"{source} holds series bias pairs {list(pairs)}, this run "
+            f"{list(have)}: continue it with the code it was trained with"
+        )
+
+
 def lora_model(base, config, init: Path | None):
     """Return `base` with a LoRA adapter to train.
 
@@ -250,6 +269,7 @@ def lora_model(base, config, init: Path | None):
             init
         ):
             raise ValueError(f"{init} holds no series bias to continue")
+        check_pairs(base, series_bias.adapter_pairs(init), init)
         model = PeftModel.from_pretrained(base, init, is_trainable=True)
     return model
 
@@ -608,7 +628,7 @@ def bias_summary(model) -> dict:
     out = {}
     for name, p in model.named_parameters():
         pair = name.rsplit(".", 1)[-1]
-        if series_bias.BIAS_MODULE not in name or pair not in series_bias.PAIRS:
+        if series_bias.BIAS_MODULE not in name:
             continue
         if not p.requires_grad:
             continue
@@ -1252,9 +1272,9 @@ def load_state(where: Path, model, optimiser) -> dict | None:
         where = where.with_suffix(".old")
     if not (where / "state.json").exists():
         return None
-    set_peft_model_state_dict(
-        model, torch.load(where / "adapter.pt", weights_only=True)
-    )
+    saved = torch.load(where / "adapter.pt", weights_only=True)
+    check_pairs(model, series_bias.pairs_in(saved), where)
+    set_peft_model_state_dict(model, saved)
     optimiser.load_state_dict(
         torch.load(where / "optimiser.pt", weights_only=True)
     )
