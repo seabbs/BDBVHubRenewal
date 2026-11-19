@@ -102,7 +102,8 @@ def test_the_evidence_has_the_compact_tables_and_labels(tmp_path) -> None:
     assert (tmp_path / "si" / "live-summary.md").is_file()
     assert (tmp_path / "fig" / "compare-slots.png").is_file()
     live = yaml.safe_load((tmp_path / "e.yml").read_text())["evidence"]["live"]
-    assert live["ebola"]["outbreaks"] == 1000
+    # BDBV is held out, so the evidence quotes no BDBV checkpoint.
+    assert "ebola" not in live
     assert live["germany"]["label"] == (
         "Preliminary: fine-tuned on 1,000 of 8,000 simulations."
     )
