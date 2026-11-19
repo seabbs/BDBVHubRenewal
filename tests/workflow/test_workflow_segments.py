@@ -145,3 +145,9 @@ def test_exclusions_are_gathered_into_one_file(tmp_path):
     out = tmp_path / "excluded.csv"
     segments.gather_exclusions([a, b, tmp_path / "none.csv"], out)
     assert segments.excluded(out) == {"30101-0002"}
+
+
+def test_offloaded_evaluation_is_refused_until_rules_score_it():
+    segments.check_eval("local")
+    with pytest.raises(ValueError, match="offload"):
+        segments.check_eval("offload")

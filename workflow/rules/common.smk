@@ -81,6 +81,7 @@ RUN = LOCAL["RUN"]
 TRAIN = f"{RUN}/train"
 
 segments.check_chunks(FT["prefixes"], FT["chunk"], FT["outbreaks"])
+segments.check_eval(FT["eval"])
 PREV = dict((n, p) for p, n in segments.segments(FT["prefixes"]))
 
 
