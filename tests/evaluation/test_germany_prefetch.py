@@ -73,3 +73,38 @@ def test_dates_share_chronos_passes(monkeypatch: pytest.MonkeyPatch) -> None:
     # (dates on other weekdays have other daily horizons), not for each
     # date and task.
     assert pipe.calls <= per_date / 2
+
+
+def test_tasks_are_built_once_and_reused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Every checkpoint scores the same German tasks: built once into
+    # `tasks_dir`, then read back, with the same forecasts.
+    from bdbvhubrenewal.evaluation import germany as de
+
+    triangle = read_triangle(FIXTURE)
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: _Pipeline())
+    first = germany_forecasts(MODELS, triangle, DATES, 30, 1, tmp_path)
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        f"{d}.pkl" for d in sorted(DATES)
+    ]
+
+    def no_build(*_a, **_k):
+        raise AssertionError("tasks rebuilt")
+
+    monkeypatch.setattr(de, "nowcast_tasks", no_build)
+    again = germany_forecasts(MODELS, triangle, DATES, 30, 1, tmp_path)
+    pd.testing.assert_frame_equal(first, again)
+
+
+def test_the_task_store_is_keyed_on_its_inputs(tmp_path: Path) -> None:
+    from bdbvhubrenewal.evaluation.checkpoint import german_tasks_dir
+
+    data = tmp_path / "triangle.csv"
+    data.write_text("a\n")
+    one = german_tasks_dir(tmp_path, data, 1000, 1)
+    assert one == german_tasks_dir(tmp_path, data, 1000, 1)
+    assert one != german_tasks_dir(tmp_path, data, 1000, 2)
+    assert one != german_tasks_dir(tmp_path, data, 100, 1)
+    data.write_text("ab\n")
+    assert one != german_tasks_dir(tmp_path, data, 1000, 1)
