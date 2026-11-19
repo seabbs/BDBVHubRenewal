@@ -4,6 +4,7 @@ import csv
 import gzip
 import json
 import re
+from datetime import datetime
 
 import pytest
 
@@ -173,7 +174,7 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
         "Tables",
     ):
         assert f"<h2>{h}</h2>" in out
-    assert "<b>my run run</b>" in out
+    assert "<b>my run</b>" in out
     for anchor in (
         "status",
         "loss",
@@ -335,3 +336,51 @@ def test_a_written_checkpoint_is_scored_as_itself_not_as_the_next(tmp_path):
 def test_the_bar_s_clock_is_spaced_from_the_status(tmp_path):
     bar = page.sections(_machine(tmp_path))["bar"]
     assert "</span> <span class=mut>" in bar
+
+
+def test_the_learning_rate_falls_over_simulations_not_constant(tmp_path):
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    s = json.loads((folder / "train/n250/settings.json").read_text())
+    s |= {
+        "learning_rate": 1e-5,
+        "lr_decay": "linear to zero over the outbreaks",
+    }
+    (folder / "train/n250/settings.json").write_text(json.dumps(s))
+    ctx.outbreaks = 1000
+    ctx.prefixes = (250, 500, 1000)
+    out = page.build(ctx)
+    assert "linear decay to 0 at 1000 simulations" in out
+    assert ">constant<" not in out
+    assert "learning rate vs simulations trained" in out
+
+
+def test_the_last_log_line_is_the_running_segment_s(tmp_path):
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    now = datetime.now().replace(microsecond=0)
+    (folder / "train" / "n500.log").write_text(
+        f"{now:%Y-%m-%d %H:%M:%S} [train] resumed at step 1140, "
+        "outbreaks 251-\n"
+    )
+    out = page.build(ctx)
+    tile = out.split("Last log line", 1)[1].split("</div></div>", 1)[0]
+    assert f"{now:%H:%M:%S}" in tile
+    assert "STALE" not in tile
+    assert "resumed at step 1140" in tile
+
+
+def test_the_next_checkpoint_names_its_simulations_and_planned_step(tmp_path):
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    (folder / "train" / "n500.log").write_text(
+        "2026-11-16 16:30:00 [train] outbreaks 251-500: 9 blocks, "
+        "99 series, 1000 steps\n"
+    )
+    out = page.build(ctx)
+    tile = out.split("Next checkpoint", 1)[1].split("</div></div>", 1)[0]
+    assert ">n500<" in tile
+    # 250 checkpointed at step 1140; n500's chunk planned as 1000 steps.
+    assert "of 500 simulations" in tile
+    assert "step 2140" in tile
+    assert "planned" in tile

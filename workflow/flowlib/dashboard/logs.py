@@ -26,10 +26,28 @@ STEP = re.compile(
 )
 """A logged step of the trainer: time, step, loss, held-out loss, its
 nowcast and forecast parts if logged, and the held-out loss by source
-(any source names) every few hundred steps."""
+(any source names) every few hundred steps. The bias relations' means
+and ranges after it are read with `BIAS`."""
+
+STAMP = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[\w+\] (.*)$")
+"""Any line of the trainer: its time and message."""
 
 SOURCE = re.compile(r"([\w+]+) ([\d.eE+-]+)")
 """One source and its loss in a step's `by source` list."""
+
+NUM = r"[+-]?[\d.]+(?:e[+-]?\d+)?"
+BIAS = re.compile(rf"(\w+?)_? ({NUM}) \[({NUM}), ({NUM})\]")
+"""One bias relation's mean and range in a step's `bias` list."""
+
+CHUNK = re.compile(
+    r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d \[train\] outbreaks (\d+)-(\d+): "
+    r"\d+ blocks, \d+ series, (\d+) steps"
+)
+"""A chunk the trainer plans: its first and last simulation and steps."""
+
+OLD_LOGS = ("train.log", "train-launcher.log")
+"""An older run's single log, as written and as renamed beside its
+segment logs."""
 
 
 def _float(x: str | None) -> float | None:
@@ -43,6 +61,7 @@ class Log:
         self.path = Path(path)
         self.offset = 0
         self._rows: dict[int, dict[str, Any]] = {}
+        self._chunks: dict[int, tuple[int, int]] = {}
 
     def _update(self) -> None:
         try:
@@ -50,7 +69,7 @@ class Log:
         except OSError:
             return
         if size < self.offset:
-            self.offset, self._rows = 0, {}
+            self.offset, self._rows, self._chunks = 0, {}, {}
         if size == self.offset:
             return
         with self.path.open("rb") as f:
@@ -59,10 +78,17 @@ class Log:
         end = data.rfind(b"\n") + 1
         self.offset += end
         for line in data[:end].decode("utf-8", "replace").splitlines():
+            c = CHUNK.match(line)
+            if c:
+                a, b, n = map(int, c.groups())
+                self._chunks[a - 1] = (b, n)
+                continue
             m = STEP.match(line)
             if not m:
                 continue
             g = m.groups()
+            cut = line.find(", bias ")
+            biased = line[cut + 7 :] if cut >= 0 else ""
             t = datetime.strptime(g[0], "%Y-%m-%d %H:%M:%S").timestamp()
             self._rows[int(g[1])] = {
                 "t": t,
@@ -75,6 +101,10 @@ class Log:
                     else {}
                 ),
                 "src": {k: float(v) for k, v in SOURCE.findall(g[6] or "")},
+                "bias": {
+                    k: {"mean": float(v), "min": float(lo), "max": float(hi)}
+                    for k, v, lo, hi in BIAS.findall(biased)
+                },
             }
 
     def rows(self) -> list[dict[str, Any]]:
@@ -82,14 +112,22 @@ class Log:
         self._update()
         return [self._rows[k] for k in sorted(self._rows)]
 
+    def chunks(self) -> dict[int, tuple[int, int]]:
+        """Return the planned chunks: simulations before -> (last, steps).
+
+        A chunk planned twice (a resumed segment) keeps its newest line.
+        """
+        self._update()
+        return dict(self._chunks)
+
 
 class RunLog:
     """A run's logged steps from every log it writes, each read as a `Log`.
 
     A run writes `train/n<N>.log`, one per segment, and an older run
-    `train.log`. New segment logs are found on each read, a file reached
-    by two names (a link) is read once, and a step logged twice keeps its
-    newest row.
+    `train.log` (`train-launcher.log` once renamed). New segment logs are
+    found on each read, a file reached by two names (a link) is read
+    once, and a step logged twice keeps its newest row.
     """
 
     def __init__(self, folder: Path | str) -> None:
@@ -100,17 +138,54 @@ class RunLog:
         found = sorted(
             self.folder.glob("train/n*.log"), key=lambda p: _size(p.name)
         )
-        old = self.folder / "train.log"
-        return ([old] if old.exists() else []) + found
+        old = [self.folder / n for n in OLD_LOGS]
+        return [p for p in old if p.exists()] + found
 
-    def rows(self) -> list[dict[str, Any]]:
-        """Return the logged steps of every log, in step order."""
-        merged: dict[int, dict[str, Any]] = {}
+    def _each(self) -> list[Log]:
+        out = []
         for path in self._paths():
             real = path.resolve()
             if real not in self._logs:
                 self._logs[real] = Log(real)
-            for row in self._logs[real].rows():
+            if self._logs[real] not in out:
+                out.append(self._logs[real])
+        return out
+
+    def chunks(self) -> dict[int, tuple[int, int]]:
+        """Return every log's planned chunks (`Log.chunks`)."""
+        merged: dict[int, tuple[int, int]] = {}
+        for log in self._each():
+            merged |= log.chunks()
+        return merged
+
+    def last_line(self) -> tuple[float, str] | None:
+        """Return the time and text of the newest log's last line.
+
+        The newest log is the one written last, the running segment's
+        `train/n<N>.log`: its last line may be any of the trainer's lines,
+        not only a logged step, so a checkpoint's evaluation or a wait
+        for simulations does not look stale.
+        """
+        paths = [p for p in self._paths() if p.exists()]
+        if not paths:
+            return None
+        newest = max(paths, key=lambda p: (p.stat().st_mtime, _size(p.name)))
+        with newest.open("rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 4096))
+            lines = f.read().decode("utf-8", "replace").splitlines()
+        for line in reversed(lines):
+            m = STAMP.match(line)
+            if m:
+                t = datetime.strptime(m[1], "%Y-%m-%d %H:%M:%S").timestamp()
+                return t, m[2]
+        return None
+
+    def rows(self) -> list[dict[str, Any]]:
+        """Return the logged steps of every log, in step order."""
+        merged: dict[int, dict[str, Any]] = {}
+        for log in self._each():
+            for row in log.rows():
                 if (
                     row["step"] not in merged
                     or row["t"] >= merged[row["step"]]["t"]

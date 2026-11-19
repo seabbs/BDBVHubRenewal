@@ -3,7 +3,8 @@
 import json
 import struct
 
-from flowlib.dashboard import bias, runs
+import pytest
+from flowlib.dashboard import bias, logs, runs, training
 
 
 def _safetensors(path, tensors):
@@ -61,7 +62,9 @@ def test_a_run_s_bias_from_its_checkpoints_and_history(tmp_path):
             d / "finetuned-ckpt" / "adapter_model.safetensors",
             {NAMES["same"]: [[v, v], [v, v]]},
         )
-        (d / "settings.json").write_text(json.dumps({"steps": step}))
+        (d / "settings.json").write_text(
+            json.dumps({"steps": step, "n_outbreaks": n})
+        )
     (folder / "train" / "history.json").write_text(
         json.dumps(
             [
@@ -73,10 +76,14 @@ def test_a_run_s_bias_from_its_checkpoints_and_history(tmp_path):
         )
     )
     run = runs.make_run("r", str(folder), live=True)
-    got = bias.run_bias(run, step=None)
-    assert [p[0] for p in got["pts"]["same"]] == [600, 1140, 2280]
+    pairs = training.anchors(logs.checkpoints(folder), {})
+    got = bias.run_bias(
+        run, step=None, sims=lambda s: training.sims_at(pairs, s)
+    )
+    # Against simulations trained: step 600 is 600 / 1140 of n250.
+    assert [p[0] for p in got["pts"]["same"]] == [131.58, 250, 500]
     assert got["pts"]["same"][0][1]["mean"] == 1.5
-    assert got["latest"]["step"] == 2280
+    assert got["latest"]["n"] == 500
     assert got["latest"]["same"] == [[2.0, 2.0], [2.0, 2.0]]
 
 
@@ -104,4 +111,79 @@ def test_the_page_payload_lists_each_run_with_bias(tmp_path):
     got = bias.payload(rs, live_step=None)
     assert [r["key"] for r in got["runs"]] == ["r"]
     assert [p["key"] for p in got["pairs"]] == ["self", "same", "up", "down"]
-    assert got["runs"][0]["pts"]["down"] == [[10, 1.0, 1.0, 1.0]]
+    assert got["runs"][0]["pts"]["down"] == [[250, 1.0, 1.0, 1.0]]
+
+
+LINE = (
+    "2026-11-16 16:50:01 [train] step {step}: loss 0.5, held-out (x) 0.4, "
+    "bias self_ {m:+.3f} [{lo:+.3f}, {hi:+.3f}], same {m:+.3f} "
+    "[{lo:+.3f}, {hi:+.3f}], 9 s\n"
+)
+CHUNK = (
+    "2026-11-16 16:40:00 [train] outbreaks {a}-{b}: 9 blocks, 99 series, "
+    "{n} steps\n"
+)
+
+
+def _logged_run(folder, launcher, segment, steps_a_sim):
+    """A run with an old launcher log and a segment log, as r5 has."""
+    (folder / "train").mkdir(parents=True)
+    text = CHUNK.format(a=1, b=100, n=100 * steps_a_sim)
+    for step, m in launcher:
+        text += LINE.format(step=step, m=m, lo=m - 0.1, hi=m + 0.1)
+    (folder / "train-launcher.log").write_text(text)
+    text = CHUNK.format(a=101, b=200, n=100 * steps_a_sim)
+    for step, m in segment:
+        text += LINE.format(step=step, m=m, lo=m - 0.1, hi=m + 0.1)
+    (folder / "train" / "n200.log").write_text(text)
+
+
+def test_each_run_s_bias_is_its_own_logged_values_over_simulations(tmp_path):
+    from flowlib.dashboard import page
+
+    # r5-like: 4 steps a simulation; r6-like: 10; slots: only a
+    # published checkpoint's settings, no logs and no adapter.
+    _logged_run(tmp_path / "r5", [(200, 0.1), (400, 0.2)], [(600, 0.3)], 4)
+    _logged_run(tmp_path / "r6", [(500, -0.5)], [(1500, -0.7)], 10)
+    slots = tmp_path / "slots" / "train" / "n250"
+    slots.mkdir(parents=True)
+    (slots / "settings.json").write_text(
+        json.dumps({"steps": 900, "n_outbreaks": 250})
+    )
+    rs = runs.load_runs(
+        [],
+        f"r5={tmp_path / 'r5'};r6={tmp_path / 'r6'},live;"
+        f"slots={tmp_path / 'slots'}",
+        [],
+    )
+    ctx = page.Context(
+        runs=rs,
+        references=[],
+        source=None,
+        rule="",
+        outbreaks=200,
+        learning_rate=1e-5,
+        prefixes=[200],
+    )
+    got = bias.payload(
+        rs,
+        None,
+        {r.key: ctx.log(r) for r in rs},
+        {r.key: ctx.sims(r) for r in rs},
+    )
+    by = {r["key"]: r["pts"] for r in got["runs"]}
+    # The slots run has no bias of its own, so it is missing, not borrowed.
+    assert set(by) == {"r5", "r6"}
+    want = {
+        "r5": [[50, 0.1], [100, 0.2], [150, 0.3]],
+        "r6": [[50, -0.5], [150, -0.7]],
+    }
+    for key, pts in want.items():
+        for rel in ("self", "same"):
+            assert [p[0] for p in by[key][rel]] == [x for x, _ in pts]
+            assert [p[1] for p in by[key][rel]] == pytest.approx(
+                [m for _, m in pts]
+            )
+            assert [p[2] for p in by[key][rel]] == pytest.approx(
+                [m - 0.1 for _, m in pts]
+            )

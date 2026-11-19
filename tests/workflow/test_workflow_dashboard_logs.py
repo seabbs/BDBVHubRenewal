@@ -3,6 +3,7 @@
 import json
 import os
 import time
+from datetime import datetime
 
 from flowlib.dashboard import logs
 
@@ -155,3 +156,83 @@ def test_steps_are_parsed_with_their_nowcast_and_forecast_parts(tmp_path):
     assert rows[0]["src"] == {"3day": 0.31, "daily": 0.29, "weekly": 0.12}
     # A line from before the split has no parts.
     assert rows[1]["parts"] == {}
+
+
+BIASED = (
+    ", bias self_ +0.012 [-0.034, +0.051], same -0.200 [-0.410, +0.010], "
+    "up +1.000 [+0.500, +1.500], 812 s; 3.1 GB"
+)
+
+
+def test_a_step_s_bias_means_and_ranges_are_read(tmp_path):
+    path = tmp_path / "train.log"
+    path.write_text(
+        LINE.format(step=100, loss=0.5, held=0.4)
+        + SOURCES
+        + BIASED
+        + "\n"
+        + LINE.format(step=200, loss=0.5, held=0.4)
+        + BIASED
+        + "\n"
+        + LINE.format(step=300, loss=0.5, held=0.4)
+        + ", 9 s\n"
+    )
+    rows = logs.Log(path).rows()
+    assert rows[0]["src"] == {"3day": 0.31, "daily": 0.29, "weekly": 0.12}
+    want = {
+        "self": {"mean": 0.012, "min": -0.034, "max": 0.051},
+        "same": {"mean": -0.2, "min": -0.41, "max": 0.01},
+        "up": {"mean": 1.0, "min": 0.5, "max": 1.5},
+    }
+    assert rows[0]["bias"] == want
+    assert rows[1]["bias"] == want
+    assert rows[2]["bias"] == {}
+
+
+def test_planned_chunks_are_read_newest_last(tmp_path):
+    path = tmp_path / "n500.log"
+    chunk = (
+        "2026-11-16 16:50:01 [train] outbreaks {a}-{b}: 9 blocks, "
+        "99 series, {n} steps\n"
+    )
+    path.write_text(
+        chunk.format(a=1, b=250, n=1500)
+        + chunk.format(a=251, b=500, n=1400)
+        + chunk.format(a=251, b=500, n=1450)
+    )
+    assert logs.Log(path).chunks() == {0: (250, 1500), 250: (500, 1450)}
+
+
+def test_a_renamed_launcher_log_is_read_with_the_segment_logs(tmp_path):
+    (tmp_path / "train").mkdir()
+    (tmp_path / "train-launcher.log").write_text(
+        LINE.format(step=10, loss=0.5, held=0.4) + "\n"
+    )
+    (tmp_path / "train" / "n2000.log").write_text(
+        LINE.format(step=20, loss=0.4, held=0.3) + "\n"
+    )
+    assert [r["step"] for r in logs.RunLog(tmp_path).rows()] == [10, 20]
+
+
+def test_the_last_line_is_the_newest_segment_log_s_last_line(tmp_path):
+    (tmp_path / "train").mkdir()
+    (tmp_path / "train.log").write_text(
+        LINE.format(step=10, loss=0.5, held=0.4) + "\n"
+    )
+    (tmp_path / "train" / "n250.log").write_text(
+        LINE.format(step=20, loss=0.4, held=0.3) + "\n"
+    )
+    # The segment running now: no step line yet, only its own lines.
+    (tmp_path / "train" / "n500.log").write_text(
+        "2026-11-19 10:01:02 [train] resumed at step 1500, outbreaks 251-\n"
+        "2026-11-19 10:05:09 [train] outbreaks 251-500: 9 blocks, "
+        "99 series, 1400 steps\n\n"
+    )
+    t, text = logs.RunLog(tmp_path).last_line()
+    assert text.startswith("outbreaks 251-500: 9 blocks")
+    want = datetime(2026, 11, 19, 10, 5, 9).timestamp()
+    assert t == want
+
+
+def test_a_run_with_no_logs_has_no_last_line(tmp_path):
+    assert logs.RunLog(tmp_path).last_line() is None
