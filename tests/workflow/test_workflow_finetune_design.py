@@ -54,10 +54,14 @@ def test_a_round_is_one_grid_block_of_840():
     # Ten training rounds, after the held-out round, are the 8,400.
     # The run's rounds are its grid's.
     assert CONFIG["finetune"]["rounds"] is None
-    assert CONFIG["finetune"]["held_round"] is None
+    assert CONFIG["finetune"]["validation_round"] is None
     for grid in CONFIG["grid_rounds"].values():
         assert len(grid["rounds"]) * 840 == CONFIG["finetune"]["outbreaks"]
-        assert grid["held_round"] not in grid["rounds"]
+        assert grid["validation_round"] not in grid["rounds"]
+        assert grid["test_round"] not in (
+            *grid["rounds"],
+            grid["validation_round"],
+        )
 
 
 def _trainer_args(tmp_path, finetune=None):

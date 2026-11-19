@@ -160,7 +160,7 @@ FT = {
         "prefixes": [250, 500],
         "outbreaks": 500,
         "rounds": [2],
-        "held_round": 1,
+        "validation_round": 1,
         "sims_from": "local",
         "real_validation": None,
     },
