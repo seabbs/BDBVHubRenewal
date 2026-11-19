@@ -308,6 +308,12 @@ def table_inputs(wc):
     }
 
 
+def unit_stamps(wc=None):
+    """Every unit the tables read, as one list (`rule score` asks for them
+    itself, so a new label's units run under tables already built)."""
+    return [f for files in table_inputs(wc).values() for f in files]
+
+
 def zone_units(wc=None):
     """Every label's zone unit."""
     labels = [*SC["reference"], *checkpoint_labels()]
