@@ -174,14 +174,15 @@ def test_the_listings_are_refreshed_in_a_run_of_their_own():
     )
     (name, refresh, _), (_, pool, _) = got[:2]
     assert name == "refresh"
-    lists = {"release_list", "available_batches"}
+    lists = {"release_list"}
     assert set(snakemake_targets(refresh)) == lists
     assert set(refresh[refresh.index("--forcerun") + 1 :]) == lists
     assert "--forcerun" not in pool
 
 
-def test_a_machine_with_the_rounds_refreshes_no_batch_list():
-    got = schedule.plan({"SCHEDULE_TARGETS": "finetune"})
+def test_finetune_needs_no_refresh_step():
+    # It lists its batches as it plans, wherever they come from.
+    got = schedule.plan({"SCHEDULE_TARGETS": "finetune", "SIMS_FROM": "remote"})
     assert [t for t, _, _ in got] == ["finetune"]
     assert "--forcerun" not in got[0][1]
 

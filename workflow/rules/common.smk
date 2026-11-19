@@ -2,6 +2,7 @@
 # apart from the rules themselves (rules/*.smk). Machine settings come
 # from config/local.env (flowlib.localconfig).
 
+import functools
 import json
 
 from flowlib import hosts, localconfig, manifest, notify, releases, segments
@@ -119,8 +120,7 @@ def available_seeds():
     order = training_seeds()
     if not ELSEWHERE:
         return order
-    path = checkpoints.available_batches.get().output[0]
-    listed = {int(s) for s in Path(path).read_text().split()}
+    listed = listed_batches()
     if not set(held_seeds()) <= listed:
         return []
     for i, seed in enumerate(order):
@@ -406,12 +406,18 @@ def push_record(input, output, params, wildcards):
     hosts.push(params.sims, s, params.there, row, REMOTE)
 
 
-def list_available(input, output, params, wildcards):
-    """List the batches that can be had now, mirroring the rounds host's lists."""
-    import json
+@functools.cache
+def listed_batches():
+    """The batches that can be had now, listed once per Snakemake run.
 
+    Listed when the run plans, not kept in a file, so a later run sees
+    rounds finished since. From the rounds host its manifests and QC
+    exclusions are mirrored in MIRROR; else the `sims-r<N>` releases'
+    assets. Written to <RUN>/available-batches.txt for the record.
+    """
+    rounds = sorted({FT["held_round"], *(round_of(s) for s in training_seeds())})
     seeds = set()
-    for r in params.rounds:
+    for r in rounds:
         if FT["sims_from"] == "remote":
             # The manifest and QC exclusions of a round there so far.
             here = Path(f"{MIRROR}/r{r}")
@@ -435,7 +441,7 @@ def list_available(input, output, params, wildcards):
             continue
         # A round not released yet has no release.
         got = subprocess.run(
-            ["gh", "release", "view", f"sims-r{r}", "-R", params.repo,
+            ["gh", "release", "view", f"sims-r{r}", "-R", SIM["repo"],
              "--json", "assets"],
             capture_output=True,
             text=True,
@@ -443,13 +449,14 @@ def list_available(input, output, params, wildcards):
         if got.returncode == 0:
             names = [a["name"] for a in json.loads(got.stdout)["assets"]]
             seeds |= releases.released_seeds(names)
-    Path(output[0]).write_text("".join(f"{s}\n" for s in sorted(seeds)))
+    record = Path(f"{RUN}/available-batches.txt")
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text("".join(f"{s}\n" for s in sorted(seeds)))
+    return seeds
 
 
 def check_report(input, output, params, wildcards):
     """Report whether checkpoint `check_at` beats zero-shot, and say so."""
-    import json
-
     s = json.loads(Path(input[0]).read_text())
     real = s.get("real_validation_loss", float("inf"))
     held = s["held_out_loss"] < s["held_out_loss_start"]

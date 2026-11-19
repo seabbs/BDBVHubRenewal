@@ -55,13 +55,12 @@ NEEDS_POOL = {"land", "release"}
 would otherwise rerun the failed scoring or simulation it depends on.
 `publish` reads only saved checkpoints, so it always runs."""
 
-LISTINGS = {"score": "release_list", "finetune": "available_batches"}
+LISTINGS = {"score": "release_list"}
 """The list each target plans from, refreshed each tick: `score` the
-checkpoint releases, `finetune` the simulation batches it can have, on a
-machine without the rounds (`SIMS_FROM` release or remote). They are
-refreshed in a run of their own, the tick's first step: Snakemake 9 ends
-a run after a forced checkpoint without the jobs it unlocks. A failed
-refresh leaves the last lists, and the pool still runs."""
+checkpoint releases. It is refreshed in a run of its own, the tick's
+first step: Snakemake 9 ends a run after a forced checkpoint without the
+jobs it unlocks. A failed refresh leaves the last list, and the pool
+still runs. `finetune` lists its batches itself each time a run plans."""
 
 MARK = "# bdbvhubrenewal workflow tick"
 """Ends this repository's cron line, so it can be replaced or removed."""
@@ -114,8 +113,6 @@ def plan(cfg: Mapping[str, str]) -> list[tuple[str, list[str], bool]]:
         raise ValueError(f"targets {bad} are not among {sorted(TARGETS)}")
     pool = [t for t in targets if t in POOL]
     lists = [LISTINGS[t] for t in pool if t in LISTINGS]
-    if cfg.get("SIMS_FROM") not in ("release", "remote"):
-        lists = [r for r in lists if r != "available_batches"]
     out = []
     if lists:
         cmd = [*_snakemake(cfg, lists), "--forcerun", *lists]

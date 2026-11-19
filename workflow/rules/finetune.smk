@@ -16,24 +16,9 @@
 # each round's manifest lists them, or from the sims-r<N> releases
 # (`release`). A segment is planned only once its batches can be had: the
 # training seeds count up to the first batch not yet listed, and nothing
-# trains before the whole held-out round is (`available_batches`, listed
-# afresh each tick). From the rounds host, its rounds' manifests and QC
-# exclusions are mirrored in <RUN>/rounds/.
-
-
-checkpoint available_batches:
-    output:
-        f"{RUN}/available-batches.txt",
-    log:
-        f"{RUN}/logs/available-batches.log",
-    localrule: True
-    params:
-        repo=SIM["repo"],
-        rounds=lambda wc: sorted(
-            {FT["held_round"], *(round_of(s) for s in training_seeds())}
-        ),
-    run:
-        list_available(input, output, params, wildcards)
+# trains before the whole held-out round is (`listed_batches`, listed
+# afresh each time a run plans). From the rounds host, its rounds'
+# manifests and QC exclusions are mirrored in <RUN>/rounds/.
 
 
 rule fetch_batch:
