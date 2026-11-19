@@ -134,8 +134,28 @@ def test_the_model_note_gives_one_draw_and_no_nb2() -> None:
     assert "NB2 or NB1" not in model
 
 
-# The simulator in this tree, which may be ahead of the pinned one.
-LOCAL = (PAPER.parent / "scripts" / "finetune_simulate.R").read_text()
+# The last script simulator (grid r6), before the r7 engine and its grid
+# config replaced it; its sampling-distribution tables are still parsed.
+R6_SIMULATOR = (
+    "3896c2f81928d5acd7c513cfd7b3b9c32acbf4a4",
+    "scripts/finetune_simulate.R",
+)
+
+
+def _r6_simulator() -> str:
+    """The r6 script simulator at its last commit, if git has it."""
+    ref, path = R6_SIMULATOR
+    done = subprocess.run(
+        ["git", "show", f"{ref}:{path}"],
+        cwd=PAPER,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return done.stdout if done.returncode == 0 else ""
+
+
+LOCAL = _r6_simulator()
 
 
 def test_sampling_distributions_are_read_with_their_reasons() -> None:

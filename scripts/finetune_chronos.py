@@ -1,7 +1,8 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Blocks, batches and memory budget for fine-tuning Chronos-2.
 
-Cuts outbreaks from `scripts/finetune_simulate.R` into training blocks
+Cuts outbreaks from the simulator (packages/nowcastfoundation/r) into
+training blocks
 (`outbreak_blocks`), packs them into batches within a memory budget
 (`plan_batches`, `max_series`), without torch.
 `scripts/finetune_stream.py` trains on them and
