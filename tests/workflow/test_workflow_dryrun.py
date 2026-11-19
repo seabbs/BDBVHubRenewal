@@ -560,7 +560,7 @@ def test_skipped_checkpoints_are_not_scored(tmp_path):
     config = {"score": {"labels": None, "skip": ["slots-aaa"]}}
     cache = tmp_path / "scores"
     cache.mkdir()
-    at = "2026-11-16T12:00:00Z"
+    at = "2026-11-20T12:00:00Z"
     (cache / "releases.json").write_text(
         f'[{{"tagName": "chronos-slots-aaa", "publishedAt": "{at}"}},'
         f' {{"tagName": "chronos-ft-bbb", "publishedAt": "{at}"}}]'
@@ -582,7 +582,7 @@ def test_a_checkpoint_released_after_the_tables_is_scored(tmp_path):
         (cache / unit).mkdir(parents=True)
         for label in labels:
             (cache / unit / f"{label}.done").write_text("")
-    at = "2026-11-17T12:00:00Z"
+    at = "2026-11-20T12:00:00Z"
     (cache / "releases.json").write_text(
         f'[{{"tagName": "chronos-slots-aaa", "publishedAt": "{at}"}},'
         f' {{"tagName": "chronos-slots-bbb", "publishedAt": "{at}"}}]'
@@ -600,7 +600,7 @@ def test_score_takes_checkpoints_from_the_release_list(tmp_path):
     cache.mkdir()
     (cache / "releases.json").write_text(
         '[{"tagName": "chronos-slots-aaa",'
-        ' "publishedAt": "2026-11-16T12:00:00Z"}]'
+        ' "publishedAt": "2026-11-20T12:00:00Z"}]'
     )
     jobs = dry(tmp_path, "score")
     assert jobs["score_release"] == 1
