@@ -14,6 +14,7 @@ from flowlib import (
     releases,
     segments,
     simulator,
+    topup,
 )
 
 LOCAL = localconfig.read()
@@ -536,3 +537,101 @@ def land_tables(input, output, params, wildcards):
     if head != git("rev-parse", f"origin/{params.branch}"):
         raise SystemExit(f"{head} is not on origin/{params.branch}")
     say(f"checkpoint scores landed at {head[:9]} on origin/{params.branch}")
+
+
+# From topup.smk.
+
+GRID = config["grid_rounds"].get(grid_name()) or {}
+TOPUP = GRID.get("topup_round")
+TOPUP_DIR = f"{ROUNDS_DIR}/r{TOPUP}"
+TOPUP_TRAINING = list(GRID.get("rounds") or [])
+TOPUP_FIRST = SIM["seed_base"] + 100 * (TOPUP or 0)
+
+
+def topup_plans():
+    """The top-up round's plans so far, by try."""
+    return sorted(
+        Path(TOPUP_DIR, "topup").glob("plan-*.txt"),
+        key=lambda p: int(p.stem.split("-")[1]),
+    )
+
+
+def batch_cells(wc):
+    """A batch's ENW_CELLS: a top-up batch's planned cells, else none."""
+    if TOPUP is None or int(wc.round) != TOPUP:
+        return ""
+    return ",".join(map(str, topup.cells_of(topup_plans(), int(wc.seed))))
+
+
+def batch_size(wc):
+    """A batch's simulations: a top-up batch's cells, else `batch`."""
+    cells = batch_cells(wc)
+    return len(cells.split(",")) if cells else SIM["batch"]
+
+
+def topup_plan_inputs(attempt):
+    """A try's inputs: the training rounds' QC, and the try before's."""
+    if TOPUP is None:
+        raise ValueError(f"grid {grid_name()} has no topup_round")
+    out = [f"{ROUNDS_DIR}/r{r}/qc/excluded.csv" for r in TOPUP_TRAINING]
+    if attempt:
+        out.append(f"{TOPUP_DIR}/qc/try-{attempt - 1}.done")
+    return out
+
+
+def topup_write_plan(attempt, out, log):
+    """Write try `attempt`'s batches of the cells still missing."""
+    cells = topup.missing_cells(Path(ROUNDS_DIR), TOPUP_TRAINING, TOPUP)
+    batches = topup.plan(cells, TOPUP_FIRST, attempt, SIM["batch"])
+    topup.write_plan(batches, Path(out))
+    Path(log).write_text(
+        f"try {attempt}: {len(cells)} missing cells in {len(batches)} batches\n"
+    )
+
+
+def topup_records(plan):
+    """The batch records of a plan's seeds."""
+    return [
+        f"{TOPUP_DIR}/records/record-{s}.csv" for s, _ in topup.read_plan(plan)
+    ]
+
+
+def topup_try_records(attempt):
+    """Try `attempt`'s batch records, once its plan is written."""
+    return topup_records(checkpoints.topup_plan.get(attempt=attempt).output[0])
+
+
+def topup_done(wc):
+    """Every try's plan, records and QC, up to the first with nothing left."""
+    out = []
+    for attempt in range(SIM.get("topup_tries", 5)):
+        plan = checkpoints.topup_plan.get(attempt=attempt).output[0]
+        out.append(plan)
+        records = topup_records(plan)
+        if not records:
+            break
+        out += [*records, f"{TOPUP_DIR}/qc/try-{attempt}.done"]
+    return out
+
+
+def topup_finish(input, output, log):
+    """Write the top-up round's manifest, seeds and READY; say any shortfall."""
+    import datetime as dt
+
+    records = [p for p in input if "/records/" in p]
+    manifest.join(records, output.manifest)
+    seeds = [int(Path(p).stem.split("-")[1]) for p in records]
+    Path(output.seeds).write_text("".join(f"{s}\n" for s in seeds))
+    left = topup.missing_cells(Path(ROUNDS_DIR), TOPUP_TRAINING, TOPUP)
+    note = (
+        f"top-up round {TOPUP}: {len(seeds)} batches; "
+        + (
+            "every training cell filled"
+            if not left
+            else f"SHORT: {len(left)} cells still missing after "
+            f"{SIM.get('topup_tries', 5)} tries ({left[:10]})"
+        )
+    )
+    Path(log).write_text(note + "\n")
+    Path(output.ready).write_text(f"{dt.datetime.now(dt.UTC):%Y-%m-%dT%H:%M:%SZ}\n")
+    say(note)

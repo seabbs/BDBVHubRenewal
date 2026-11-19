@@ -15,10 +15,14 @@ grid_rounds:
   r5:
     rounds: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
     held_round: 9
+    topup_round: null
     sources: [daily, weekly, 3day, daily+weekly, daily+3day]
   r6:
     rounds: [21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
     held_round: 20
+    # The training rounds' missing cells, simulated again (target `topup`,
+    # flowlib.topup), so the final model trains on ten whole blocks.
+    topup_round: 32
     sources: [daily, weekly, 3day, daily+weekly, daily+rolling7, daily+3day,
       daily+rolling3]
 
@@ -38,6 +42,9 @@ simulate:
   # A batch's memory, and its one retry's (MB).
   mem_mb: 16384
   retry_mem_mb: 20480
+  # Tries of the top-up (target `topup`): each try simulates the cells
+  # still missing after the sim QC of the try before.
+  topup_tries: 5
   # GitHub repository of the `sims-r<N>` releases.
   repo: seabbs/bdbv-hub-modelling
 

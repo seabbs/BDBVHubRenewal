@@ -208,3 +208,26 @@ def test_the_comparison_tabulates_simulated_against_real(tmp_path):
     noise = next(ln for ln in text.splitlines() if "relative noise" in ln)
     assert "0.5" not in noise.split("|")[2]
     assert "Shocks: none 67%" in text
+
+
+@needs_rscript
+def test_a_top_up_batch_simulates_the_cells_it_is_given(tmp_path):
+    # ENW_CELLS: simulation i is cell i of the list, past any round's block
+    # (a top-up seed's position would be refused otherwise); the default
+    # path is the round's block as before.
+    out = run_light(
+        """
+cat("given", grid_index(33200, 3L, 2L, 30000L, "17641,17650,21002"), "\\n")
+cat("default", grid_index(32100, 21L, 2L, 30000L), "\\n")
+cat("short", tryCatch(grid_index(33200, 3L, 1L, 30000L, "1,2"),
+  error = function(e) "error"), "\\n")
+cat("past", tryCatch(grid_index(33240, 21L, 1L, 30000L),
+  error = function(e) "error"), "\\n")
+""",
+        tmp_path,
+    )
+    rows = {x.split()[0]: x.split()[1:] for x in out.splitlines() if x}
+    assert rows["given"] == ["17650"]
+    assert rows["default"] == [str(21 * 840 + 1)]
+    assert rows["short"] == ["error"]
+    assert rows["past"] == ["error"]

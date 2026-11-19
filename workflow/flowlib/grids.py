@@ -41,7 +41,8 @@ def resolve(ft: dict[str, Any], table: Mapping[str, Any]) -> dict[str, Any]:
 def owner(round_: int, table: Mapping[str, Any]) -> str | None:
     """Return the grid a round belongs to, or None for an unlisted round."""
     for grid, entry in table.items():
-        if round_ == entry["held_round"] or round_ in entry["rounds"]:
+        own = (entry["held_round"], entry.get("topup_round"))
+        if round_ in own or round_ in entry["rounds"]:
             return grid
     return None
 
