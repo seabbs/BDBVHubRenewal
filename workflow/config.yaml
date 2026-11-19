@@ -11,8 +11,8 @@ rounds: []
 # the validation round; the test round is fresh seeds, never trained on
 # or monitored, and scored only for the final model. A round's number
 # sets its seeds and its release `sims-r<N>`, so no two grids share a
-# round (flowlib.grids): r6 validates on round 20, trains on 21 to 30 and
-# tests on 31, and never overwrites r5's.
+# round (flowlib.grids): r7 validates on round 33, trains on 34 to 37 and
+# tests on 38, and never overwrites r5's or r6's.
 grid_rounds:
   r5:
     rounds: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
@@ -27,6 +27,13 @@ grid_rounds:
     # The training rounds' missing cells, simulated again (target `topup`,
     # flowlib.topup), so the final model trains on ten whole blocks.
     topup_round: 32
+    sources: [daily, weekly, 3day, daily+weekly, daily+rolling7, daily+3day,
+      daily+rolling3]
+  r7:
+    rounds: [34, 35, 36, 37]
+    validation_round: 33
+    test_round: 38
+    topup_round: null
     sources: [daily, weekly, 3day, daily+weekly, daily+rolling7, daily+3day,
       daily+rolling3]
 
@@ -56,10 +63,12 @@ simulate:
 
 finetune:
   # The continuous run, one training
-  # segment per prefix (`--until`), in <RUN>/train/n<N>/. It trains on
-  # 8,400 outbreaks, ten of grid r6's balanced blocks of 840.
-  prefixes: [250, 500, 750, 1000, 2000, 4000, 8400]
-  outbreaks: 8400
+  # segment per prefix (`--until`), in <RUN>/train/n<N>/. Every
+  # fine-tuned setting trains on the same 3,200 simulations, its grid's
+  # four training rounds, so they compare fairly, with checkpoints
+  # doubling from 100.
+  prefixes: [100, 200, 400, 800, 1600, 3200]
+  outbreaks: 3200
   # Training seeds: the rounds' batches in seed order, or a fixed list
   # from `seed_file` (one seed a line, in order). The validation round is
   # one whole grid block, and the ten rounds after it the ten blocks
@@ -78,7 +87,7 @@ finetune:
   # Chronos-2's recipe: one draw of each simulation cut at `cuts`
   # cut-offs, the learning rate falling linearly to zero over the
   # `outbreaks` simulations, and the series bias at its own rate `bias_lr`.
-  grid: r6
+  grid: r7
   draws: 1
   cuts: 32
   subset_seed: 1
@@ -89,12 +98,12 @@ finetune:
   # Days after the cut-off a training block's horizon, and so the loss,
   # runs to (null: the whole horizon, to four weeks ahead). Checkpoint
   # scoring covers every horizon either way.
-  loss_horizon_days: null
+  loss_horizon_days: 7
   # Cases a block needs reported across its places in the 28 days up to
   # its cut-off, from what is known at the cut-off, to be trained on
   # (null: keep every block).
-  quiet_min_cases: null
-  chunk: 250
+  quiet_min_cases: 10
+  chunk: 100
   # Steps between the trainer's held-out evaluations: the monitor on the
   # first 100 held-out blocks, and by source (100 blocks a source) on a
   # multiple of it. They only score: the steps trained are the same.
@@ -105,17 +114,16 @@ finetune:
   # rules score them after each segment, on whichever machine
   # WORKER_GROUPS gives `evaluate`; rules/evaluate.smk). Training is the
   # same either way.
-  eval: local
+  eval: offload
   series_bias: true
-  # The live r6 run's checkpoints carry this note, and the note is part of
-  # the settings hash, so it stays as written to reproduce them.
-  note: continuous r5
+  # Part of the settings hash: changing it changes every checkpoint's hash.
+  note: r7 run, 3,200 simulations
   # Real validation blocks the trainer scores each checkpoint on, or null.
   # Null: BDBV is held out for the paper, so no BDBV blocks are scored in
   # development, and there is no other real-data set yet.
   real_validation: null
   # The checkpoint checked against zero-shot on the held-out simulations.
-  check_at: 1000
+  check_at: 800
 
 score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes

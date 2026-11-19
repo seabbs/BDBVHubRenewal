@@ -160,6 +160,9 @@ FT = {
     "finetune": {
         "prefixes": [250, 500],
         "outbreaks": 500,
+        # The fixtures' own chunks and evaluation, whatever the run's.
+        "chunk": 250,
+        "eval": "local",
         "rounds": [2],
         "validation_round": 1,
         "sims_from": "local",
@@ -703,14 +706,17 @@ def test_at_most_two_simulations_run_at_once(tmp_path):
 
 
 def test_a_failed_run_posts_a_mailbox_line(tmp_path):
-    # A real run of one local rule that fails: n1000_check on settings
+    # A real run of one local rule that fails: n800_check on settings
     # with no losses.
     box = tmp_path / "box.md"
     _local(tmp_path, "NOTIFY=1", f"MAILBOX={box}")
-    n1000 = tmp_path / "checkpoints" / "slots" / "train" / "n1000"
-    n1000.mkdir(parents=True)
-    (n1000 / "settings.json").write_text("{}")
-    target = tmp_path / "checkpoints" / "slots" / "reports" / "n1000-check.txt"
+    n800 = tmp_path / "checkpoints" / "slots" / "train" / "n800"
+    n800.mkdir(parents=True)
+    (n800 / "settings.json").write_text("{}")
+    # Evaluated in the trainer, so the report needs only the checkpoint.
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text("finetune:\n  eval: local\n")
+    target = tmp_path / "checkpoints" / "slots" / "reports" / "n800-check.txt"
     out = subprocess.run(
         [
             str(SNAKEMAKE),
@@ -719,6 +725,8 @@ def test_a_failed_run_posts_a_mailbox_line(tmp_path):
             "1",
             "--workflow-profile",
             "workflow/profiles/ci",
+            "--configfile",
+            str(overlay),
         ],
         cwd=ROOT,
         env={
