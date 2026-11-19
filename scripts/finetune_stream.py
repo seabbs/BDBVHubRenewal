@@ -42,6 +42,7 @@ import sys
 import time
 import zlib
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
@@ -594,7 +595,12 @@ def train_step(model, batch: dict, accepted, device, share: float) -> float:
     block recomputed in backward (`checkpoint_large_batches`) gets the
     same series bias.
     """
-    with series_bias.assigned(model, batch.get("series_rows")):
+    with (
+        series_bias.assigned(model, batch.get("series_rows")),
+        _HorizonLoss(batch.get("horizon_rows")) as horizon,
+    ):
+        if HORIZON_LOSS == "distil":
+            horizon.capture_base(model, batch, accepted)
         loss = forward(model, batch, accepted, device).loss
         (loss * share).backward()
     return float(loss.detach())
@@ -724,6 +730,13 @@ class ByLength:
         self.bias = bias
         self.batch_size = batch_size
         self.inputs = [tensors(b) for b in blocks]
+        # With a horizon loss, each batch carries its rows' nowcast and
+        # week steps (`horizon_rows`).
+        self.horizon = (
+            [horizon_rows([b]) for b in blocks]
+            if HORIZON_LOSS != "all"
+            else None
+        )
         self.lengths = [b["prediction_length"] for b in blocks]
         self.local: dict[int, int] = {}
         self.data = {}
@@ -750,6 +763,10 @@ class ByLength:
         batch = self.data[length]._build_batch([self.local[i] for i in indices])
         if self.bias:
             batch["series_rows"] = block_rows([self.inputs[i] for i in indices])
+        if self.horizon is not None:
+            batch["horizon_rows"] = np.concatenate(
+                [self.horizon[i] for i in indices]
+            )
         return batch
 
     def indices(self):
@@ -828,6 +845,149 @@ class _LossSplit:
         from chronos.chronos2.model import Chronos2Model
 
         Chronos2Model._compute_loss = self.original
+
+
+HORIZON_LOSSES = ("all", "nowcast", "nowcast+1w", "distil")
+"""Training losses by horizon (`--horizon-loss`): Chronos-2's own over
+every step (`all`); only the steps to the cut-off (`nowcast`); those and
+the week after it (`nowcast+1w`); or every step plus a penalty keeping the
+quantiles after the cut-off near base Chronos-2's (`distil`)."""
+
+HORIZON_LOSS = "all"
+"""The run's horizon loss, set from `--horizon-loss`."""
+
+DISTIL_WEIGHT = 1.0
+"""Weight of the `distil` penalty, set from `--distil-weight`."""
+
+
+@contextmanager
+def horizon_loss(mode: str, weight: float = 1.0):
+    """Set the horizon loss and its distillation weight while open."""
+    global HORIZON_LOSS, DISTIL_WEIGHT
+    if mode not in HORIZON_LOSSES:
+        raise ValueError(f"unknown horizon loss {mode}")
+    before = HORIZON_LOSS, DISTIL_WEIGHT
+    HORIZON_LOSS, DISTIL_WEIGHT = mode, weight
+    try:
+        yield
+    finally:
+        HORIZON_LOSS, DISTIL_WEIGHT = before
+
+
+def horizon_settings(mode: str, weight: float) -> dict:
+    """Return the horizon loss's entry of a checkpoint's settings."""
+    if mode == "all":
+        return {}
+    entry: dict = {"mode": mode}
+    if mode == "distil":
+        entry["distil_weight"] = weight
+    return {"horizon_loss": entry}
+
+
+def week_steps(block: dict) -> int:
+    """Return the steps in a week at a block's cadence (at least one)."""
+    days = ft.DAYS_PER_STEP.get(block.get("source", "daily"), 1)
+    return max(1, round(7 / days))
+
+
+class _HorizonLoss:
+    """Chronos-2's training loss under the run's `HORIZON_LOSS`.
+
+    `rows` gives each batch row its nowcast steps and its steps in a week.
+    `nowcast` and `nowcast+1w` mask the targets after the cut-off, or a
+    week after it, and rescale the loss to the steps kept, so its size
+    does not fall with the steps dropped. `distil` adds the mean absolute
+    gap, summed over levels, between the scaled quantiles and base
+    Chronos-2's (`capture_base`) over the target steps after the cut-off.
+    """
+
+    def __init__(self, rows) -> None:
+        self.rows = rows
+        self.base = None
+        self.capturing = False
+
+    def capture_base(self, model, batch: dict, accepted) -> None:
+        """Keep base Chronos-2's scaled quantiles of `batch` (no adapter)."""
+        import torch
+
+        disabled = getattr(model, "disable_adapter", None)
+        self.capturing = True
+        try:
+            with torch.no_grad():
+                if disabled is None:
+                    forward(model, batch, accepted)
+                else:
+                    with disabled():
+                        forward(model, batch, accepted)
+        finally:
+            self.capturing = False
+
+    def __enter__(self):
+        import torch
+        from chronos.chronos2.model import Chronos2Model
+
+        self.original = original = Chronos2Model._compute_loss
+
+        def compute(model, **kwargs):
+            if self.capturing:
+                self.base = kwargs["quantile_preds"].detach()
+                return original(model, **kwargs)
+            if self.rows is None or HORIZON_LOSS == "all":
+                return original(model, **kwargs)
+            target = kwargs["future_target"]
+            mask = kwargs["future_target_mask"]
+            mask = ~torch.isnan(target) if mask is None else mask > 0
+            preds = kwargs["quantile_preds"]
+            steps = preds.shape[-1]
+            if mask.shape[-1] < steps:
+                pad = steps - mask.shape[-1]
+                mask = torch.nn.functional.pad(mask, (0, pad))
+            rows = torch.as_tensor(self.rows, device=mask.device)
+            at = torch.arange(steps, device=mask.device)[None, :]
+            after = at >= rows[:, :1]
+            covariate = kwargs["patched_future_covariates_mask"]
+            known = covariate.reshape(covariate.shape[0], -1)[:, :steps] > 0
+            scored = mask & ~known
+            if HORIZON_LOSS == "distil":
+                loss = original(model, **kwargs)
+                keep = (scored & after).float()
+                if self.base is None or keep.sum() == 0:
+                    return loss
+                gap = (preds - self.base).abs().sum(dim=1)
+                return loss + DISTIL_WEIGHT * (gap * keep).sum() / keep.sum()
+            edge = rows[:, :1] + (
+                rows[:, 1:] if HORIZON_LOSS != "nowcast" else 0
+            )
+            keep = at < edge
+            kept = (scored & keep).float().sum()
+            if kept == 0:
+                return original(model, **kwargs) * 0.0
+            kwargs["future_target_mask"] = (mask & keep)[
+                :, : target.shape[-1]
+            ].float()
+            scale = scored.float().sum() / kept
+            return original(model, **kwargs) * scale
+
+        Chronos2Model._compute_loss = compute
+        return self
+
+    def __exit__(self, *exc) -> None:
+        from chronos.chronos2.model import Chronos2Model
+
+        Chronos2Model._compute_loss = self.original
+
+
+def horizon_rows(blocks: list[dict]) -> np.ndarray:
+    """Return each row's nowcast steps and week steps, for `blocks`."""
+    return np.concatenate(
+        [
+            np.tile(
+                [nowcast_steps(b), week_steps(b)],
+                (int(b["context"].shape[0]), 1),
+            )
+            for b in blocks
+        ]
+    )
 
 
 def held_out_parts(
@@ -1341,6 +1501,9 @@ def build_parser() -> argparse.ArgumentParser:
     # group attention bias for same-place and parent-child pairs.
     parser.add_argument("--series-bias", action="store_true")
     parser.add_argument("--bias-lr", type=float, default=BIAS_LR)
+    # The loss by horizon (HORIZON_LOSSES); `all` is Chronos-2's own.
+    parser.add_argument("--horizon-loss", choices=HORIZON_LOSSES, default="all")
+    parser.add_argument("--distil-weight", type=float, default=DISTIL_WEIGHT)
     # One segment of a continuous run: stop once prefix N is saved, with
     # the trainer's state beside it (`n<N>/state`), which the next
     # segment resumes from (workflow/rules/finetune.smk).
@@ -1406,7 +1569,7 @@ def check_cadence(eval_every: int, by_source_every: int) -> None:
 
 def main() -> None:
     """Train on the chunks as they are simulated."""
-    global CHUNK, DRAWS_PER_PASS, SUBSET_SEED
+    global CHUNK, DRAWS_PER_PASS, SUBSET_SEED, HORIZON_LOSS, DISTIL_WEIGHT
     import torch
     from chronos import Chronos2Pipeline
     from chronos.chronos2.dataset import DatasetMode
@@ -1421,6 +1584,7 @@ def main() -> None:
     ft.check_sources(ft.SOURCES)
     ft.check_package(Path(__file__).parents[1])
     ft.UNIVARIATE_SHARE = args.univariate_share
+    HORIZON_LOSS, DISTIL_WEIGHT = args.horizon_loss, args.distil_weight
     global EXCLUDE_FILE, DRAWS_PER_PASS, SUBSET_SEED
     EXCLUDE_FILE = args.exclude
     DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
@@ -1570,6 +1734,7 @@ def main() -> None:
             ),
         },
         **bias_settings(args.series_bias, args.bias_lr),
+        **horizon_settings(args.horizon_loss, args.distil_weight),
         "learning_rate": args.learning_rate,
         **(
             {
