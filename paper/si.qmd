@@ -166,6 +166,9 @@ where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or 
 - The aggregate row has no lag series of its own.
 - It belongs to its place, so it is in that place's same-place relation.
 - The loss counts the aggregate row only on period-end days, where $m_{n,t} = 1$, and its missing days have $m_{n,t} = 0$.
+- Each block's periods end on a day drawn at random, so its totals can end on any weekday.
+- Other daily blocks instead have a row per place with its rolling 7-day or 3-day sum.
+- The rolling row has a value on every day and the loss counts it on every day, as the German target's 7-day sums are.
 
 #### LoRA
 
@@ -199,10 +202,18 @@ $$
 where $s_t$ is the number of simulations trained by step $t$, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.
 - $\eta_0 = 10^{-5}$ for the LoRA adapter, the rate Chronos-2's fine-tuning recommends for LoRA and AutoGluon's default [@chronos_forecasting; @autogluon], and $\eta_0 = 10^{-3}$ for the attention biases.
 - We train with AdamW [@Loshchilov2019] in fp32 and clip the gradient norm at 1 [@Pascanu2013].
+- A step that runs out of GPU memory is run again in halves.
+- A single block that runs out is run once more and then skipped.
+- A step whose loss or gradients are not finite is skipped and counted.
+- We do not stop early.
 - Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].
 
 **Training blocks.**
-A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off, one cut-off a week.
+A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off.
+Releases follow the layout's steps, daily, every 3 days or weekly.
+Of the daily blocks, 20% have weekly releases, 10% releases on weekdays only and 10% daily releases with missed days.
+Of the 3-day and weekly blocks, 20% have missed releases.
+A missed release drops each release but the last with chance 0.2.
 Each simulation gives one observation draw, cut at 32 cut-offs, one drawn at random within each of 32 equal stretches of its weekly cut-offs, so one simulation gives up to 32 blocks.
 Each block has up to 364 steps of context, and its prediction length is its horizon.
 We train on 8,400 simulations, 10 balanced blocks of 840, with checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400.
@@ -213,14 +224,17 @@ We train on 8,400 simulations, 10 balanced blocks of 840, with checkpoints at 25
 | Daily | 25% |
 | Weekly | 25% |
 | 3-day | 15% |
-| Daily with a weekly row per place | 25% |
-| Daily with a 3-day row per place | 10% |
+| Daily with a weekly row per place | 12.5% |
+| Daily with a rolling 7-day row per place | 12.5% |
+| Daily with a 3-day row per place | 5% |
+| Daily with a rolling 3-day row per place | 5% |
 
 The layouts of the training blocks and their shares.
 :::
 
 - We apply further options on top of the layout, each drawn independently.
-- 20% of the blocks hold a single series, the country or one place.
+- In outbreaks with more than one place, 20% of the blocks hold a single series, the country or one place.
+- Outbreaks with a single stratum give only blocks of the country.
 - The other blocks hold a random set of places, with or without the country.
 - Where a block holds the country and some of its places, a third each have a country equal to the sum of its places, above it (with cases not assigned to a place), or later than it (its own stream).
 - The options combine, so a block can be, for example, daily with a weekly row and non-summing.
@@ -230,9 +244,11 @@ The layouts of the training blocks and their shares.
 Each training block is built as follows.
 
 - A training block cuts one draw's releases at one cut-off and lays them out as the ragged layout does, with the target past the last complete step the outbreak's final counts.
-- The longest lag $D$ is drawn from 2 to 7 weeks, or 14 to 49 days, so the model is not tied to one $D$.
-- Four or more flat places are grouped into regions, with region totals.
+- The longest lag $D$ is drawn from 2 to 7 weeks, 14 to 49 days or 5 to 16 steps of 3 days, so the model is not tied to one $D$.
+- A block's number of series is drawn log-uniformly from 1 to 2,000.
+- Four or more flat places are grouped into 2 to 6 regions, with region totals.
 - The blocks with more than one series have as targets all levels, leaves and the national total, or leaves only, in equal shares.
+- Blocks whose places do not nest have no intermediate level, so their targets are leaves with or without the national total.
 
 ::: {#tbl-block-combinations}
 {{< include build/tables/si/block-combinations.md >}}
@@ -243,7 +259,8 @@ The realised shares of the combinations of layout and options in the training bl
 **Order of the training data.**
 The grid is balanced in blocks of 840 simulations, with each factor's levels shuffled independently within a block, as in a Latin hypercube.
 Training takes the simulations in order, in chunks of 250, so a chunk holds under a third of a block.
-A chunk gives up to 8,000 training blocks, 32 a simulation, which are shuffled and packed into about 1,500 steps of up to 256 series each, roughly 6 a simulation.
+A chunk gives up to 8,000 training blocks, 32 a simulation, which are shuffled and packed into about 1,500 steps, roughly 6 a simulation.
+Each step is filled until it holds 256 series or more, so one large block can make a step of up to 2,000 series.
 So the checkpoints at 250, 500 and 750 simulations have seen only part of the grid, whole blocks are seen at each 840, and the 8,400 checkpoint has seen ten.
 
 Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
@@ -343,6 +360,9 @@ Simulated summaries (centiles over 1,000 drawn settings) against the range over 
 ![Six contrasting simulations of the grid, from pilot simulations: the final daily counts (black) and the counts known at releases 40%, 65% and 90% of the way through each outbreak (dashed), summed over strata.](build/figures/si/sim-examples.png){#fig-sim-examples}
 
 Outbreaks run 16 to 52 weeks.
+A simulation that fails, or has fewer than 10 cases or more than $10^6$ cases per stratum, is redrawn up to five times, and its grid cell is skipped if every draw fails.
+Before training, a language model reviews each round's simulations for implausible outbreaks with a fixed prompt, and the trainer skips those it flags.
+The prompt defaults to keeping a simulation, and no simulation is deleted.
 
 The grid has two limitations.
 Simulated strata are less sparse than BDBV's provinces: the share of stratum-weeks with no cases reaches {{< meta evidence.realism.zero_share.sim_q95 >}} at the 95% point of the simulations, against {{< meta evidence.realism.zero_share.BDBV >}} for BDBV.
@@ -350,8 +370,8 @@ Simulated delays are shorter than the German data's, whose 99% point is {{< meta
 
 The simulator works around four limits of epinowcast's simulation mode, each until the linked epinowcast change.
 It uses `enw_simulate()` from a feature branch of epinowcast (commit e084b080), until [epinowcast#841](https://github.com/epinowcast/epinowcast/pull/841) is merged.
-It reads the posterior predictive counts (`pp_obs`) from the fit directly, as `enw_pp_summary()` is slow, and runs each batch of 25 simulations under a 16 GB memory cap ([epinowcast#841](https://github.com/epinowcast/epinowcast/pull/841)).
-Gamma reporting delays have a coefficient of variation of 0.8 to 1.6, as a shape above 2 gives NaN tail hazards ([epinowcast#939](https://github.com/epinowcast/epinowcast/issues/939)).
+It reads the posterior predictive counts (`pp_obs`) from the fit directly, as `enw_pp_summary()` is slow, and runs each batch of 21 simulations under a 16 GB memory cap, with one retry at 20 GB ([epinowcast#841](https://github.com/epinowcast/epinowcast/pull/841)).
+Gamma reporting delays have a coefficient of variation of 0.75 to 1.6, as a shape above 2 gives NaN tail hazards ([epinowcast#939](https://github.com/epinowcast/epinowcast/issues/939)).
 When the delay walks over weeks, its log spread walks at half the scale of its log location, as a zero scale sits on the parameter's lower bound, where Stan cannot start ([epinowcast#941](https://github.com/epinowcast/epinowcast/issues/941)).
 
 ![How the simulated outbreaks (grey histograms) compare with the BDBV data and the German data by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.](build/figures/si/sim-realism.png){#fig-sim-realism}
@@ -364,10 +384,10 @@ The simulated outbreaks' ranges against published values for several diseases, t
 
 {{< include build/tables/si/heldout-set.md >}}
 
-We cut the held-out simulations into blocks as in training, with the five layouts and non-summing parents (@tbl-block-layouts), using a fixed seed.
+We cut the held-out simulations into blocks as in training, with the same layouts and non-summing parents (@tbl-block-layouts), using a fixed seed.
 A manifest records each held-out block's layout and options.
 The held-out simulations are simulation round 9, one whole block of 840 separate from the ten training blocks, and are the paper's test set.
-The trainer monitors its loss on 90 of them, a random sample of the block's cells.
+The trainer monitors its loss on the first 90 of them by seed.
 
 The Ebola case study is held out from model development but not blind.
 We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.
