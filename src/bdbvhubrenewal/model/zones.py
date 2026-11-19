@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, cast
 
@@ -918,6 +918,32 @@ def zone_vintage_from_tables(
         parents=np.array([parent_names.index(parent_of[p]) for p in names]),
         parent_names=parent_names,
         own=totals.sum(axis=0) >= MIN_OWN_CASES,
+    )
+
+
+def single_patch(data: Vintage) -> ZoneVintage:
+    """Return a vintage with each place as its own patch.
+
+    Each place is its own parent, so the zone model has no within-parent
+    deviation and its delay and missing-onset share are by place: the
+    province model, or with one place the model fitted to that place
+    alone.
+
+    Parameters
+    ----------
+    data : Vintage
+        The vintage.
+
+    Returns
+    -------
+    ZoneVintage
+        The same data, one place per parent.
+    """
+    shared = {f.name: getattr(data, f.name) for f in fields(Vintage)}
+    return ZoneVintage(
+        **shared,
+        parents=np.arange(len(data.names)),
+        parent_names=list(data.names),
     )
 
 
