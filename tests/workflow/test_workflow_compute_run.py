@@ -32,13 +32,14 @@ rule b:
     input: f"{ROOT}/a.txt"
     output: f"{ROOT}/b.txt"
     log: f"{ROOT}/logs/b.log"
-    params: copy_back=[f"{ROOT}/extra.txt"]
+    params: copy_back=[f"{ROOT}/extra.txt", f"{ROOT}/rows/"]
     threads: 1
     resources: mem_mb=10
     shell:
         "echo ran-in $(pwd) > {log}; "
         "cat {input} > {output}; echo $ROOT >> {output}; "
-        "echo extra > {params.copy_back}"
+        "echo extra > {ROOT}/extra.txt; "
+        "mkdir -p {ROOT}/rows; echo r > {ROOT}/rows/r.csv"
 """
 
 
@@ -128,6 +129,9 @@ def test_a_job_runs_on_the_worker_and_comes_back(setup):
     assert (croot / "b.txt").read_text() == f"from-coordinator\n{wroot}\n"
     assert str(worker) in (croot / "logs" / "b.log").read_text()
     assert (croot / "extra.txt").read_text() == "extra\n"
+    # A folder to copy back lands at its own path, not inside itself.
+    assert (croot / "rows" / "r.csv").read_text() == "r\n"
+    assert not (croot / "rows" / "rows").exists()
 
 
 def test_a_worker_on_another_commit_fails_the_job(setup):

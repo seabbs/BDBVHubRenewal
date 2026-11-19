@@ -15,6 +15,11 @@ reference folder, to its model by name (`model:<name>`, such as a hub
 team), else to the checkpoint of a folder a run claims; excluded and
 unclaimed checkpoints are left out. The page draws `levels`; coverage,
 bias and the WIS use the seven cached levels.
+
+Bands and coverage are 50% and 90%, as in the paper: the 90% interval
+from the 5% and 95% quantiles where a file has them (`OUTER`; summarised
+samples do), else the 95% interval, as the German hub's quantiles stop
+at 2.5% and 97.5%.
 """
 
 from __future__ import annotations
@@ -39,6 +44,12 @@ SEVEN = ("0.025", "0.1", "0.25", "0.5", "0.75", "0.9", "0.975")
 """The cached quantile levels."""
 
 LEVELS = tuple(float(q) for q in SEVEN)
+
+OUTER = ("0.05", "0.95")
+"""The 90% interval's quantiles, used for bands and coverage if present."""
+
+SUMMARY_LEVELS = tuple(sorted((*SEVEN, *OUTER), key=float))
+"""The levels a summary of samples holds (`summarise_samples`)."""
 
 PAGE_LEVELS = (0.025, 0.25, 0.5, 0.75, 0.975)
 """Default levels of `build`; the page draws all seven (`LEVELS`)."""
@@ -92,13 +103,35 @@ def cdf_at(q: Sequence[float], y: float) -> float:
     return 0.5
 
 
-def stats(pairs: Sequence[tuple[Sequence[float], float]]) -> list[float]:
-    """Return 50% and 95% coverage and the mean bias, 1 - 2 F(y)."""
+def stats(
+    pairs: Sequence[tuple[Sequence[float], float]],
+    outer: Sequence[Sequence[float] | None] | None = None,
+) -> list[float]:
+    """Return 50% and outer coverage, the mean bias, 1 - 2 F(y), and band.
+
+    The outer interval is 90% where every forecast has its `OUTER`
+    quantiles (`outer`, one pair or None per forecast), else 95%; the
+    last value is its level, 90 or 95.
+    """
     n = len(pairs)
+    ninety = outer is not None and all(o is not None for o in outer)
+    bounds = (
+        [(o[0], o[1]) for o in outer if o is not None]
+        if ninety and outer is not None
+        else [(q[0], q[6]) for q, _ in pairs]
+    )
     return [
         round(sum(q[2] <= y <= q[4] for q, y in pairs) / n, 3),
-        round(sum(q[0] <= y <= q[6] for q, y in pairs) / n, 3),
+        round(
+            sum(
+                lo <= y <= hi
+                for (lo, hi), (_, y) in zip(bounds, pairs, strict=True)
+            )
+            / n,
+            3,
+        ),
         round(sum(1 - 2 * cdf_at(q, y) for q, y in pairs) / n, 3),
+        90 if ninety else 95,
     ]
 
 
@@ -133,7 +166,10 @@ def read_file(
             value = num(r.get("value"))
             if (
                 series is None
-                or r.get("quantile") not in SEVEN
+                or (
+                    r.get("quantile") not in SEVEN
+                    and r.get("quantile") not in OUTER
+                )
                 or value is None
             ):
                 continue
@@ -161,11 +197,14 @@ def digest(
     """Return one file's series, stats, score, truth and latest by key.
 
     Kept with the file (`build`'s `files`), so a rebuild after a new
-    file only assembles these.
+    file only assembles these. Where every date has the `OUTER`
+    quantiles, the outermost band drawn is 90%, from them, in place of
+    the 2.5% and 97.5% quantiles (`series["band"]`), else 95%.
     """
     out = []
     for (loc, sid, src, tgt), dates in rows.items():
-        times, drawn, scored = [], [], []
+        times, drawn, scored, outers = [], [], [], []
+        ninety = all(all(k in dates[d]["q"] for k in OUTER) for d in dates)
         seen: dict[str, tuple[str, float]] = {}
         last: dict[str, float] = {}
         for day in sorted(dates):
@@ -173,18 +212,25 @@ def digest(
             if not all(k in e["q"] for k in SEVEN):
                 continue
             seven = [e["q"][k] for k in SEVEN]
+            outer = [e["q"][k] for k in OUTER] if ninety else None
+            band = list(seven)
+            if outer is not None:
+                band[0], band[-1] = outer
             times.append(day)
-            drawn.append([round(seven[i], 1) for i in picks])
+            drawn.append([round(band[i], 1) for i in picks])
             if e["y"] is not None:
                 scored.append((seven, e["y"], e["s"]))
+                outers.append(outer)
                 seen[day] = (e["v"], e["y"])
             if e["l"] is not None:
                 last[day] = e["l"]
         entry: dict[str, Any] | None = None
         if times:
-            entry = {"series": {"t": times, "q": drawn}}
+            entry = {
+                "series": {"t": times, "q": drawn, "band": 90 if ninety else 95}
+            }
             if scored:
-                entry["stats"] = stats([(q, y) for q, y, _ in scored])
+                entry["stats"] = stats([(q, y) for q, y, _ in scored], outers)
                 entry["score"] = round(
                     sum(s if s is not None else wis(q, y) for q, y, s in scored)
                     / len(scored),
@@ -437,7 +483,9 @@ def summarise_samples(
     quantiles, the truth (each week's count in the first release `D`
     days after it, `D` the age by which `truth_level` of the `national`
     count is reported, leaving out `truth_skip` releases), the sample
-    CRPS and the latest release's count.
+    CRPS and the latest release's count. Summaries hold
+    `SUMMARY_LEVELS`, the seven and the 90% interval's; a folder written
+    with other levels (`.levels`) is summarised again.
 
     Returns
     -------
@@ -462,9 +510,15 @@ def summarise_samples(
     latest = last.set_index(["location", "target_end_date"])["total"]
     t_mt = truth_path.stat().st_mtime
     wanted = set(ds.get("targets") or ())
+    marker = out / ".levels"
+    levels = " ".join(SUMMARY_LEVELS)
+    again = not marker.exists() or marker.read_text().strip() != levels
     for f in sorted(raw.glob("*/*.csv.gz")):
         dst = out / f.parent.name / f.name
-        if dst.exists() and dst.stat().st_mtime >= max(f.stat().st_mtime, t_mt):
+        fresh = dst.exists() and dst.stat().st_mtime >= max(
+            f.stat().st_mtime, t_mt
+        )
+        if fresh and not again:
             continue
         frame = pd.read_csv(f)
         if "target" not in frame:
@@ -481,7 +535,7 @@ def summarise_samples(
             vintage = truth.loc[(loc, week), "truth_vintage"] if hit else ""
             sc = "" if y is None else round(crps_sample(y, x), 3)
             lt = latest.get((loc, week), "")
-            for q in SEVEN:
+            for q in SUMMARY_LEVELS:
                 rows.append(
                     [
                         model,
@@ -518,4 +572,7 @@ def summarise_samples(
             )
             w.writerows(rows)
         tmp.replace(dst)
+    if again:
+        out.mkdir(parents=True, exist_ok=True)
+        marker.write_text(levels + "\n")
     return delay

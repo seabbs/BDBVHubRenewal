@@ -30,7 +30,7 @@ def test_loss_by_level_is_relative_to_the_start_at_each_checkpoint():
         ("n500", {"steps": 3000, "held_out_loss_by_level": {"leaf": 0.05}}),
     ]
     assert learning.by_level(HISTORY, cks) == {
-        "leaf": [(0, 1.0), (1500, 0.5), (3000, 0.25)],
+        "leaf": [(0, 1.0), (250, 0.5), (500, 0.25)],
         "national": [(0, 1.0)],
     }
 
@@ -115,7 +115,7 @@ def test_section_has_three_panels(tmp_path):
     (folder / "train").mkdir(parents=True)
     (folder / "train" / "history.json").write_text(json.dumps(HISTORY))
     run = runs.Run("r5", "r5", folder=folder, live=True)
-    out = learning.section(run)
+    out = learning.section([run])
     assert out.count("<div class=card>") == 3
     assert "by encoder layer" in out
 
@@ -157,7 +157,7 @@ def test_each_panel_has_its_explainer(tmp_path):
     (folder / "train").mkdir(parents=True)
     (folder / "train" / "history.json").write_text(json.dumps(HISTORY))
     run = runs.Run("r5", "r5", folder=folder, live=True)
-    out = learning.section(run, tip=lambda key: f"<i data-key={key}></i>")
+    out = learning.section([run], tip=lambda key: f"<i data-key={key}></i>")
     for key in learning.EXPLAINERS:
         assert f"<i data-key={key}></i>" in out
 
@@ -167,3 +167,29 @@ def test_every_explainer_has_a_note():
 
     for key in learning.EXPLAINERS:
         assert page.EXPLAIN.get(key)
+
+
+def test_every_run_is_in_the_learning_panels(tmp_path):
+    folders = {}
+    for key, v in (("r5", 0.5), ("r6", 0.8)):
+        folder = tmp_path / key
+        d = folder / "train" / "n250"
+        d.mkdir(parents=True)
+        (folder / "train" / "history.json").write_text(json.dumps(HISTORY))
+        (d / "settings.json").write_text(
+            json.dumps(
+                {
+                    "steps": 1500,
+                    "n_outbreaks": 250,
+                    "held_out_loss_by_level": {"leaf": 0.2 * v},
+                }
+            )
+        )
+        folders[key] = folder
+    rs = runs.load_runs([], f"r5={folders['r5']};r6={folders['r6']},live", [])
+    out = learning.section(rs)
+    assert "leaf (r5)" in out
+    assert "leaf (r6)" in out
+    assert "simulations trained" in out
+    # One legend: levels by colour, runs by line style.
+    assert out.count(">leaf</span>") == 1

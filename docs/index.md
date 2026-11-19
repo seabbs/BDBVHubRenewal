@@ -22,7 +22,7 @@ The joint-model-informed renewal project compares renewal models fitted on their
 [![](assets/logos/nowcasteval/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcasteval/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcasteval](methods/evaluation.md){ .quick-link }
 [![](assets/logos/nowcastworkflow/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastworkflow/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastworkflow](development/cli.md){ .quick-link }
 [![](assets/logos/nowcastbaselines/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastbaselines/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastbaselines](methods/baselines.md){ .quick-link }
-[![](assets/logos/nowcastfoundation/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastfoundation/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastfoundation](methods/foundation.md){ .quick-link }
+[![](assets/logos/nowcastfoundation/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastfoundation/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastfoundation](methods/finetuned-chronos.md){ .quick-link }
 [![](assets/logos/nowcastrenewal/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastrenewal/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastrenewal](methods/model.md){ .quick-link }
 [![](assets/logos/bdbvhub/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/bdbvhub/logo-mark-dark.svg#only-dark){ width="96" height="96" } bdbvhub](submission/workflow.md){ .quick-link }
 </div>

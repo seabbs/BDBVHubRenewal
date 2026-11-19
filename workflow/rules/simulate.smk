@@ -24,12 +24,43 @@ wildcard_constraints:
     n=r"\d+",
 
 
-def batch_priority(wc):
-    """A batch's priority: 15, earlier seeds a fraction higher."""
-    return segments.batch_priority(int(wc.seed), 15, SIM["seed_base"])
+rule epinowcast_lib:
+    output:
+        f"{ENW_LIB}/.installed",
+    log:
+        f"{ENW_LIB}.log",
+    conda:
+        TOOLS_ENV
+    threads: 1
+    resources:
+        mem_mb=4096,
+    params:
+        lib=lambda wc, output: str(Path(output[0]).parent),
+        sha=ENW_SHA,
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+    shell:
+        # R CMD INSTALL of the archive GitHub serves for the commit, at nice
+        # 19 under the job's memory cap as a batch runs, with the system's
+        # tools first for the whole command. Its dependencies must already
+        # be in R's libraries.
+        """
+        exec >{log} 2>&1
+        r=$(dirname "$(command -v Rscript)")
+        src=$(mktemp -d)
+        trap 'rm -rf "$src"' EXIT
+        curl -fsSL \
+            https://github.com/epinowcast/epinowcast/archive/{params.sha}.tar.gz \
+            | tar -xz -C "$src" --strip-components 1
+        mkdir -p {params.lib}
+        PATH="$(getconf PATH):$PATH" {params.prefix} nice -n 19 \
+            "$r/R" CMD INSTALL --library={params.lib} "$src"
+        touch {output}
+        """
 
 
 rule simulate_batch:
+    input:
+        lib=batch_lib,
     output:
         counts=f"{ROUNDS_DIR}/r{{round}}/sims/counts-{{seed}}.csv.gz",
         settings=f"{ROUNDS_DIR}/r{{round}}/sims/settings-{{seed}}.csv",
@@ -55,29 +86,38 @@ rule simulate_batch:
         batch=SIM["batch"],
         draws=SIM["draws"],
         seed_base=SIM["seed_base"],
+        lib=ENW_LIB,
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         min_free=LOCAL["MIN_FREE_GB"],
         min_disk=LOCAL["MIN_DISK_GB"],
+        max_load=LOCAL["MAX_LOAD"],
     shell:
         # The simulator must be the committed one, as the manifest records
         # the commit. A retry keeps the first attempt's log. R and Stan
         # write temporary files to a folder of the batch's own, removed
-        # however the batch ends.
+        # however the batch ends. Rscript is the one on PATH; the whole job
+        # command after it (the memory cap, timed.sh, nice and the tools R
+        # starts, such as make and bash) takes the system's tools first: R
+        # puts the system libraries on LD_LIBRARY_PATH, under which a bash
+        # from another prefix (such as linuxbrew) fails. Under a conda
+        # env's R this also puts the system compilers first.
         """
         if ! git diff --quiet HEAD -- scripts/finetune_simulate.R; then
             echo "scripts/finetune_simulate.R differs from HEAD" >{log}
             exit 1
         fi
         workflow/scripts/wait_for_room.sh {params.min_free} {params.min_disk} \
-            {params.sims}
+            {params.sims} {params.max_load}
         [ -s {log} ] && mv {log} {params.sims}/logs/{wildcards.seed}.first.log
         tmp={params.sims}/tmp/{wildcards.seed}
         rm -rf "$tmp" && mkdir -p "$tmp"
         trap 'rm -rf "$tmp"' EXIT
+        rscript=$(command -v Rscript)
         TMPDIR="$tmp" ENW_DRAWS={params.draws} \
-            ENW_SEED_BASE={params.seed_base} {params.prefix} \
+            ENW_SEED_BASE={params.seed_base} ENW_LIB={params.lib} \
+            PATH="$(getconf PATH):$PATH" {params.prefix} \
             workflow/scripts/timed.sh \
-            nice -n 19 Rscript scripts/finetune_simulate.R \
+            nice -n 19 "$rscript" scripts/finetune_simulate.R \
             {params.batch} {wildcards.seed} {params.sims} >{log} 2>&1
         gzip -t {output.counts}
         """

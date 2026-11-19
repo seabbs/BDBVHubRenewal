@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from flowlib import simulator
 
 pytest.importorskip("snakemake")
 
@@ -93,6 +94,26 @@ def test_batches_already_simulated_are_kept(tmp_path):
         (sims / f"settings-{seed}.csv").write_text("outbreak\n")
     jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
     assert jobs["simulate_batch"] == 38
+
+
+def _enw_lib(tmp_path):
+    """The pinned epinowcast's library under the machine's ROOT."""
+    return tmp_path / "rlib" / f"epinowcast-{simulator.epinowcast_sha()}"
+
+
+def test_simulate_installs_the_pinned_epinowcast_first(tmp_path):
+    # Without it the simulator would load whatever epinowcast R finds.
+    jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
+    assert jobs["epinowcast_lib"] == 1
+
+
+def test_the_pinned_epinowcast_is_installed_once_a_machine(tmp_path):
+    lib = _enw_lib(tmp_path)
+    lib.mkdir(parents=True)
+    (lib / ".installed").write_text("")
+    jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
+    assert "epinowcast_lib" not in jobs
+    assert jobs["simulate_batch"] == 40
 
 
 SPLIT = {"rounds": [10]}
@@ -408,6 +429,18 @@ def test_score_runs_each_unit_for_a_checkpoint_and_the_reference(tmp_path):
     assert "land" not in jobs
 
 
+def test_units_wait_below_the_load_ceiling(tmp_path):
+    blocks = score_jobs(
+        tmp_path, {"score": {"labels": ["aaa"]}}, "MAX_LOAD=12\n", "zones"
+    )
+    units = [
+        b for b in blocks if re.match(r"rule score_(bdbv|zones|germany):", b)
+    ]
+    assert units
+    for block in units:
+        assert f"wait_for_room.sh 20 16 {tmp_path}/scores 12 " in block
+
+
 def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
     blocks = score_jobs(
         tmp_path, {"score": {"labels": ["aaa"]}}, target="zones"
@@ -418,6 +451,15 @@ def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
         assert "scripts/checkpoint_scores.py" not in block
     shells = "".join(units)
     assert "-m bdbvhubrenewal.evaluation.checkpoint zones" in shells
+
+
+def test_units_make_the_rows_folder_a_worker_brings_back(tmp_path):
+    blocks = score_jobs(
+        tmp_path, {"score": {"labels": ["aaa"]}}, target="zones"
+    )
+    shells = "".join(blocks)
+    for study in ("bdbv", "zones", "germany"):
+        assert f"mkdir -p {tmp_path}/scores/{study}/aaa/" in shells
 
 
 def test_zones_are_their_own_target_and_refresh_the_table(tmp_path):
