@@ -68,6 +68,20 @@ We call the model with this term `renewalbvd`.
 Every renewal model also inherits from BVDOutbreakSize the generation interval, the incubation period priors, the prior on the half-life of the province deviations and the sum-to-zero basis for the deviations.
 Without a qualifying release `renewalbvd` is `renewal`.
 
+## Single-patch comparison
+
+To see what the joint fit adds, we also fit the same model to one place at a time.
+The place is the only patch in its fit.
+So it has no shared trend with other places, no deviations, no transmission from other places and no BVDOutbreakSize term.
+Its delay and missing-onset share are its own, and its log Rt is a single weekly random walk.
+One place's series cannot inform the share at risk, so this model has no depletion.
+Its other parts and priors are those of `renewal`.
+In code it is the same model builder as the zone fits, with each place as its own patch.
+We fit it to each province with a case, and split each province's forecast into its zones by their recent share of cases ([Renewal models](../methods/model.md#health-zones)).
+We call this model `renewalsp`.
+Comparing it with `renewal` and `renewalbvd` shows what pooling, transmission between places and the external Rt add.
+It is also a fallback in the submission chain that does not share the zone fits' failure modes.
+
 ## Priors
 
 Every time-varying part is a weekly random walk or AR(1), so it stays near constant unless the data show change.
@@ -91,9 +105,10 @@ The main priors are below, and the rest are on the [Renewal models](../methods/m
 
 We fit each model with the No-U-Turn sampler[^nuts] in NumPyro[^numpyro], through PyRenew[^pyrenew].
 Each zone fit runs 2 chains of 500 warm-up and 1500 draws, keeping every other draw, with target acceptance 0.9 (0.95 for `renewalbvd`) and maximum tree depth 10 (`ci/policy.toml`).
-`renewalsp` runs 2 chains of 500 warm-up and 750 draws.
+`renewalsp` runs 2 chains of 500 warm-up and 750 draws per province.
 Each chain starts from its own draw from the prior.
 The walks are sampled non-centred and anchored at their mean over the fit, which removes a ridge between a walk's level and its first steps.
+In `renewalsp` the log Rt walk is the only Rt process, and the data pin its level closely, so we sample its weekly levels directly (centred) rather than its standardised steps (#330).
 A fit runs on a 4-core CI runner in 1.4 to 3.1 hours at the origins 2026-10-17 to 2026-11-15 (#185).
 
 Each fit reports, for every parameter, the rank-normalised R-hat and the bulk and tail effective sample sizes[^vehtari].
@@ -111,7 +126,7 @@ A trajectory is the final count of known onsets, those reported by the cut-off p
 The hub's target is `wk inc confirmed cases` as 100 samples for 4 weeks before the reference date to 3 weeks after it, for every zone, province and the country ([Hub specification](../submission/hub-spec.md)).
 Zone trajectories go into the hub file as they are, and provinces and the country are their sums.
 The submission walks a chain of candidates, `renewalbvd`, `renewalsp`, `renewal`, `randomwalknowcast` and `randomwalk`, and submits the first that passes its checks ([Submission workflow](../submission/workflow.md#renewal-chain)).
-`renewalsp` fits each province on its own, with the same observation model and no pooling, and splits its provinces into zones.
+`renewalsp` is the [single-patch comparison](#single-patch-comparison).
 
 ## Limitations
 
