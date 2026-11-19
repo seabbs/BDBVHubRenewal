@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bdbvhubrenewal.data.hierarchy import depth, parent
-from bdbvhubrenewal.data.snapshots import snapshot_arrays
+from bdbvhubrenewal.data.hierarchy import depth, is_zone, parent, province_of
+from bdbvhubrenewal.data.snapshots import snapshot_arrays, weekly_counts
 
 
 def test_parent_drops_the_last_part() -> None:
@@ -34,3 +34,31 @@ def test_snapshots_take_the_root_from_the_codes() -> None:
     assert snap.locations == ("DE", "DE-BE", "DE-BY")
     assert snap.parent.tolist() == [-1, 0, 0]
     assert snap.counts[1:, 0].sum() == 5
+
+
+def test_zone_levels_follow_the_codes() -> None:
+    assert province_of("CD-IT-01") == "CD-IT"
+    assert province_of("DE-BY-09") == "DE-BY"
+    assert [is_zone(c) for c in ("DE", "DE-BY", "DE-BY-09")] == [
+        False,
+        False,
+        True,
+    ]
+
+
+def test_weekly_counts_sum_onsets_to_saturday_weeks() -> None:
+    daily = pd.DataFrame(
+        {
+            "vintage": ["2026-10-24"] * 3,
+            "location": ["DE-BY-09"] * 3,
+            "onset_date": ["2026-10-17", "2026-10-18", "2026-10-24"],
+            "observed": [1, 2, 0],
+            "imputed": [0, 1, 0],
+        }
+    )
+    out = weekly_counts(daily, "2026-10-24")
+    assert out.to_dict("list") == {
+        "location": ["DE-BY-09"] * 2,
+        "target_end_date": ["2026-10-17", "2026-10-24"],
+        "total": [1, 3],
+    }

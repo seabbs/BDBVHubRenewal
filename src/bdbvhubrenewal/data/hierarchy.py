@@ -46,3 +46,13 @@ def depth(code: str) -> int:
         0 for a root, 1 for its children, and so on.
     """
     return code.count(SEP)
+
+
+def is_zone(code: str) -> bool:
+    """Stub."""
+    raise NotImplementedError
+
+
+def province_of(zone: str) -> str:
+    """Stub."""
+    raise NotImplementedError
