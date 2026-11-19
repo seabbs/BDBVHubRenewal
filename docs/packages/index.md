@@ -4,11 +4,13 @@ The code behind the three projects, as seven packages.
 { .page-subtitle }
 
 Each package will have its own docs site, with install, getting started, how-to pages and an API reference.
-Until the packages are split out, they are modules of `bdbvhubrenewal`, and their API is in the [API reference](../reference/index.md).
+The packages move out of `bdbvhubrenewal` one at a time.
+nowcastutils is its own package now.
+The others are still modules of `bdbvhubrenewal`, and their API is in the [API reference](../reference/index.md).
 
 | | Package | What it holds | Code and API |
 |---|---|---|---|
-| ![](../assets/logos/nowcastutils/logo-mark.svg){ width="40" height="40" } | [**nowcastutils**](nowcastutils.md){ #nowcastutils } | Releases, snapshots, location hierarchies and file formats | [Data](../reference/data.md) |
+| ![](../assets/logos/nowcastutils/logo-mark.svg){ width="40" height="40" } | [**nowcastutils**](nowcastutils.md){ #nowcastutils } | Releases, snapshots, location hierarchies, the forecast task and sample trajectories | [nowcastutils](../reference/nowcastutils.md) |
 | ![](../assets/logos/nowcasteval/logo-mark.svg){ width="40" height="40" } | [**nowcasteval**](nowcasteval.md){ #nowcasteval } | Scores (WIS and its parts, CRPS, energy), backtests and trajectory pairing | [Evaluation](../reference/evaluation.md) |
 | ![](../assets/logos/nowcastworkflow/logo-mark.svg){ width="40" height="40" } | **nowcastworkflow**{ #nowcastworkflow } | The Snakemake workflow, its modules and the command line | [CLI](../development/cli.md) |
 | ![](../assets/logos/nowcastbaselines/logo-mark.svg){ width="40" height="40" } | [**nowcastbaselines**](nowcastbaselines.md){ #nowcastbaselines } | The random walk and the random walk nowcast | [Forecasters](../reference/forecasters.md), [Baselinenowcast](../reference/baselinenowcast.md) |
