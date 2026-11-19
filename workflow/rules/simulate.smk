@@ -24,6 +24,11 @@ wildcard_constraints:
     n=r"\d+",
 
 
+def batch_priority(wc):
+    """A batch's priority: 15, earlier seeds a fraction higher."""
+    return segments.batch_priority(int(wc.seed), 15, SIM["seed_base"])
+
+
 rule simulate_batch:
     output:
         counts=f"{ROUNDS_DIR}/r{{round}}/sims/counts-{{seed}}.csv.gz",
@@ -31,8 +36,10 @@ rule simulate_batch:
     log:
         f"{ROUNDS_DIR}/r{{round}}/sims/logs/{{seed}}.log",
     # In one pool, after the trainer (20) and before scoring (10 and
-    # below): the trainer waits on these batches.
-    priority: 15
+    # below): the trainer waits on these batches. Among themselves in
+    # seed order, the order training reads them, so a run over several
+    # rounds finishes each round before the next.
+    priority: batch_priority
     retries: 1
     conda:
         TOOLS_ENV
