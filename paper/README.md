@@ -23,7 +23,7 @@ flowchart LR
 ```
 
 Simulation and fine-tuning run locally, not on CI, and publish each checkpoint as a `chronos-ft-<hash>` release (#192).
-A round's simulations are made on a CPU host (`task simulate`) and trained on a GPU (`task finetune`) by the Snakemake workflow in [`workflow/`](../workflow/README.md).
+A round's simulations are made on a CPU host (`task nowcast-foundation:simulate`) and trained on a GPU (`task nowcast-foundation:finetune`) by the Snakemake workflow in [`workflow/`](../workflow/README.md).
 Everything from forecasting on runs in this workflow, locally or on CI.
 
 <details>

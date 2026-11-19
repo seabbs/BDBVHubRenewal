@@ -1,11 +1,13 @@
 """Run this machine's scheduled workflow targets once (one tick).
 
-    python3 workflow/scripts/tick.py
+    python3 workflow/scripts/tick.py [--dry-run]
 
 What a tick runs, and in what order, is `flowlib.schedule.plan`'s
 (`SCHEDULE_TARGETS` in config/local.env). It is skipped when another
 tick is running (a lock in output/) or there is too little memory or
-disk (`MIN_FREE_GB`, `MIN_DISK_GB`). Standard library only, so a timer
+disk (`MIN_FREE_GB`, `MIN_DISK_GB`). `--dry-run` runs each step's
+Snakemake command with `-n` instead, with no lock, room check or status.
+Standard library only, so a timer
 can run it with any python3.
 """
 
@@ -45,13 +47,19 @@ def watch(cmd: list[str], step: str, cfg: dict[str, str]) -> int:
             report(cfg, step, alive=True)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     """Run one tick; return its exit code."""
     cfg = localconfig.read()
     steps = schedule.plan(cfg)
     if not steps:
         say("no SCHEDULE_TARGETS set; nothing to run")
         return 0
+    if argv == ["--dry-run"]:
+        failed = 0
+        for target, cmd, _ in steps:
+            say(f"{target}: dry run")
+            failed = failed or subprocess.run([*cmd, "-n"], cwd=ROOT).returncode
+        return failed
     out = ROOT / "output"
     out.mkdir(exist_ok=True)
     with schedule.locked(out / "workflow-tick.lock") as held:
@@ -83,4 +91,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

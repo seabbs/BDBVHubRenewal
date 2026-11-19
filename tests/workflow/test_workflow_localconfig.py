@@ -132,7 +132,14 @@ def test_paper_cores_come_from_the_local_config():
     assert "localconfig.py CORES" in script
 
 
-@pytest.mark.parametrize("taskfile", ["Taskfile.yml", "paper/Taskfile.yml"])
+@pytest.mark.parametrize(
+    "taskfile",
+    [
+        "Taskfile.yml",
+        "paper/Taskfile.yml",
+        *(f"taskfiles/{p.name}" for p in (ROOT / "taskfiles").glob("*.yml")),
+    ],
+)
 def test_task_leaves_the_local_config_to_localconfig(taskfile):
     # Task's dotenv expands `$HOME` against the file alone, so
     # ROOT=$HOME/rounds reached every job as /rounds, and the environment
@@ -142,7 +149,7 @@ def test_task_leaves_the_local_config_to_localconfig(taskfile):
 
 
 def test_the_workflow_s_profile_comes_from_the_local_config():
-    text = (ROOT / "Taskfile.yml").read_text()
+    text = (ROOT / "taskfiles" / "nowcast-workflow.yml").read_text()
     assert "localconfig.py SNAKEMAKE_PROFILE" in text
 
 

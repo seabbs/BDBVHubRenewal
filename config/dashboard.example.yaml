@@ -1,4 +1,4 @@
-# The fine-tuning dashboard's run settings for this machine (task dashboard,
+# The fine-tuning dashboard's run settings for this machine (task nowcast-foundation:dashboard,
 # workflow/scripts/dashboard.py). Copy to config/dashboard.local.yaml, which
 # git ignores, or name another file with DASHBOARD_CONFIG in
 # config/local.env. Keys here replace workflow/config.yaml's `dashboard`

@@ -830,7 +830,7 @@ def _backtest(args: argparse.Namespace) -> int:
         if not names:
             print(
                 "ERROR: fitted models come from the fit store: run "
-                "`task fit-store`.",
+                "`task hub:fit-store`.",
                 file=sys.stderr,
             )
             return 1

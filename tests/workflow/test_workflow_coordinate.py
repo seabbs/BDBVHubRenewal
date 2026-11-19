@@ -55,11 +55,11 @@ def test_an_installed_timer_is_refused():
         text=True,
     )
     assert got.returncode != 0
-    assert "task run" in got.stdout + got.stderr
+    assert "task workflow:run" in got.stdout + got.stderr
 
 
 def test_the_taskfile_runs_the_coordinator():
-    text = (ROOT / "Taskfile.yml").read_text()
+    text = (ROOT / "taskfiles" / "nowcast-workflow.yml").read_text()
     assert "workflow/scripts/coordinate.py" in text
 
 

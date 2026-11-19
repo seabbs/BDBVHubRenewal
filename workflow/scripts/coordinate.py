@@ -1,6 +1,6 @@
 """The persistent coordinator run: one tick after another until stopped.
 
-    python3 workflow/scripts/coordinate.py      # or `task run`
+    python3 workflow/scripts/coordinate.py      # or `task workflow:run`
 
 Each pass is a tick (workflow/scripts/tick.py: this machine's
 SCHEDULE_TARGETS, with its lock and room checks). As soon as a pass

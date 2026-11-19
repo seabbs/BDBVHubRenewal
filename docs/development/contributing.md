@@ -11,7 +11,7 @@ Setting up, checking and documenting changes to the package.
 | `task lint` | Lint with ruff, check formatting and type-check with mypy. |
 | `task format` | Format and fix lint where safe. |
 | `task docs` | Build the docs strictly into `_site/`. |
-| `task ci-test` | Lint, type-check and test the submission CI scripts in `ci/`. |
+| `task bdbv-hub:ci-test` | Lint, type-check and test the submission CI scripts in `ci/`. |
 
 Pre-commit hooks run the same checks on each commit.
 The docs build, not pytest coverage, runs the reporting code end to end.

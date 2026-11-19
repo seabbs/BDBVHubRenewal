@@ -88,8 +88,8 @@ A round's page is frozen once its pull request merges, and later docs builds do 
 
 | command | what it does |
 | --- | --- |
-| `task ci-dry` | Every path through the workflow on fixture data. |
-| `task ci-test` | Tests of the CI scripts. |
-| `task ci-fit` | Fits and forecasts one config as a candidate does. |
-| `task submission-preflight` | Lists what a live run still needs. |
+| `task bdbv-hub:ci-dry` | Every path through the workflow on fixture data. |
+| `task bdbv-hub:ci-test` | Tests of the CI scripts. |
+| `task bdbv-hub:ci-fit` | Fits and forecasts one config as a candidate does. |
+| `task bdbv-hub:preflight` | Lists what a live run still needs. |
 | `gh workflow run submit.yml -R seabbs/bdbv-hub-modelling -f force=true -f ignore_window=true -f reference_date=<date>` | A dry run on a past round. |

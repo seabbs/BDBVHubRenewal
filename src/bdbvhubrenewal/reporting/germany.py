@@ -388,7 +388,7 @@ def germany_page(
     _write(gen / "germany-ft.md", _ft_note(results))
     if not (results / "scores.csv.gz").exists():
         for name in _PAGES[:-1]:
-            _write(gen / name, "Not run yet: `task germany`.\n")
+            _write(gen / name, "Not run yet: `task eval:germany`.\n")
         return
     scores = _read(results, ("scores.csv.gz", "teams.csv.gz"))
     assert scores is not None
@@ -435,7 +435,9 @@ def germany_page(
         + sortable_table(table, digits=3),
     )
     if forecasts is None:
-        _write(gen / "germany-nowcasts.md", "Not run yet: `task germany`.\n")
+        _write(
+            gen / "germany-nowcasts.md", "Not run yet: `task eval:germany`.\n"
+        )
     else:
         forecasts = _development(forecasts, config)
         _refuse_held_out(forecasts, config.split_date)

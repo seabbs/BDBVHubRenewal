@@ -1,0 +1,16 @@
+version: "3"
+
+# The hub and BVDOutbreakSize data (nowcast-utils).
+
+tasks:
+
+  data:
+    desc: Download every hub data vintage and rebuild the tidy tables in data/ (not committed; the tests read tests/fixtures/data/)
+    cmds:
+      - uv run bdbvhubrenewal data
+
+
+  data-bvd:
+    desc: Cache the BVDOutbreakSize releases each backtest vintage may use in data/bvd/ (for renewalbvd)
+    cmds:
+      - uv run bdbvhubrenewal bvd {{.CLI_ARGS}}

@@ -202,7 +202,7 @@ rule finetune:
 
 rule dashboard:
     # A static render of the dashboard for the configured runs, for a
-    # finished run or the record; `task dashboard` serves it live instead.
+    # finished run or the record; `task nowcast-foundation:dashboard` serves it live instead.
     output:
         f"{RUN}/reports/dashboard.html",
     log:

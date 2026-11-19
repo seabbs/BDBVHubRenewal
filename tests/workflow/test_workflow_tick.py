@@ -3,6 +3,7 @@
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -126,3 +127,29 @@ def test_a_failed_refresh_still_runs_the_pool(ran):
     codes["refresh"] = 1
     assert tick.main() == 1
     assert calls == ["refresh", "score"]
+
+
+def test_a_dry_run_plans_each_target_without_running_it(ran, monkeypatch):
+    calls, _, _ = ran
+    dry = []
+
+    def run(cmd, **_):
+        dry.append(cmd)
+
+        class Done:
+            returncode = 0
+
+        return Done()
+
+    monkeypatch.setattr(tick, "subprocess", SimpleNamespace(run=run))
+
+    def report(*_, **__):
+        pytest.fail("a dry run writes no status")
+
+    monkeypatch.setattr(tick, "report", report)
+    # Even while another tick runs: a dry run takes no lock.
+    with schedule.locked(tick.ROOT / "output" / "workflow-tick.lock"):
+        assert tick.main(["--dry-run"]) == 0
+    assert calls == []
+    assert len(dry) == 3
+    assert all(cmd[-1] == "-n" for cmd in dry)
