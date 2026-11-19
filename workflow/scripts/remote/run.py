@@ -130,18 +130,31 @@ def elsewhere(cfg: dict, worker: compute.Worker, rec: dict) -> int:
             return 1
     env = compute.job_env(cfg, worker)
     snakemake = cfg.get("WORKER_SNAKEMAKE") or "uv run --group paper snakemake"
+    # A run of this job still alive there (its ssh dropped) is not
+    # joined by a second; the pid file names this run's Snakemake.
+    pid = q(compute.remote_pid_file(worker, job))
     command = (
-        f"cd {q(worker.checkout)} && env -u LOCAL_CONFIG "
+        f"mkdir -p $(dirname {pid}) && "
+        f'if [ -f {pid} ] && kill -0 "$(cat {pid})" 2>/dev/null; then '
+        f"echo 'the job is still running on {worker.name}' >&2; exit 75; fi; "
+        f"echo $$ > {pid}; "
+        f"cd {q(worker.checkout)} && exec env -u LOCAL_CONFIG "
         + " ".join(f"{k}={q(v)}" for k, v in env.items())
         + f" {snakemake} "
         + " ".join(q(a) for a in rec["argv"])
     )
     say(f"running on {worker.name}: {job['rule']}")
     rc = subprocess.run(compute.on(worker, command, compute.SSH_JOB)).returncode
+    if rc == 75:
+        say(f"the job is still running on {worker.name}")
     pull = back + extra if rc == 0 else files(job.get("log"))
     for path in pull:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        got = rsync(addr(at(path)), path, missing_ok=True)
+        src, dst = addr(at(path)), path
+        if path.endswith("/"):
+            # A folder's contents, so it is not copied into itself.
+            src, dst = src.rstrip("/") + "/", dst.rstrip("/") + "/"
+        got = rsync(src, dst, missing_ok=True)
         if got and rc == 0:
             say(f"cannot pull {path} from {worker.name}")
             rc = 1

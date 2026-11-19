@@ -57,6 +57,19 @@ def batch_priority(seed: int, base: float, seed_base: int) -> float:
     return base + 1 - (rank + 1) / (BATCH_SPAN + 1)
 
 
+def check_eval(mode: str) -> None:
+    """Raise if the trainer's evaluation is offloaded.
+
+    No rule scores an offloaded run's snapshots yet, so its checkpoints
+    would have no held-out losses and could not be published.
+    """
+    if mode != "local":
+        raise ValueError(
+            f"finetune.eval: {mode} needs rules that score the trainer's "
+            "snapshots, which the workflow does not have yet: use local"
+        )
+
+
 def round_seeds(round_: int, base: int, batches: int) -> list[int]:
     """Return a round's batch seeds, `base` + 100 r on.
 

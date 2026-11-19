@@ -1,6 +1,5 @@
 """The Snakemake DAG stays valid and the development target runs."""
 
-import json
 import re
 import subprocess
 import sys
@@ -10,7 +9,7 @@ import pandas as pd
 import pytest
 import yaml
 
-from paperpipe.config import last_release
+from paperpipe.config import last_release, run_studies
 
 pytest.importorskip("snakemake")
 
@@ -83,8 +82,11 @@ def development(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp / "results" / "development"
 
 
+DEV_STUDIES = run_studies(CONFIG["studies"], "development")
+
+
 def test_development_writes_main_and_si_outputs(development: Path) -> None:
-    for study in CONFIG["studies"]:
+    for study in DEV_STUDIES:
         assert (
             development / "figures" / "main" / f"{study}-results.png"
         ).is_file()
@@ -94,9 +96,8 @@ def test_development_writes_main_and_si_outputs(development: Path) -> None:
         assert list((development / "figures" / "si").glob(f"{study}-*.png"))
         assert list((development / "tables" / "si").glob(f"{study}-*.csv"))
     assert (development / "tables" / "main" / "synthetic-grid.csv").is_file()
-    for study in ("synthetic", "ebola"):
-        joint = development / "tables" / "main" / f"{study}-joint.md"
-        assert "rel_energy_log" in joint.read_text()
+    joint = development / "tables" / "main" / "synthetic-joint.md"
+    assert "rel_energy_log" in joint.read_text()
     design = development / "tables" / "si" / "grid-epidemic.md"
     assert "Generative process" in design.read_text()
     assert (development / "figures" / "si" / "sim-examples.png").is_file()
@@ -119,10 +120,13 @@ def test_development_never_reads_heldout_data(development: Path) -> None:
     synthetic = pd.read_csv(development / "forecasts" / "synthetic.csv.gz")
     held = tuple(f"s{s}-" for s in CONFIG["heldout"]["synthetic_seeds"])
     assert not synthetic["location"].str.startswith(held).any()
+    # The Ebola study is held out entirely.
+    assert DEV_STUDIES == ("synthetic", "germany")
+    assert not list(development.rglob("ebola*"))
 
 
 def test_development_scores_have_truth(development: Path) -> None:
-    for study in CONFIG["studies"]:
+    for study in DEV_STUDIES:
         scores = pd.read_csv(development / "scores" / f"{study}.csv.gz")
         assert len(scores) > 0
         assert scores["score"].notna().all()
@@ -136,6 +140,11 @@ def test_development_publishes_for_the_paper(development: Path) -> None:
     assert results["mode"] == "development"
     assert results["germany"]["source"] == "dummy"
     assert results["germany"]["label"]
+    # No Ebola results, and placeholders for the tables the paper
+    # includes inside the hidden Ebola sections.
+    assert "ebola" not in results
+    held = build / "tables" / "main" / "ebola-scores.md"
+    assert "Held out" in held.read_text()
 
 
 def test_dry_run_with_real_data_runs_the_benchmark(tmp_path: Path) -> None:
@@ -157,32 +166,37 @@ def test_dry_run_with_real_data_runs_the_benchmark(tmp_path: Path) -> None:
     dev = _snakemake("development", "-n", "--configfile", base, str(cfg))
     assert dev.returncode == 0, dev.stderr
     log = dev.stdout + dev.stderr
-    for rule in ("germany_fetch", "germany_development", "ebola_hub"):
+    for rule in ("germany_fetch", "germany_development"):
         assert f"rule {rule}" in log
-    assert "rule germany_heldout" not in log
+    for rule in ("germany_heldout", "ebola_hub"):
+        assert f"rule {rule}" not in log
     paper = _snakemake("paper", "-n", "--configfile", base, str(cfg))
-    assert "rule germany_heldout" in paper.stdout + paper.stderr
+    for rule in ("germany_heldout", "ebola_hub"):
+        assert f"rule {rule}" in paper.stdout + paper.stderr
 
 
-def test_ebola_runs_split_at_the_first_scored_round(tmp_path: Path) -> None:
+def test_only_the_paper_runs_ebola_scoring_every_round(
+    tmp_path: Path,
+) -> None:
     first = CONFIG["heldout"]["ebola_from"]
     base = str(PAPER / "workflow" / "config.yaml")
-    for target, flag in (("development", "--before"), ("paper", "--split")):
+    for target in ("development", "paper"):
         res = _snakemake(
             target, "-n", "-p", "--configfile", base, str(_offline(tmp_path))
         )
         assert res.returncode == 0, res.stderr
-        lines = (res.stdout + res.stderr).splitlines()
         ebola = [
             line
-            for line in lines
+            for line in (res.stdout + res.stderr).splitlines()
             if "paperpipe forecasts ebola" in line
             or "paperpipe figures ebola" in line
         ]
+        if target == "development":
+            assert not ebola
+            continue
         assert ebola
         for line in ebola:
-            if target == "paper" or "paperpipe forecasts" in line:
-                assert f"{flag} {first}" in line, line
+            assert f"--split {first}" in line, line
 
 
 def test_benchmark_commands_run_from_the_repository_root(
@@ -254,53 +268,6 @@ def test_the_synthetic_runner_runs_once_the_simulations_exist(
     assert "--seeds " + " ".join(str(s) for s in seeds) in log
 
 
-def test_ebola_outputs_hold_while_no_scored_round_has_truth(
-    development: Path, tmp_path: Path
-) -> None:
-    # Until the first scored round's truth is reported, every Ebola score
-    # is before the split, so the scored part is empty.
-    d = development
-    late = "2099-01-01"
-    common = [
-        "--scores",
-        str(d / "scores" / "ebola.csv.gz"),
-        "--locations",
-        str(d / "data" / "ebola-locations.csv"),
-        "--meta",
-        str(d / "data" / "ebola-meta.json"),
-        "--main-dir",
-        str(tmp_path / "main"),
-        "--si-dir",
-        str(tmp_path / "si"),
-        "--split",
-        late,
-    ]
-    figures = [
-        "figures",
-        "ebola",
-        "--forecasts",
-        str(d / "forecasts" / "ebola.csv.gz"),
-        "--observations",
-        str(d / "data" / "ebola-observations.csv.gz"),
-        "--truth",
-        str(d / "truth" / "ebola.csv.gz"),
-        "--config",
-        json.dumps(CONFIG),
-        *common,
-    ]
-    for args in (figures, ["score-tables", "ebola", *common]):
-        res = subprocess.run(
-            [sys.executable, "-m", "paperpipe", *args],
-            cwd=PAPER,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert res.returncode == 0, res.stderr
-    assert (tmp_path / "main" / "ebola-results.png").is_file()
-    assert (tmp_path / "main" / "ebola-scores.csv").is_file()
-
-
 def test_the_paper_runs_its_ebola_models_at_its_own_draws(
     tmp_path: Path,
 ) -> None:
@@ -316,7 +283,7 @@ def test_the_paper_runs_its_ebola_models_at_its_own_draws(
         )
     )
     base = str(PAPER / "workflow" / "config.yaml")
-    res = _snakemake("development", "-n", "-p", "--configfile", base, str(cfg))
+    res = _snakemake("paper", "-n", "-p", "--configfile", base, str(cfg))
     assert res.returncode == 0, res.stderr
     log = res.stdout + res.stderr
     assert "rule ebola_backtest_draws" in log

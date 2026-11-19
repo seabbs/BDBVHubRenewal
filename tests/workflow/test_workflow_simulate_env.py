@@ -37,3 +37,15 @@ def test_a_batch_runs_with_the_pinned_library_and_system_tools(tmp_path):
     )
     assert f"ENW_LIB={lib} " in " ".join(command.split())
     assert '"$rscript" scripts/finetune_simulate.R' in command
+
+
+def test_heavy_jobs_wait_below_the_load_ceiling(tmp_path):
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nMAX_LOAD=12\n"
+    )
+    batch = tmp_path / "rounds" / "r4" / "sims" / "counts-30400.csv.gz"
+    out = dry_run(tmp_path, str(batch), extra=["-p", "--quiet", "host"])
+    assert out.returncode == 0, out.stderr
+    command = " ".join(out.stdout.split("rule simulate_batch", 1)[1].split())
+    sims = tmp_path / "rounds" / "r4" / "sims"
+    assert f"wait_for_room.sh 20 16 {sims} 12" in command

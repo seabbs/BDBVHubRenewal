@@ -32,13 +32,14 @@ rule b:
     input: f"{ROOT}/a.txt"
     output: f"{ROOT}/b.txt"
     log: f"{ROOT}/logs/b.log"
-    params: copy_back=[f"{ROOT}/extra.txt"]
+    params: copy_back=[f"{ROOT}/extra.txt", f"{ROOT}/rows/"]
     threads: 1
     resources: mem_mb=10
     shell:
         "echo ran-in $(pwd) > {log}; "
         "cat {input} > {output}; echo $ROOT >> {output}; "
-        "echo extra > {params.copy_back}"
+        "echo extra > {ROOT}/extra.txt; "
+        "mkdir -p {ROOT}/rows; echo r > {ROOT}/rows/r.csv"
 """
 
 
@@ -128,6 +129,9 @@ def test_a_job_runs_on_the_worker_and_comes_back(setup):
     assert (croot / "b.txt").read_text() == f"from-coordinator\n{wroot}\n"
     assert str(worker) in (croot / "logs" / "b.log").read_text()
     assert (croot / "extra.txt").read_text() == "extra\n"
+    # A folder to copy back lands at its own path, not inside itself.
+    assert (croot / "rows" / "r.csv").read_text() == "r\n"
+    assert not (croot / "rows" / "rows").exists()
 
 
 def test_a_worker_on_another_commit_fails_the_job(setup):
@@ -148,3 +152,51 @@ def test_an_unreachable_worker_fails_at_submit(setup):
     assert got.returncode != 0
     assert not (croot / "b.txt").exists()
     assert "nohost.invalid" in got.stderr + got.stdout
+
+
+def test_a_job_still_running_on_the_worker_is_not_started_twice(setup):
+    # A dropped ssh can leave the job running on the worker; its retry
+    # must not start a second copy beside it.
+    sys.path.insert(0, str(REPO / "workflow"))
+    from flowlib import compute
+
+    coord, worker, (croot, wroot), state = setup
+    w = compute.Worker("w", "local", str(wroot), str(worker))
+    pid_file = Path(compute.remote_pid_file(w, {"rule": "b", "wildcards": {}}))
+    pid_file.parent.mkdir(parents=True)
+    alive = subprocess.Popen(["sleep", "60"])
+    try:
+        pid_file.write_text(f"{alive.pid}\n")
+        got = _run(coord, f"w=local:{wroot}:{worker}", croot, state)
+    finally:
+        alive.kill()
+    assert got.returncode != 0
+    assert not (wroot / "b.txt").exists()
+    logs = "".join(p.read_text() for p in state.glob("*.log"))
+    assert "still running" in logs
+
+
+def test_cancel_stops_the_job_on_the_worker(setup, monkeypatch):
+    sys.path.insert(0, str(REPO / "workflow"))
+    sys.path.insert(0, str(SCRIPTS))
+    import cancel
+    from flowlib import compute
+
+    coord, worker, (croot, wroot), state = setup
+    local = coord.parent / "local.env"
+    local.write_text(
+        f"COMPUTE=ssh\nROOT={croot}\nWORKERS=w=local:{wroot}:{worker}\n"
+    )
+    monkeypatch.setenv("LOCAL_CONFIG", str(local))
+    job = {"rule": "b", "wildcards": {}}
+    (state / "7.json").write_text(
+        json.dumps({"job": job, "checkout": str(coord)})
+    )
+    (state / "7.placed").write_text(json.dumps({"worker": "w"}))
+    w = compute.Worker("w", "local", str(wroot), str(worker))
+    pid_file = Path(compute.remote_pid_file(w, job))
+    pid_file.parent.mkdir(parents=True)
+    alive = subprocess.Popen(["sleep", "60"])
+    pid_file.write_text(f"{alive.pid}\n")
+    cancel.stop_remote(state, "7")
+    assert alive.wait(timeout=10) != 0

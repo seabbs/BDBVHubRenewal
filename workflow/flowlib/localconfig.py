@@ -97,6 +97,9 @@ DEFAULTS = (
     # Memory and disk a job leaves free when it starts (GB).
     ("MIN_FREE_GB", "20"),
     ("MIN_DISK_GB", "16"),
+    # The load average below which a heavy job starts (empty: the core
+    # count).
+    ("MAX_LOAD", ""),
     # Logs of the paper's detached jobs (paper/scripts).
     ("PAPER_LOGS", "$HOME/paper-jobs"),
 )

@@ -238,7 +238,8 @@ def _real_finetune(a: argparse.Namespace) -> None:
         frame = pd.read_csv(path) if path.stat().st_size else None
         return None if frame is None or frame.empty else frame
 
-    table = real_finetune_combined(read(a.germany), read(a.ebola))
+    ebola = read(a.ebola) if a.ebola else None
+    table = real_finetune_combined(read(a.germany), ebola)
     a.out.write_text(to_markdown(table))
 
 
@@ -399,7 +400,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("real-finetune")
     p.add_argument("--germany", type=Path, required=True)
-    p.add_argument("--ebola", type=Path, required=True)
+    p.add_argument("--ebola", type=Path)
     p.add_argument("--out", type=Path, required=True)
     p.set_defaults(run=_real_finetune)
     return parser

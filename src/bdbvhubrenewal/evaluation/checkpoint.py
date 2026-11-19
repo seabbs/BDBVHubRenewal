@@ -786,10 +786,11 @@ def table(
         )
         meta[h] = (settings, *outbreaks_and_grid(settings, release))
     labels = [REFERENCE, *hashes]
+    # BDBV is held out for the paper (Sam, 2026-11-19): no BDBV rows are
+    # computed, and those already in `evidence` are kept.
     new = pd.concat(
         [
             germany_rows(cache, labels),
-            bdbv_rows(cache, labels),
             *(held_out_rows(h, m[0]) for h, m in meta.items()),
         ],
         ignore_index=True,

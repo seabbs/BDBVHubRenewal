@@ -115,6 +115,7 @@ RUN = LOCAL["RUN"]
 TRAIN = f"{RUN}/train"
 
 segments.check_chunks(FT["prefixes"], FT["chunk"], FT["outbreaks"])
+segments.check_eval(FT["eval"])
 PREV = dict((n, p) for p, n in segments.segments(FT["prefixes"]))
 
 
@@ -282,7 +283,7 @@ def checkpoint_labels(wc=None):
 
 ROOM = (
     f"workflow/scripts/wait_for_room.sh {LOCAL['MIN_FREE_GB']} "
-    f"{LOCAL['MIN_DISK_GB']} {CACHE} && "
+    f"{LOCAL['MIN_DISK_GB']} {CACHE} {LOCAL['MAX_LOAD']} && "
 )
 
 
@@ -315,17 +316,17 @@ def unit_env(wc, threads):
     return machine.shell_env(machine.torch_env(LOCAL, threads))
 
 
-def cpu_env(wc, threads):
-    """As `unit_env`, on the CPU."""
-    return machine.shell_env(machine.torch_env(LOCAL, threads, device="cpu"))
-
-
 EVALUATE = "uv run --group chronos python -m bdbvhubrenewal.evaluation.checkpoint"
+
+
+def unit_rows(study):
+    """The unit's rows folder, which a worker brings back with its output."""
+    return lambda wc: f"{CACHE}/{study}/{wc.label}/"
 
 
 def unit_shell(study):
     return (
-        f"mkdir -p {CACHE} && {ROOM}{{params.prefix}} nice -n 19 "
+        f"mkdir -p {{params.copy_back}} && {ROOM}{{params.prefix}} nice -n 19 "
         f"env {{params.env}} {EVALUATE} {study} {CACHE} {{wildcards.label}} "
         "> {log} 2>&1 && touch {output}"
     )
@@ -335,7 +336,6 @@ def table_inputs(wc):
     labels = checkpoint_labels()
     every = [*SC["reference"], *labels]
     return {
-        "bdbv": expand(f"{CACHE}/bdbv/{{label}}.done", label=every),
         "germany": expand(f"{CACHE}/germany-days/{{label}}.done", label=every),
         "release": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
     }
@@ -345,12 +345,6 @@ def unit_stamps(wc=None):
     """Every unit the tables read, as one list (`rule score` asks for them
     itself, so a new label's units run under tables already built)."""
     return [f for files in table_inputs(wc).values() for f in files]
-
-
-def zone_units(wc=None):
-    """Every label's zone unit."""
-    labels = [*SC["reference"], *checkpoint_labels()]
-    return expand(f"{CACHE}/zones/{{label}}.done", label=labels)
 
 
 # From followups.smk.
@@ -370,7 +364,6 @@ def slots_labels():
 
 def main_scores(wc):
     return [
-        f"{CACHE}/bdbv/{wc.label}.done",
         f"{CACHE}/germany-days/{wc.label}.done",
     ]
 
@@ -458,10 +451,9 @@ def listed_batches():
     """The batches that can be had now, listed once per Snakemake run.
 
     Listed when the run plans, not kept in a file, so a later run sees
-    rounds finished since. From the rounds host its manifests, batch
-    records (a round's batches so far) and QC exclusions are mirrored in
-    MIRROR; else the `sims-r<N>` releases'
-    assets. Written to <RUN>/available-batches.txt for the record.
+    rounds finished since. From the rounds host the manifests and QC
+    exclusions of its rounds are mirrored in MIRROR, and a round counts
+    once its QC has run; else the `sims-r<N>` releases' assets. Written to <RUN>/available-batches.txt for the record.
     """
     rounds = sorted({FT["held_round"], *(round_of(s) for s in training_seeds())})
     seeds = set()
@@ -485,19 +477,10 @@ def listed_batches():
                         f"could not copy {there}: {got.stderr.strip()[:200]}",
                         file=sys.stderr,
                     )
-            seeds |= manifest.seeds(here / "manifest.csv")
-            # The manifest is written once the round is whole; until then
-            # each finished batch's record lists it.
-            subprocess.run(
-                ["rsync", "-a", hosts._at(REMOTE, f"{REMOTE_ROUNDS}/r{r}/records/"),
-                 str(here / "records")],
-                capture_output=True,
-                text=True,
-            )  # fmt: skip
-            seeds |= {
-                int(p.stem.removeprefix("record-"))
-                for p in (here / "records").glob("record-*.csv")
-            }
+            # QC runs once the round is whole: no batch it later excludes
+            # is trained on.
+            if (here / "qc" / "excluded.csv").exists():
+                seeds |= manifest.seeds(here / "manifest.csv")
             continue
         # A round not released yet has no release.
         got = subprocess.run(
@@ -516,16 +499,16 @@ def listed_batches():
 
 
 def check_report(input, output, params, wildcards):
-    """Report whether checkpoint `check_at` beats zero-shot, and say so."""
+    """Report whether checkpoint `check_at` beats zero-shot, and say so.
+
+    On the held-out simulations only: BDBV is held out for the paper.
+    """
     s = json.loads(Path(input[0]).read_text())
-    real = s.get("real_validation_loss", float("inf"))
-    held = s["held_out_loss"] < s["held_out_loss_start"]
-    ok = held and real < params.zero_shot
+    ok = s["held_out_loss"] < s["held_out_loss_start"]
     text = (
         f"n{CHECK} {'beats' if ok else 'does NOT beat'} zero-shot: "
         f"held-out {s['held_out_loss']:.4f} vs "
-        f"{s['held_out_loss_start']:.4f}, real {real:.4f} vs "
-        f"{params.zero_shot}"
+        f"{s['held_out_loss_start']:.4f}"
     )
     Path(output[0]).write_text(f"{text}\n")
     nxt = f", check before n{AFTER[0]}" if AFTER else ""
