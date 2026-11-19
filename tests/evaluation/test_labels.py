@@ -18,7 +18,7 @@ MAIN = {
 
 
 @pytest.mark.parametrize(("model", "label"), MAIN.items())
-def test_main_models_have_sams_names(model, label) -> None:
+def test_main_models_display_names(model, label) -> None:
     assert model_label(model) == label
 
 
@@ -43,6 +43,14 @@ def test_checkpoints_real_data_and_hub_teams() -> None:
         == "Fine-tuned on real data (delays)"
     )
     assert model_label("OHTJHU-someteam") == "OHTJHU-someteam"
+
+
+@pytest.mark.parametrize(
+    "model", ["epinowcast_real", "randomwalk_real", "hub_ensemble_real"]
+)
+def test_real_data_names_only_models_with_a_variant(model) -> None:
+    # Only labels with a "(...)" variant name a real-data fine-tune.
+    assert model_label(model) == model
 
 
 def test_wis_parts_are_shades_darkest_first() -> None:
