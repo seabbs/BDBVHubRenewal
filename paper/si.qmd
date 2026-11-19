@@ -68,16 +68,20 @@ $$
 $$
 so each sample is one trajectory.
 
-- $\sigma_p^2$ is the variance of the weekly changes in $\log(1 + Y_{p,o})$ over the 9 weeks to the latest complete week, less their mean Poisson variance $Y / (1 + Y)^2$ by the delta method, as the walk adds Poisson counts.
+- $\sigma_p^2$ is the variance of the weekly changes in $\log(1 + Y_{p,o})$ over the 9 weeks to the latest complete week, less the mean Poisson variance of the changes, $v(Y_{t-1}) + v(Y_t)$ with $v(Y) = Y / (1 + Y)^2$ by the delta method, as the walk adds Poisson counts.
 - A place with no case in the 9 weeks to the cut-off stays at 0 until an introduction, which starts its walk from a Poisson(1) count of at least 1.
-- An introduction occurs each week with probability $q_p = 1 - (1 - q_\mathrm{local})(1 - q_\mathrm{global})$, the rates of introductions among the place and its siblings and among the other places of its level.
+- An introduction occurs each week with probability $q_p = 1 - (1 - q_\mathrm{local})(1 - q_\mathrm{global})$, the rates of introductions among the place and its siblings and among the other places of its level, times the share of the week not yet reported.
+- $q_p$ is the rate of a first case for a place with none yet, and of a re-introduction for a place seen before.
+- Provinces and the country have no other places to pool over, so their $q_\mathrm{global} = 0$.
 
 **Start of the walk.**
 
 - The random walk starts every sample from the reported count of the latest week whose estimated share reported, the mean of $1 / \Gamma_p(c_o - t)$ over its days, is at least 0.95.
 - The random walk nowcast takes the nowcast draws for the weeks up to the cut-off.
-  A partial cut-off week adds Poisson counts for its missing days, at the rate walked from the sample's nowcast of the latest full week that is at least 5% reported with at least 5 cases in the 9 weeks to the cut-off.
+  A partial cut-off week adds Poisson counts for its missing days, at the rate walked from the sample's nowcast of the latest full week in the 9 weeks to the cut-off that is at least 5% reported and has at least 5 reported cases itself.
   Each sample then walks on from its own completed cut-off week.
+- A place with recent cases but no such week starts from its mean reported count over the 9 weeks to its latest complete week.
+- The random walk needs a week at least 95% reported in every place, and makes no forecast for the task otherwise.
 
 **Places.**
 Both baselines forecast each place of the lowest pooled level and give the country as the per-sample sum of those places.
@@ -176,6 +180,7 @@ W' = W + \frac{\alpha}{r} B A,
 $$
 where $A \in \mathbb{R}^{r \times d_\text{in}}$ and $B \in \mathbb{R}^{d_\text{out} \times r}$ are trained and $W$ is frozen [@Hu2021].
 - We use rank $r = 8$ and $\alpha = 16$.
+- These are the defaults of Chronos-2's fine-tuning (`Chronos2Pipeline.fit`) and of AutoGluon [@chronos_forecasting; @autogluon].
 - We apply it to the query, key, value and output projections of the time and group attention of all 12 layers, and to the output layer.
 - $B$ starts at zero, so $W' = W$ at the start.
 
@@ -196,7 +201,7 @@ $$
 \eta_t = \eta_0 \left(1 - \frac{s_t}{8{,}400}\right),
 $$
 where $s_t$ is the number of simulations trained by step $t$, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.
-- $\eta_0 = 10^{-5}$ for the LoRA adapter, as in Chronos-2 [@Ansari2025], and $\eta_0 = 10^{-3}$ for the attention biases.
+- $\eta_0 = 10^{-5}$ for the LoRA adapter, the rate Chronos-2's fine-tuning recommends for LoRA and AutoGluon's default [@chronos_forecasting; @autogluon], and $\eta_0 = 10^{-3}$ for the attention biases.
 - We train with AdamW [@Loshchilov2019] in fp32 and clip the gradient norm at 1 [@Pascanu2013].
 - Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].
 
@@ -365,7 +370,10 @@ The simulated outbreaks' ranges against published values for several diseases, t
 
 We cut the held-out simulations into blocks as in training, with the five layouts and non-summing parents (@tbl-block-layouts), using a fixed seed.
 A manifest records each held-out block's layout and options.
-The held-out simulations are simulation round 9, one whole block of 840 separate from the ten training blocks, and are the paper's test set.
+We keep two sets of simulations out of training, each one whole block of 840 separate from the ten training blocks.
+The validation set is the round on which the trainer monitors its loss.
+The test set is a further round simulated with fresh seeds, and no model is scored on it until the final model is fixed.
+The test set is the paper's held-out synthetic data.
 The trainer monitors its loss on 90 of them, a random sample of the block's cells.
 
 The Ebola case study is held out from model development but not blind.
@@ -385,8 +393,8 @@ A few Ebola checkpoint scores were produced in error during development and were
 
 **The copula.**
 Each week, each trajectory $k$ draws one normal $z_k$ per province, with correlation $\rho_p$ between any two provinces.
-Before a province's walk starts, each cell's $m$ draws are sorted and the $k$th trajectory takes the draw whose rank matches the rank of $z_k$ in that cell.
-From the walk start, each province's trajectory moves as a whole, ranked by its walk total against the normals of the latest week any province's walk starts, so the walk's own dependence over weeks is kept.
+Each cell's $m$ draws are sorted and the $k$th trajectory takes the draw whose rank matches the rank of $z_k$ in that cell, whether the province is nowcast or walking that week.
+Weeks are not paired with each other, so a province's own weeks are not kept as one trajectory, which no score or submission uses.
 
 **The estimator.**
 $\rho_p$ comes from the model's own matured errors.
@@ -415,7 +423,7 @@ Option (e) is inference only, on the final checkpoint.
 
 ::: {.callout-note title="Plan"}
 - We describe the scores and check them against scoringutils.
-- We compute the WIS from scoringrules' `interval_score` and the absolute error of the median, as its `weighted_interval_score` (0.11) adds the median itself ([scoringrules#140](https://github.com/frazane/scoringrules/issues/140)).
+- We compute the WIS directly from the quantiles, as the weighted interval scores and the absolute error of the median.
 - Key references: [@bosse2022scoringutils; @jordanEvaluatingProbabilisticForecasts2019; @zanetta_scoringrules_2024].
 :::
 
@@ -426,8 +434,10 @@ $$
 $$
 Its expectation does not depend on $m$, whereas the usual sample form, with $2m^2$ in the second denominator, favours forecasts with more samples [@Ferro2014; @Zamo2018].
 The fair energy score is the same form for a vector of counts, with the Euclidean norm $\lVert \cdot \rVert$ in place of $|\cdot|$.
-We compute both with scoringrules' `fair` estimator, `crps_ensemble` and `es_ensemble`, on counts and on $\log(x + 1)$ counts.
+We compute both with scoringrules' `fair` estimator, `crps_ensemble` and `es_ensemble`, the CRPS on counts and on $\log(x + 1)$ counts, and the energy score on $\log(x + 1)$ counts only.
 Our models give 1,000 samples and hub teams 100, so the fair form compares them on the same footing.
+We score the German hub's seven quantile levels, and 23 levels, from 1% to 99%, for the synthetic study and for forecasts given as samples.
+Relative WIS compares each model with the baseline on the forecasts both made, while bias and coverage use every forecast a model made.
 
 ### Choices tuned on development data
 
@@ -439,7 +449,6 @@ Our models give 1,000 samples and hub teams 100, so the fair form compares them 
 | Floor on Chronos-2's scale at inference | None | Held-out simulations and the BDBV release backtest |
 | Lag cap of the ragged layout | 4 weeks or 28 days | German first half and the BDBV release backtest |
 | Copula shrinkage weight $w$ | 10, the weakest of 0, 10, 30 and 100, which scored within 1% of one another | Ebola release backtest |
-| Checkpoint of the submitted fine-tuned model | 1,000 simulations | BDBV release backtest, the plausibility check of the 14 November 2026 round, and the German first half |
 | Realism checks of the simulation grid | Grid ranges | BDBV releases and German data reported by 2022-02-09 |
 
 Choices tuned on development data, with their values and the data they were set on.
@@ -530,7 +539,7 @@ Zero-shot Chronos-2 and the newest checkpoint of the runs with and without atten
 ### Real-data fine-tune against synthetic
 
 - We fine-tune a model on the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
-- Its BDBV training data are every release up to {{< meta results.realdata_after >}}, so we score it on BDBV rounds from 21 November 2026 only.
+- Its BDBV training data are every release up to {{< meta results.realdata_after >}}, so we score it only on held-out Ebola rounds after that release.
 - It saw the German development half, so we score it on the held-out half only.
 - Both use the same recipe and the ragged layout.
 - @tbl-real-finetune gives the scores, and @fig-compare-realdata shows them.
@@ -557,7 +566,7 @@ Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tune
 ::: {#fig-germany-si-results-daily}
 ![](build/figures/si/germany-si-results-daily.png)
 
-German nowcast hub, daily counts: the panels of the German results figure, with daily nowcasts against the daily truth and WIS on daily counts, without the hub teams. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub, daily counts: the score panels of the German results figure, on daily counts relative to `randomwalknowcast`, without the hub teams or the nowcast panel. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ### Held-out synthetic data

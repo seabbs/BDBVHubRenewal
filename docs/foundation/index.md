@@ -12,7 +12,7 @@ flowchart LR
 ```
 
 - [Paper](../paper.md): the main text and the supporting information, which hold the methods (the simulation grid, the training and the evaluation) and the results.
-- [Using the fine-tuned Chronos-2](../methods/finetuned-chronos.md): loading a released checkpoint and nowcasting your own reporting triangle.
+- [Using the fine-tuned model](../methods/finetuned-chronos.md): loading a released checkpoint and nowcasting your own reporting triangle.
 - [German nowcast benchmark](../germany.md): the paper's retrospective case study.
 
 How the hub submission uses these models is on [Foundation models](../methods/foundation.md) and [Baseline models](../methods/baselines.md), under Hub submission.
