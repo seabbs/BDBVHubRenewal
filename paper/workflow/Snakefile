@@ -43,7 +43,7 @@ from flowlib import localconfig  # noqa: E402
 from paperdata.synthetic_runner import (  # noqa: E402
     MODELS as SYNTHETIC_MODELS,
 )
-from paperpipe.config import MODES, run_settings  # noqa: E402
+from paperpipe.config import MODES, run_settings, run_studies  # noqa: E402
 from paperpipe.evidence import EVIDENCE as EVIDENCE_NAMES  # noqa: E402
 from paperpipe.evidence import branch_head  # noqa: E402
 from paperpipe.outputs import (  # noqa: E402
@@ -366,6 +366,20 @@ def tables(mode, study):
     ]
 
 
+HELD_OUT_INCLUDES = (
+    ("main", "scores"),
+    ("main", "joint"),
+    ("si", "scores-by-horizon"),
+    ("si", "scores-by-location"),
+)
+"""The tables main.qmd and si.qmd include for every case study."""
+
+
+def studies(mode):
+    """The studies a run has: development leaves out the held-out ones."""
+    return run_studies(STUDIES, mode)
+
+
 def outputs(mode):
     design = [f"{R}/{mode}/figures/si/sim-examples.png"] + [
         f"{R}/{mode}/tables/si/{n}.md"
@@ -380,12 +394,12 @@ def outputs(mode):
     evidence = [f"{R}/{mode}/evidence.yml"]
     joint = [
         f"{R}/{mode}/tables/main/{study}-joint.md"
-        for study in STUDIES
+        for study in studies(mode)
         if study in JOINT_STUDIES
     ]
     real = (
         [f"{R}/{mode}/tables/si/real-finetune.md"]
-        if {"germany", "ebola"} <= set(STUDIES)
+        if "germany" in studies(mode)
         else []
     )
     return (
@@ -395,7 +409,7 @@ def outputs(mode):
         + real
         + [
             path
-            for study in STUDIES
+            for study in studies(mode)
             for path in [*figures(mode, study), *tables(mode, study)]
         ]
     )
@@ -714,7 +728,12 @@ rule real_finetune:
     # The real-data comparison of both case studies as one table.
     input:
         germany=f"{R}/{{mode}}/tables/si/germany-real-finetune.csv",
-        ebola=f"{R}/{{mode}}/tables/si/ebola-real-finetune.csv",
+        # Development runs have no Ebola study, so Germany only.
+        ebola=lambda w: [
+            f"{R}/{w.mode}/tables/si/ebola-real-finetune.csv"
+            for s in studies(w.mode)
+            if s == "ebola"
+        ],
     output:
         f"{R}/{{mode}}/tables/si/real-finetune.md",
     log:
@@ -723,10 +742,11 @@ rule real_finetune:
         TOOLS_ENV
     params:
         python=PYTHON,
+        ebola=lambda w, input: f"--ebola {input.ebola}" if input.ebola else "",
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe real-finetune --germany {input.germany} "
-        "--ebola {input.ebola} --out {output}"
+        "{params.ebola} --out {output}"
 
 
 def study_split(mode, study):
@@ -902,8 +922,12 @@ rule evidence:
 
 rule summary:
     input:
-        meta=[study_files(s)["meta"] for s in STUDIES],
-        scores=[f"{R}/{{mode}}/tables/main/{s}-scores.csv" for s in STUDIES],
+        meta=lambda w: [
+            study_files(s)["meta"].format(mode=w.mode) for s in studies(w.mode)
+        ],
+        scores=lambda w: [
+            f"{R}/{w.mode}/tables/main/{s}-scores.csv" for s in studies(w.mode)
+        ],
     output:
         f"{R}/{{mode}}/results.yml",
     log:
@@ -935,9 +959,19 @@ rule publish:
     params:
         run=lambda w: f"{R}/{w.mode}",
         build=BUILD,
+        # The tables the paper includes from studies a development run
+        # leaves out: placeholders, inside sections it does not show.
+        held=lambda w: " ".join(
+            f"{BUILD}/tables/{part}/{study}-{name}.md"
+            for study in STUDIES
+            if study not in studies(w.mode)
+            for part, name in HELD_OUT_INCLUDES
+        ),
     shell:
         "exec >{log} 2>&1; "
         "rm -rf {params.build} && mkdir -p {params.build} && "
         "cp -R {params.run}/figures {params.run}/tables {params.build}/ && "
         "cp {input.summary} {params.build}/results.yml && "
-        "cp {params.run}/evidence.yml {params.build}/evidence.yml"
+        "cp {params.run}/evidence.yml {params.build}/evidence.yml && "
+        "for f in {params.held}; do mkdir -p $(dirname $f) && "
+        "echo '*Held out until the paper run.*' > $f; done"

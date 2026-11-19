@@ -203,8 +203,7 @@ def test_a_worker_s_gpu_is_its_own_for_the_groups_placed_on_it():
     sets = got[got.index("--set-resources") + 1 : got.index("--resources")]
     assert "train_segment:gpu_laptop=1" in sets
     assert "score_germany:gpu_archie=1" in sets
-    assert "score_bdbv:gpu_archie=1" in sets
-    assert not any(s.startswith("score_zones:") for s in sets)
+    assert not any(s.startswith("score_bdbv:") for s in sets)
 
 
 def test_the_gpu_rules_are_those_that_take_the_gpu():

@@ -27,6 +27,7 @@ coordinator's run settings (`job_env`) and its own machine settings.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shlex
@@ -54,8 +55,6 @@ RULE_GROUPS = {
     "train_segment": "train",
     "verify_checkpoint": "publish",
     "publish_checkpoint": "publish",
-    "score_bdbv": "score",
-    "score_zones": "score",
     "score_germany": "score",
     "slots_check_shard": "score",
     "agg_sanity": "score",
@@ -64,7 +63,7 @@ RULE_GROUPS = {
 }
 """Each placed rule's group; any other rule is in `any`."""
 
-GPU_RULES = frozenset({"train_segment", "score_bdbv", "score_germany"})
+GPU_RULES = frozenset({"train_segment", "score_germany"})
 """The rules taking the `gpu` resource. Placed on a worker by their
 group, each also takes that worker's own `gpu_<worker>`, so the pooled
 GPUs are not shared across workers."""
@@ -109,8 +108,16 @@ MACHINE_KEYS = frozenset(
 
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
 # A job's ssh gives up after 10 minutes without an answer (a laptop
-# asleep), so the job fails and its retry resumes it.
-SSH_JOB = [*SSH, "-o", "ServerAliveInterval=60", "-o", "ServerAliveCountMax=10"]
+# asleep), so the job fails and its retry resumes it. Its terminal (-tt)
+# makes the worker hang up the job when the session drops.
+SSH_JOB = [
+    *SSH,
+    "-tt",
+    "-o",
+    "ServerAliveInterval=60",
+    "-o",
+    "ServerAliveCountMax=10",
+]
 
 
 @dataclass(frozen=True)
@@ -262,6 +269,17 @@ def on(worker: Worker, command: str, ssh: Sequence[str] = SSH) -> list[str]:
     if worker.local:
         return ["bash", "-c", command]
     return [*ssh, worker.host, command]
+
+
+def remote_pid_file(worker: Worker, job: Mapping) -> str:
+    """Return where `worker` records the pid of `job`'s Snakemake.
+
+    Keyed by the job's rule and wildcards, so a retry finds the run
+    before it.
+    """
+    key = json.dumps([job["rule"], job.get("wildcards", {})], sort_keys=True)
+    name = hashlib.sha256(key.encode()).hexdigest()[:16]
+    return str(Path(worker.root) / ".remote-jobs" / f"{name}.pid")
 
 
 def reachable(worker: Worker) -> bool:
