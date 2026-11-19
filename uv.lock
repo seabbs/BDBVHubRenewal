@@ -235,6 +235,7 @@ docs = [
 paper = [
     { name = "snakefmt" },
     { name = "snakemake" },
+    { name = "snakemake-executor-plugin-cluster-generic" },
 ]
 
 [package.metadata]
@@ -277,6 +278,7 @@ docs = [
 paper = [
     { name = "snakefmt", specifier = ">=0.10" },
     { name = "snakemake", specifier = ">=9.27,<10" },
+    { name = "snakemake-executor-plugin-cluster-generic", specifier = ">=1.0.9" },
 ]
 
 [[package]]
@@ -3489,6 +3491,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/59/e5/61deb0378bcb5b974f3348292b9397fc2f5a28f8ccb22e1a756c8a3c78aa/snakemake-9.27.1.tar.gz", hash = "sha256:f772714bb4133f836f0b5c3124ed70ef954c223aa034d6fcaf0282a4bbb98a5e", size = 6819275, upload-time = "2026-10-21T08:53:20.462Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d4/24/08e5bd06a94770441f844611fa50626d06f2170f037bd37019b2b8b3e489/snakemake-9.27.1-py3-none-any.whl", hash = "sha256:cb8b9045c68d2d561520a92d78c8acb0e7383cd7958adde1efb68d97a0601a92", size = 1165618, upload-time = "2026-10-21T08:53:18.655Z" },
+]
+
+[[package]]
+name = "snakemake-executor-plugin-cluster-generic"
+version = "1.0.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "snakemake-interface-common" },
+    { name = "snakemake-interface-executor-plugins" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a9/7a/b2c291a8312fef0e5b6e7d178097b3a57327ed9358250fe95d4f993d7db7/snakemake_executor_plugin_cluster_generic-1.0.9.tar.gz", hash = "sha256:ad0dc2d8bde7d4f336364bebe11a3b2209653c481ce8fbb0ae8bec81016a9a14", size = 5709, upload-time = "2024-03-11T20:06:07.919Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ae/b9/a0284debbe1b125c3402976029d3f67e5b678701ff7b1fa8145693fa2b1d/snakemake_executor_plugin_cluster_generic-1.0.9-py3-none-any.whl", hash = "sha256:39a9af6fe16d8be5e6150cbffca40e6cfe76f42b3834874da3372ea0e5be3458", size = 6423, upload-time = "2024-03-11T20:06:06.349Z" },
 ]
 
 [[package]]
