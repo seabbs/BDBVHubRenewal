@@ -174,7 +174,7 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
         "Tables",
     ):
         assert f"<h2>{h}</h2>" in out
-    assert "<b>my run run</b>" in out
+    assert "<b>my run</b>" in out
     for anchor in (
         "status",
         "loss",

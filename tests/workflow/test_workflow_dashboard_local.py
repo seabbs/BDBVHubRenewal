@@ -50,7 +50,8 @@ runs:
     )
     ctx = context.build(BASE, local, root=tmp_path)
     assert [r.key for r in ctx.runs] == ["bias"]
-    assert ctx.runs[0].label == "attention bias"
+    # The live run shows the shared display name, not its label (Sam 10:45).
+    assert ctx.runs[0].label == "Fine-tuned (delays)"
     assert ctx.runs[0].hue == 217
     assert ctx.source.root == tmp_path / "cache"
 
