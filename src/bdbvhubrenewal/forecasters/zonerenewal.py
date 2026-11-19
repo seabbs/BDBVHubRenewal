@@ -330,21 +330,20 @@ def _zone_places(task: ForecastTask) -> pd.DataFrame:
     zones = places.loc[places.index.map(is_zone)]
     missing = [z for z in task.locations if z not in places.index]
     if missing:
+        parents = [province_of(z) for z in missing]
+        absent = sorted(set(parents) - set(places.index))
+        if absent:
+            raise ValueError(f"No places for provinces {absent}.")
         by_province = zones.groupby(zones.index.map(province_of))[
             "population"
         ].mean()
         median = zones["population"].median()
+        centres = places.loc[parents, ["latitude", "longitude"]]
         extra = pd.DataFrame(
             {
-                "population": [
-                    by_province.get(province_of(z), median) for z in missing
-                ],
-                "latitude": [
-                    places.loc[province_of(z), "latitude"] for z in missing
-                ],
-                "longitude": [
-                    places.loc[province_of(z), "longitude"] for z in missing
-                ],
+                "population": [by_province.get(p, median) for p in parents],
+                "latitude": centres["latitude"].to_numpy(),
+                "longitude": centres["longitude"].to_numpy(),
             },
             index=pd.Index(missing, name="location"),
         )

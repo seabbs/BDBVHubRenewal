@@ -512,32 +512,36 @@ def bvd_record(release: BvdRelease | None) -> dict[str, Any]:
     return record
 
 
+def _required(task: ForecastTask, name: str) -> Any:
+    """Return a task field the renewal models need, or raise."""
+    value = getattr(task, name)
+    if value is None:
+        raise ValueError(f"The task at {task.vintage} carries no {name}.")
+    return value
+
+
 def task_places(task: ForecastTask) -> pd.DataFrame:
-    """Return the task's places, which the renewal models need.
+    """Return the task's places (`ForecastTask.places`).
 
     Raises
     ------
     ValueError
         If the task carries none.
     """
-    if task.places is None:
-        raise ValueError(f"The task at {task.vintage} carries no places.")
-    return task.places
+    places: pd.DataFrame = _required(task, "places")
+    return places
 
 
 def task_imputation_delay(task: ForecastTask) -> np.ndarray:
-    """Return the task's imputation delay, which the renewal models need.
+    """Return the task's imputation delay (`ForecastTask.imputation_delay`).
 
     Raises
     ------
     ValueError
         If the task carries none.
     """
-    if task.imputation_delay is None:
-        raise ValueError(
-            f"The task at {task.vintage} carries no imputation delay."
-        )
-    return task.imputation_delay
+    pmf: np.ndarray = _required(task, "imputation_delay")
+    return pmf
 
 
 def vintage_inputs(

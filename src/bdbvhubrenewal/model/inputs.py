@@ -52,11 +52,19 @@ def imputation_pmf(pmf: np.ndarray, dmax: int) -> np.ndarray:
     -------
     numpy.ndarray
         The pmf on days 0 to `dmax`, summing to one.
+
+    Raises
+    ------
+    ValueError
+        If the pmf has no mass on days 0 to `dmax`.
     """
     out = np.zeros(dmax + 1)
     kept = np.asarray(pmf, dtype=float)[: dmax + 1]
     out[: kept.size] = kept
-    return np.asarray(out / out.sum(), dtype=float)
+    total = out.sum()
+    if not total > 0:
+        raise ValueError(f"The imputation delay has no mass on 0 to {dmax}.")
+    return np.asarray(out / total, dtype=float)
 
 
 def province_distances(

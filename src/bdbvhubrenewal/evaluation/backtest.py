@@ -342,6 +342,16 @@ def forecast_locations(vintage_rows: pd.DataFrame) -> tuple[str, ...]:
     return tuple(sorted(set(prov["location"])))
 
 
+def _imputation_delay(vintage: str) -> np.ndarray:
+    """Return the hub's imputation delay at a release, read-only.
+
+    Tasks share it, so none may change it in place.
+    """
+    pmf = hub_delay_pmf(vintage)
+    pmf.setflags(write=False)
+    return pmf
+
+
 def make_tasks(
     target: pd.DataFrame,
     delays: pd.DataFrame | None,
@@ -415,7 +425,7 @@ def make_tasks(
     source = target if history is None else history
     if places is None:
         places = hub_places()
-    imputation = functools.cache(hub_delay_pmf)
+    imputation = functools.cache(_imputation_delay)
     for (kind, vintage), rows in target.groupby(["kind", "vintage"]):
         mine = source["kind"] == kind
         past_target = source.loc[mine & (source["vintage"] <= vintage)]
@@ -432,7 +442,6 @@ def make_tasks(
                 same &= delays["kind"] == kind
             past = delays.loc[same]
             history = past if not past.empty else None
-        fields_of_zones = _zone_fields(zones, str(kind), str(vintage))
         tasks.append(
             ForecastTask(
                 vintage=str(vintage),
@@ -444,7 +453,7 @@ def make_tasks(
                 delay_history=history,
                 target_history=past_target if not past_target.empty else None,
                 daily_history=_daily_for(daily, str(kind), str(vintage)),
-                **fields_of_zones,
+                **_zone_fields(zones, str(kind), str(vintage)),
                 imputation_delay=imputation(str(vintage)),
                 places=places,
                 locations=forecast_locations(rows),

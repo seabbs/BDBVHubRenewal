@@ -70,3 +70,10 @@ def test_unmapped_zones_take_their_province_place() -> None:
     assert out.loc["DE-BY-02", "population"] == 30.0
     assert out.loc["DE-BY-09", "population"] == 20.0
     assert out.loc["DE-BY-09", "latitude"] == 48.0
+
+
+def test_an_imputation_delay_with_no_mass_is_an_error() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="no mass"):
+        imputation_pmf(np.array([0.0, 0.0, 1.0]), 1)
