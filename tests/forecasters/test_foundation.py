@@ -1174,3 +1174,24 @@ def test_native_quantiles_pass_chronos_only_its_keys(
     assert len(seen) == 1
     assert set(seen[0]) <= allowed
     assert out[0].shape == (1, 2, 3)
+
+
+def test_rolling_rows_hold_each_days_seven_day_sum() -> None:
+    from bdbvhubrenewal.forecasters.foundation import (
+        HubTriangle,
+        rolling_rows,
+        week_rows,
+    )
+
+    times = [f"2026-09-{d:02d}" for d in range(1, 21)]
+    final = np.arange(40, dtype=float).reshape(2, 20)
+    tri = HubTriangle(times, final, np.full((2, 20, 3), np.nan), 19)
+    rows = rolling_rows(tri, 7)
+    assert not rows.ends[:6].any()
+    assert rows.ends[6:].all()
+    assert np.isnan(rows.totals[:, :6]).all()
+    assert np.allclose(rows.totals[:, 10], final[:, 4:11].sum(1))
+    # On a Saturday it is the week's total, as the weekly rows give.
+    weekly = week_rows(tri)
+    sat = np.flatnonzero(weekly.ends)
+    assert np.allclose(rows.totals[:, sat], weekly.totals[:, sat])

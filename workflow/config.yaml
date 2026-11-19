@@ -47,13 +47,17 @@ finetune:
   # Chronos-2's recipe: one draw of each simulation cut at `cuts`
   # cut-offs, the learning rate falling linearly to zero over the
   # `outbreaks` simulations, and the series bias at its own rate `bias_lr`.
-  grid: r5
+  # r6: grid r5's simulations, cut with release cadences that follow
+  # each layout (CADENCES in scripts/finetune_chronos.py) and with
+  # rolling-sum layouts beside the period-total ones (SOURCE_SHARES).
+  grid: r6
   draws: 1
   cuts: 32
   subset_seed: 1
   learning_rate: 1.0e-5
   bias_lr: 1.0e-3
-  sources: [daily, weekly, 3day, daily+weekly, daily+3day]
+  sources:
+    [daily, weekly, 3day, daily+weekly, daily+rolling7, daily+3day, daily+rolling3]
   univariate_share: 0.2
   chunk: 250
   # Steps between the trainer's held-out evaluations: the monitor on the
@@ -66,7 +70,7 @@ finetune:
   # scripts/finetune_evaluate.py and carries on). Training is the same.
   eval: local
   series_bias: true
-  note: continuous r5
+  note: continuous r6
   # The real validation blocks (scripts/finetune_real_validation.py) and
   # the delay table they are cut from; null leaves them out.
   real_validation: output/finetune/real-validation.pkl

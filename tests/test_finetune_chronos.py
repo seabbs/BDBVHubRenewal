@@ -1013,6 +1013,51 @@ def test_steps_in_a_row_do_not_sum_gradients():
         assert torch.equal(a, b)
 
 
+def test_every_layout_has_cadences_whose_shares_sum_to_one():
+    for source in ft.SOURCE_SHARES:
+        mix = ft.CADENCES[ft.native_cadence(source)]
+        assert sum(mix.values()) == pytest.approx(1)
+    assert ft.native_cadence("daily+rolling7") == "daily"
+    assert ft.native_cadence("3day") == "3day"
+    assert ft.native_cadence("weekly") == "weekly"
+
+
+@pytest.mark.parametrize("source", ["daily", "3day", "weekly"])
+def test_each_layout_draws_its_cadences_at_their_shares(source):
+    rng = np.random.default_rng(0)
+    drawn = [ft.draw_cadence(source, rng) for _ in range(4000)]
+    for cadence, share in ft.CADENCES[ft.native_cadence(source)].items():
+        assert drawn.count(cadence) / len(drawn) == pytest.approx(
+            share, abs=0.03
+        )
+
+
+def _lag_fill(b) -> float:
+    n = b["n_targets"]
+    ctx = b["context"][:, : ft.CONTEXT]
+    seen = np.isfinite(ctx[0])
+    return float(np.isfinite(ctx[n:, seen]).mean())
+
+
+def test_blocks_record_their_cadence_and_daily_releases_fill_lags(
+    tmp_path, monkeypatch
+):
+    import finetune_chronos
+    from finetune_stream import cut
+
+    ids = _sim_dir(tmp_path)
+    monkeypatch.setattr(finetune_chronos, "SOURCES", ("daily",))
+    fills = {}
+    for cadence in ("daily", "weekly"):
+        monkeypatch.setitem(finetune_chronos.CADENCES, "daily", {cadence: 1.0})
+        blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
+        assert blocks
+        assert {b["cadence"] for b in blocks} == {cadence}
+        fills[cadence] = np.mean([_lag_fill(b) for b in blocks])
+    assert fills["daily"] > 0.8
+    assert fills["weekly"] < 0.3
+
+
 def test_evaluation_cadence_defaults_to_the_recipe_s():
     import finetune_stream as fs
 

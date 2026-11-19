@@ -28,6 +28,8 @@ from bdbvhubrenewal.forecasters.finetune import (
     AHEAD_WEEKS,
     BINNED,
     MIXED,
+    ROLLING,
+    release_days,
     training_block,
     weekly_cutoffs,
 )
@@ -41,7 +43,9 @@ MAX_LAGS = {
     "daily": tuple(range(14, 50)),
     "3day": tuple(range(5, 17)),
     "daily+weekly": tuple(range(14, 50)),
+    "daily+rolling7": tuple(range(14, 50)),
     "daily+3day": tuple(range(14, 50)),
+    "daily+rolling3": tuple(range(14, 50)),
 }
 """Release lags $D$ the blocks are drawn from; daily blocks with period
 totals have daily lags."""
@@ -52,7 +56,9 @@ DAYS_PER_STEP = {
     "daily": 1,
     "3day": 3,
     "daily+weekly": 1,
+    "daily+rolling7": 1,
     "daily+3day": 1,
+    "daily+rolling3": 1,
 }
 """Days in a step of each source."""
 
@@ -61,16 +67,48 @@ SOURCE_SHARES = {
     "daily": 0.25,
     "weekly": 0.25,
     "3day": 0.15,
-    "daily+weekly": 0.25,
-    "daily+3day": 0.10,
+    "daily+weekly": 0.125,
+    "daily+rolling7": 0.125,
+    "daily+3day": 0.05,
+    "daily+rolling3": 0.05,
 }
 """Share of blocks of each layout, for one model of every frequency:
 daily, weekly and 3-day blocks, and daily blocks with each place's weekly
-or 3-day totals on period-end days (`finetune.MIXED`)."""
+or 3-day totals, either on period-end days only (`finetune.MIXED`) or as
+rolling sums on every day (`finetune.ROLLING`). r6 splits r5's mixed
+shares (25% and 10%) evenly between the two."""
 
 
 SOURCES = tuple(SOURCE_SHARES)
 """Sources blocks are cut from, drawn at `SOURCE_SHARES`."""
+
+
+CADENCES = {
+    "daily": {"daily": 0.6, "weekly": 0.2, "daily_gaps": 0.1, "weekdays": 0.1},
+    "3day": {"3day": 0.8, "3day_gaps": 0.2},
+    "weekly": {"weekly": 0.8, "weekly_gaps": 0.2},
+}
+"""Release cadences of the blocks of each step width
+(`finetune.release_days`), and their shares. A layout's releases follow its
+data: daily layouts get daily releases, as Germany's, 3-day layouts one
+every 3 days, weekly layouts weekly ones. A share has irregular cadences:
+missed releases (`_gaps`), daily releases on weekdays only, and for daily
+layouts weekly releases, as the BDBV hub's daily data come. Up to r5 every
+block had weekly releases, so a daily block's lag series were filled one
+cell in seven."""
+
+
+def native_cadence(source: str) -> str:
+    """Return the regular cadence of a source's step: daily, 3-day or weekly."""
+    return {1: "daily", 3: "3day", 7: "weekly"}[DAYS_PER_STEP[source]]
+
+
+def draw_cadence(source: str, rng: np.random.Generator) -> str:
+    """Draw a block's release cadence at its source's shares (`CADENCES`)."""
+    mix = CADENCES[native_cadence(source)]
+    names = list(mix)
+    p = np.array([mix[n] for n in names])
+    return str(rng.choice(names, p=p / p.sum()))
 
 
 def check_sources(sources: tuple[str, ...]) -> None:
@@ -82,7 +120,12 @@ def check_sources(sources: tuple[str, ...]) -> None:
     bad = [
         s
         for s in sources
-        if (s not in foundation.SOURCES and s not in BINNED and s not in MIXED)
+        if (
+            s not in foundation.SOURCES
+            and s not in BINNED
+            and s not in MIXED
+            and s not in ROLLING
+        )
         or s not in DAYS_PER_STEP
         or s not in MAX_LAGS
     ]
@@ -360,7 +403,8 @@ def outbreak_blocks(
     and its places (`choose_places`) are about that many series at its
     lag, with the country first. A block whose places have no release
     rows by its cut (strata with no cases) is skipped and, with `empty`,
-    described there.
+    described there. Each block's releases run up to its cut at a cadence
+    drawn for its source (`draw_cadence`), recorded as its `cadence`.
     """
     # Cut-offs fall Wednesday to Saturday, as the hub's releases do.
     weekday = int(rng.integers(2, 6))
@@ -396,7 +440,7 @@ def outbreak_blocks(
                 size = np.exp(rng.uniform(0, np.log(MAX_SERIES)))
                 # A place's rows: its counts, its lags and, with period
                 # totals, one more.
-                rows = lag + 1 + (source in MIXED)
+                rows = lag + 1 + (source in MIXED or source in ROLLING)
                 fits = MAX_SERIES // rows - 1
                 budget = min(round(size / rows) - 1, fits)
                 places, mix = choose_places(provinces, budget, rng)
@@ -406,16 +450,20 @@ def outbreak_blocks(
             parent = "exact"
             if len(places) > 1 and places[0] == NATIONAL:
                 parent = str(parent_rng.choice(PARENT_MIX))
+            options = block_options(source, option_rng)
+            # The releases follow the source's cadence (`CADENCES`), up to
+            # the slot's cut.
+            cadence = draw_cadence(source, option_rng)
             block = training_block(
                 counts,
                 source,
                 places,
-                cutoffs[: cut + 1],
+                release_days(first, cutoffs[cut], cadence, option_rng),
                 max_lag=lag,
                 totals=any("-" in p for p in provinces),
                 parent=parent,
                 rng=parent_rng,
-                **(options := block_options(source, option_rng)),
+                **options,
             )
             if block is None:
                 if empty is not None:
@@ -432,6 +480,7 @@ def outbreak_blocks(
             padded |= options
             padded["mix"] = mix
             padded["source"] = source
+            padded["cadence"] = cadence
             out.append(padded)
     return out
 

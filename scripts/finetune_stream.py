@@ -1418,6 +1418,7 @@ def main() -> None:
         "univariate_share": ft.UNIVARIATE_SHARE,
         "parent_mix": list(ft.PARENT_MIX),
         "source_shares": ft.SOURCE_SHARES,
+        "release_cadences": ft.CADENCES,
         "aggregate_end": ft.AGGREGATE_END,
         **(
             {
@@ -1770,6 +1771,10 @@ def main() -> None:
             parents = seen.setdefault("parents", {})
             kind = block.get("parent", "exact")
             parents[kind] = parents.get(kind, 0) + 1
+            cadences = seen.setdefault("cadences", {})
+            source = block.get("source", "weekly")
+            cell = f"{source}:{block.get('cadence', 'weekly')}"
+            cadences[cell] = cadences.get(cell, 0) + 1
         # Blocks of strata with no cases by their cut are not laid out.
         mix["empty"] = mix.get("empty", 0) + len(empty)
         if done in prefixes:
@@ -1791,6 +1796,7 @@ def main() -> None:
                 "blocks": seen["blocks"],
                 "series": seen["series"],
                 "level_mix": seen.get("mix", {}),
+                "cadence_mix": seen.get("cadences", {}),
                 "tokens": seen.get("tokens", 0),
                 "skipped_blocks": skipped,
                 "memory_gb": args.memory_gb,
