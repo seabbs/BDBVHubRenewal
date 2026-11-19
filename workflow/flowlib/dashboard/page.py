@@ -58,6 +58,8 @@ class Context:
     datasets: Sequence[Mapping[str, Any]] = ()
     mailbox: Path | None = None
     mail_filter: str = ""
+    mail_hide: str = ""
+    hidden_studies: set = field(default_factory=set)
     mail_lines: int = 400
     once: bool = False
     view: Mapping[str, Any] = field(default_factory=dict)
@@ -208,6 +210,8 @@ class Status:
     nxt: int | None
     trained: float | None = None
     steps: Callable[[int], tuple[int, bool]] | None = None
+    sims_rate: float | None = None
+    span: float | None = None
 
     @property
     def target(self) -> int:
@@ -223,8 +227,18 @@ class Status:
         return bool(self.steps and self.steps(n)[1])
 
     def eta(self, n: int | None) -> str:
-        """Return the time until checkpoint `n` at the recent speed."""
-        if not (self.rate and self.step is not None and n):
+        """Return the time until checkpoint `n` at the recent speed.
+
+        From simulations a minute where known (the checkpoints are
+        simulation counts), else from steps a second.
+        """
+        if not n or self.step is None:
+            return "n/a"
+        if self.sims_rate and self.trained is not None:
+            if self.trained >= n:
+                return "due now"
+            return _dur((n - self.trained) / self.sims_rate)
+        if not self.rate:
             return "n/a"
         if self.at(n) <= self.step:
             return "due now"
@@ -256,13 +270,23 @@ def live_status(
     """
     step = rows[-1]["step"] if rows else None
     last_t = rows[-1]["t"] if rows else None
-    recent = [r for r in rows if r["t"] >= (last_t or 0) - 1800]
-    rate = None
-    if len(recent) >= 2 and recent[-1]["t"] > recent[0]["t"]:
-        rate = (recent[-1]["step"] - recent[0]["step"]) / (
-            recent[-1]["t"] - recent[0]["t"]
-        )
     folder = live.folder
+    # Timestamped steps: every logged step, and the trainer's status file
+    # (written every few steps), as evaluations log a step only every few
+    # hundred (`training.recent_rate`).
+    points = [(r["t"], r["step"]) for r in rows]
+    status = training.status_point(folder) if folder else None
+    if status:
+        points.append(status)
+        if step is None or status[1] > step:
+            step = int(status[1])
+    rate, span = training.recent_rate(points)
+    sims_rate = None
+    if rate and span and sims:
+        newest = max(points)
+        first_s = newest[1] - rate * span
+        done = sims(newest[1]) - sims(first_s)
+        sims_rate = done / span if done > 0 else None
     args = logs.trainer_args(folder) if folder else ""
     trained = sims(step) if sims and step is not None else None
     params = (
@@ -313,6 +337,8 @@ def live_status(
         nxt,
         trained,
         None if params["lr_steps"] else steps,
+        sims_rate,
+        span,
     )
 
 
@@ -368,10 +394,19 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             "",
         ),
         (
-            "Steps / s (30 min)",
+            "Steps / s",
             "t_rate",
             f"{st.rate:.3f}" if st.rate else "n/a",
-            f"{st.rate * 60:.1f} steps/min" if st.rate else "",
+            "; ".join(
+                x
+                for x in (
+                    f"{st.sims_rate * 60:.2f} simulations/min"
+                    if st.sims_rate
+                    else "",
+                    f"over the last {_dur(st.span)}" if st.span else "",
+                )
+                if x
+            ),
             "",
         ),
         ("Next checkpoint", "t_next", next_v, next_s, ""),
@@ -506,6 +541,16 @@ def lr_card(
     )
 
 
+LOSS_TYPES = {
+    "total": "total",
+    "nowcast": "nowcast",
+    "forecast": "forecast",
+    "layout": "by layout",
+    "level": "by level",
+}
+"""The held-out loss types the Loss panel offers (Sam, 19 Nov)."""
+
+
 def loss_section(ctx: Context, live: Run, st: Status) -> str:
     """Return the loss controls and the client-side loss plots' data."""
     cks = {r.key: _checkpoints(r) for r in ctx.runs}
@@ -519,7 +564,9 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
     for r in ctx.runs:
         base = own.get(r.base or "") if r.base else None
         refs = (
-            {k: base[k] for k in ("full0", "src0", "parts0")} if base else None
+            {k: base[k] for k in ("full0", "src0", "parts0", "lvl0")}
+            if base
+            else None
         )
         out.append(
             training.loss_run(
@@ -548,6 +595,14 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
         "<button class=tog data-rng=zoom>live run</button>"
         "<button class=tog data-rng=full>full range</button>"
         + tip("lossscale")
+        + "</div>"
+        # Which held-out loss the held-out panel draws, for every run.
+        + '<div class="sctl modebar"><span class=mut>Loss type</span>'
+        + "".join(
+            f"<button class=tog data-lt={k}>{v}</button>"
+            for k, v in LOSS_TYPES.items()
+        )
+        + tip("losstype")
         + "</div>"
     )
     return (
@@ -597,7 +652,7 @@ def checkpoint_table(
     by_head = "".join(f"<th>{html.escape(src)}" for src in sources)
     out = [
         f"<table><tr><th>run<th>ckpt<th>hash<th>{head}<th>held-out "
-        f"start<th>real-val{by_head}<th>saved</tr>"
+        f"start{by_head}<th>saved</tr>"
     ]
     for name, s, mtime in rows:
         by = s.get("held_out_loss_by_source") or {}
@@ -608,7 +663,6 @@ def checkpoint_table(
             html.escape(str(s.get("hash", ""))),
             _fmt(ho / den if ho and den else None) or "n/a",
             _fmt(s.get("held_out_loss_start")),
-            _fmt(s.get("real_validation_loss")),
             *(_fmt(by.get(src)) or "n/a" for src in sources),
             datetime.fromtimestamp(mtime).strftime("%m-%d %H:%M")
             if mtime
@@ -662,9 +716,10 @@ def nowcasts_section(
 ) -> str:
     """Return the nowcast panels of every dataset, behind a selector.
 
-    Every configured dataset is listed (Germany, BDBV, the held-out
-    simulations); one with no nowcasts yet is listed as empty, with why
-    (its `missing`), so the selector always offers it.
+    Every configured dataset is listed (Germany's development half and
+    the held-out simulations; BDBV is held out, Sam 11:20). One with no
+    nowcasts yet is listed as empty, with why (its `missing`), so the
+    selector always offers it.
     """
     datasets, sources = [], set()
     for ds in ctx.datasets:
@@ -768,9 +823,15 @@ def mail_section(ctx: Context) -> str:
     if not ctx.mailbox.exists():
         return "<p class=mut>no notes yet</p>"
     rx = re.compile(ctx.mail_filter, re.I) if ctx.mail_filter else None
+    # Lines about a held-out study (BDBV) are never shown.
+    hide = re.compile(ctx.mail_hide, re.I) if ctx.mail_hide else None
     with ctx.mailbox.open(errors="replace") as f:
         tail = deque(f, maxlen=ctx.mail_lines)
-    lines = [x.rstrip("\n") for x in tail if not rx or rx.search(x)]
+    lines = [
+        x.rstrip("\n")
+        for x in tail
+        if (not rx or rx.search(x)) and not (hide and hide.search(x))
+    ]
     if not lines:
         return "<p class=mut>no matching lines</p>"
 
@@ -907,7 +968,11 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     for r in ctx.runs:
         base = info.get(r.base or r.key, info[r.key])
         info[r.key]["bfull"] = base["full0"]
-    score_rows = scores.read(ctx.source.scores)
+    score_rows = [
+        r
+        for r in scores.read(ctx.source.scores)
+        if r.get("study") not in ctx.hidden_studies
+    ]
     sizes = checkpoint_sizes(ctx, info, score_rows)
     mail = mail_section(ctx)
     builts = {ds["key"]: ctx.nowcasts(ds["key"]) for ds in ctx.datasets}

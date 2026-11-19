@@ -51,9 +51,24 @@ def build(
             if k not in ("runs", "exclude", "datasets")
         },
     }
-    dash["datasets"] = merge_datasets(
-        config["dashboard"].get("datasets") or [], extra.get("datasets") or []
-    )
+    # Held out of model development (BDBV, Sam 11:20): never shown, even
+    # if a machine's local file adds it back.
+    held = dict(config["dashboard"].get("held_out") or {})
+    hidden = set(held.get("datasets") or ())
+    dash["datasets"] = [
+        d
+        for d in merge_datasets(
+            config["dashboard"].get("datasets") or [],
+            extra.get("datasets") or [],
+        )
+        if d["key"] not in hidden
+    ]
+    hidden_studies = set(held.get("studies") or ())
+    dash["studies"] = {
+        k: v
+        for k, v in (dash.get("studies") or {}).items()
+        if k not in hidden_studies
+    }
     run_list = spec.load_runs(
         [*(dash.get("runs") or []), *(extra.get("runs") or [])],
         local.get("DASHBOARD_RUNS", ""),
@@ -104,6 +119,8 @@ def build(
         datasets=dash.get("datasets") or [],
         mailbox=source.mailbox,
         mail_filter=dash.get("mail_filter", ""),
+        mail_hide=held.get("mail", ""),
+        hidden_studies=hidden_studies,
         mail_lines=source.mailbox_lines,
         once=once,
         view={

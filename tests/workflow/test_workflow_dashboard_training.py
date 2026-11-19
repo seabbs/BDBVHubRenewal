@@ -196,3 +196,69 @@ def test_the_step_a_checkpoint_is_saved_at_comes_from_planned_chunks():
     # n750 is not: at the run's mean rate so far, 5.8 steps a simulation.
     assert training.step_at(pairs, 750) == (4350, False)
     assert training.step_at([(0, 0)], 250, spo=4.0) == (1000, False)
+
+
+def test_the_rate_uses_logged_steps_and_the_status_over_a_long_enough_window():
+    # Evaluations every 400 steps leave one logged step in 30 minutes; the
+    # status file's step and time make the second point.
+    t0 = 1_000_000.0
+    points = [(t0, 800), (t0 + 2400, 1200), (t0 + 2400 + 900, 1350)]
+    rate, span = training.recent_rate(points)
+    assert rate == pytest.approx(550 / 3300)
+    assert span == pytest.approx(3300)
+    # With points only far apart, the last two are used.
+    rate, _ = training.recent_rate([(t0, 0), (t0 + 20000, 4000)])
+    assert rate == pytest.approx(0.2)
+    # One point, or none: no rate.
+    assert training.recent_rate([(t0, 5)]) == (None, None)
+    assert training.recent_rate([]) == (None, None)
+
+
+def test_a_falling_logged_rate_is_a_decay_even_without_lr_decay(tmp_path):
+    n = tmp_path / "train" / "n250"
+    n.mkdir(parents=True)
+    (n / "settings.json").write_text(json.dumps({"learning_rate": 1e-5}))
+    hist = [
+        {"step": 400, "lr": {"lora": 9.9e-6}},
+        {"step": 800, "lr": {"lora": 9.7e-6}},
+    ]
+    got = training.run_params(tmp_path, hist, 800, "", (250, 8400), sims=160)
+    assert got["lr_outbreaks"] == 8400
+
+
+def test_loss_runs_carry_checkpoint_losses_by_layout_and_level(tmp_path):
+    # Sam 11:10: the Loss type selector draws by layout and by level too.
+    folder = tmp_path / "run"
+    (folder / "train").mkdir(parents=True)
+    (folder / "train" / "history.json").write_text(
+        json.dumps(
+            [
+                {
+                    "step": 0,
+                    "held_out_loss": 0.5,
+                    "by_level": {"national": 0.4, "leaf": 0.6},
+                }
+            ]
+        )
+    )
+    run = runs.make_run("r", str(folder), live=True)
+    cks = [
+        (
+            "n250",
+            {
+                "steps": 1000,
+                "n_outbreaks": 250,
+                "held_out_loss": 0.35,
+                "held_out_loss_by_source": {"daily": 0.3, "weekly": 0.2},
+                "held_out_loss_by_level": {"national": 0.3, "leaf": 0.5},
+            },
+            None,
+        )
+    ]
+    got = training.loss_run(
+        run, [], cks, sims=lambda s: s / 4, base=None, colour="#111"
+    )
+    assert got["ck_src"] == {"daily": [[250, 0.3]], "weekly": [[250, 0.2]]}
+    assert got["ck_lvl"] == {"national": [[250, 0.3]], "leaf": [[250, 0.5]]}
+    assert got["lvl0"] == {"national": 0.4, "leaf": 0.6}
+    assert got["blvl0"] == got["lvl0"]

@@ -4,7 +4,7 @@ import csv
 import gzip
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -384,12 +384,12 @@ def test_the_next_checkpoint_names_its_simulations_and_planned_step(tmp_path):
 
 
 def test_every_configured_dataset_is_in_the_selector(tmp_path):
-    # Sam 11:05: Germany, BDBV and the held-out simulations, each listed
-    # whether or not it has nowcasts yet.
+    # Sam 11:05: every configured dataset, each listed whether or not it
+    # has nowcasts yet.
     ctx = _machine(tmp_path)
     ctx.datasets = [
         *ctx.datasets,
-        {"key": "bdbv", "label": "BDBV", "format": "samples"},
+        {"key": "other", "label": "Other", "format": "samples"},
         {
             "key": "held_out",
             "label": "Held-out simulations",
@@ -402,7 +402,52 @@ def test_every_configured_dataset_is_in_the_selector(tmp_path):
     got = [
         (d["key"], d["label"], bool(d.get("empty"))) for d in data["datasets"]
     ]
-    assert ("bdbv", "BDBV", True) in got
+    assert ("other", "Other", True) in got
     assert ("held_out", "Held-out simulations", True) in got
     held = next(d for d in data["datasets"] if d["key"] == "held_out")
     assert "the scoring workflow writes none yet" in held["missing"]
+
+
+def test_speed_and_etas_come_from_the_status_file_when_steps_are_sparse(
+    tmp_path,
+):
+    # One logged step in the last 30 minutes (evaluations every 400 steps)
+    # and the trainer's status: a rate, simulations a minute and ETAs.
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    now = datetime.now().replace(microsecond=0)
+    (folder / "train.log").write_text(
+        LINE.format(m=0, s=800, l=0.5, h=0.45).replace(
+            "2026-11-16 16:00:00",
+            f"{now - timedelta(minutes=40):%Y-%m-%d %H:%M:%S}",
+        )
+        + "\n"
+    )
+    (folder / "train" / "stream-status.json").write_text(
+        json.dumps(
+            {
+                "stage": "training",
+                "step": 1200,
+                "outbreaks": 250,
+                "time": f"{now - timedelta(minutes=1):%Y-%m-%d %H:%M:%S}",
+            }
+        )
+    )
+    out = page.build(ctx)
+    tile = out.split("Steps / s", 1)[1].split("</div></div>", 1)[0]
+    assert "n/a" not in tile
+    assert "simulations/min" in tile
+    eta = out.split("ETA n8000", 1)[1].split("</div></div>", 1)[0]
+    assert "n/a" not in eta
+
+
+def test_the_loss_panel_offers_each_loss_type(tmp_path):
+    out = page.build(_machine(tmp_path))
+    for k in ("total", "nowcast", "forecast", "layout", "level"):
+        assert f"data-lt={k}>" in out
+
+
+def test_checkpoint_tables_have_no_real_data_validation_column(tmp_path):
+    # Its loss is on BDBV pseudo-origins, held out (Sam 11:20).
+    out = page.build(_machine(tmp_path))
+    assert "real-val" not in out

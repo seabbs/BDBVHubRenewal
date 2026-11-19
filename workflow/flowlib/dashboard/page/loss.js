@@ -5,6 +5,11 @@ var STY=["","6 3","8 3 2 3","2 3"],SPAL=["#16a34a","#ea580c","#9333ea","#0891b2"
 var PARTS=[["nowcast","nowcast steps","6 3"],["forecast","forecast steps","2 3"]];
 var SRCS=[];D.runs.forEach(function(r){Object.keys(r.bysrc).concat(Object.keys(r.src0||{})).forEach(function(k){if(SRCS.indexOf(k)<0)SRCS.push(k)})});SRCS.sort();
 var SRC={};SRCS.forEach(function(k,i){SRC[k]=SPAL[i%SPAL.length]});
+var LVLS=[];D.runs.forEach(function(r){Object.keys(r.ck_lvl||{}).concat(Object.keys(r.lvl0||{})).forEach(function(k){if(LVLS.indexOf(k)<0)LVLS.push(k)})});
+var LVL={};LVLS.forEach(function(k,i){LVL[k]=SPAL[(i+3)%SPAL.length]});
+// The held-out loss type shown (Loss type), kept for the session.
+var LT="total";try{LT=sessionStorage.getItem("ftlt")||"total"}catch(e){}
+document.addEventListener("click",function(e){var b=e.target.closest("[data-lt]");if(!b)return;LT=b.dataset.lt;try{sessionStorage.setItem("ftlt",LT)}catch(x){}draw()});
 function sw(c,d){return '<svg width=22 height=8 viewBox="0 0 22 8"><line x1=0 x2=22 y1=4 y2=4 stroke="'+c+'" stroke-width=2'+(d?' stroke-dasharray="'+d+'"':"")+' /></svg>'}
 function roll(p,k){var o=[],a=[];p.forEach(function(q){a.push(q[1]);if(a.length>k)a.shift();o.push([q[0],a.reduce(function(x,y){return x+y},0)/a.length])});return o}
 function lticks(lo,hi){var o=[];for(var e=Math.floor(lo)-1;e<=Math.ceil(hi);e++)[1,2,3,5,7].forEach(function(m){var v=m*Math.pow(10,e),l=Math.log10(v);if(l>=lo&&l<=hi)o.push(v)});
@@ -54,42 +59,43 @@ function draw(){
  var mode=window.ftMode||"start",rng=window.ftRng||"full",on=ftSel.get(),rel=mode!="raw";
  var xmax=rng=="zoom"?D.xlim:null,runs=D.runs.filter(function(r){return on.indexOf(r.key)>=0});
  var suf={raw:"",start:", relative to start",base:", relative to base Chronos-2"}[mode],hl=rel;
- var tr=[],held=[],by=[],byRuns=[];
+ var tr=[],held=[],byRuns=[];
  runs.forEach(function(r){var i=D.runs.indexOf(r);
   var p=r.train;if(rel&&r.tr0)p=p.map(function(q){return [q[0],q[1]/r.tr0]});
   if(r.live)tr.push({color:r.color,pts:p,kind:"dots"});
   tr.push({label:r.label,color:r.color,pts:roll(p,20),kind:r.live?"line":"faint"});
-  // The monitor on the first blocks at each evaluation, as a line, and
-  // the full set at each checkpoint, as points; each split into the
-  // nowcast and forecast steps where logged. The subset has no step-0
-  // value, so relative to start is to its first evaluation; it has no
-  // base Chronos-2 value at all.
+  // The held-out loss of the chosen type (Loss type): the subset monitor
+  // at each evaluation as a line, the full set at step 0 and at each
+  // checkpoint as points. The subset has no step-0 value, so relative to
+  // start is to its first evaluation; it has no base Chronos-2 value.
   function scaled(pts,d){return d?pts.map(function(q){return [q[0],q[1]/d]}):[]}
-  var sub=[["",r.held,"",null]].concat(PARTS.map(function(p){return [p[0],(r.held_parts||{})[p[0]]||[],p[2],p]}));
-  sub.forEach(function(x){var pts=x[1];if(!pts.length||mode=="base")return;
-   if(mode=="start")pts=scaled(pts,pts[0][1]);
-   held.push({label:r.label+" subset "+(x[3]?x[3][1]:"all steps"),color:r.color,pts:pts,kind:"line",dash:x[2],sub:1,part:x[0]})});
-  var full=[["",r.full0,r.bfull,r.ck,"o"]].concat(PARTS.map(function(p){return [p[0],(r.parts0||{})[p[0]],(r.bparts0||{})[p[0]],(r.ck_parts||{})[p[0]]||[],p[0]=="nowcast"?"^":"s"]}));
-  full.forEach(function(x){var pts=(x[1]!=null?[[0,x[1]]]:[]).concat(x[3]);if(!pts.length)return;
-   if(rel)pts=scaled(pts,mode=="start"?x[1]:x[2]);
-   if(pts.length)held.push({label:r.label+" full set "+(x[0]||"all steps"),color:r.color,pts:pts,kind:"marks",shape:x[4],part:x[0]})});
-  SRCS.forEach(function(s){var pts=(r.bysrc[s]||[]);if(!pts.length)return;var z=(r.src0||{})[s];pts=(z?[[0,z]]:[]).concat(pts);
-   if(rel){var d=(mode=="start"?r.src0:r.bsrc)[s];if(!d)return;pts=pts.map(function(q){return [q[0],q[1]/d]})}
-   if(byRuns.indexOf(r)<0)byRuns.push(r);
-   by.push({src:s,label:s+" ("+r.label+")",color:SRC[s],pts:pts,kind:"pts",dash:STY[i%4]})})});
- var used=SRCS.filter(function(s){return by.some(function(b){return b.src==s})});
- var byLeg=used.map(function(s){return '<span><i style="background:'+SRC[s]+'"></i>'+s+'</span>'}).join("")+byRuns.map(function(r){return '<span>'+sw("var(--fg)",STY[D.runs.indexOf(r)%4])+' '+r.label+'</span>'}).join("");
+  function add(lab,colour,dash,sub,z,bz,ck,shape,key){
+   if(sub&&sub.length&&mode!="base"){var s=mode=="start"?scaled(sub,sub[0][1]):sub;
+    held.push({label:r.label+" "+lab+" subset",color:colour,pts:s,kind:"line",dash:dash,sub:1,key:key})}
+   var f=(z!=null?[[0,z]]:[]).concat(ck||[]);if(!f.length)return;
+   if(rel)f=scaled(f,mode=="start"?z:bz);
+   if(f.length)held.push({label:r.label+" "+lab+" full set",color:colour,pts:f,kind:"marks",shape:shape,key:key})}
+  var dash=STY[i%4];
+  if(LT=="total")add("all steps",r.color,"",r.held,r.full0,r.bfull,r.ck,"o");
+  else if(LT=="nowcast"||LT=="forecast")add(LT+" steps",r.color,"",(r.held_parts||{})[LT],(r.parts0||{})[LT],(r.bparts0||{})[LT],(r.ck_parts||{})[LT],"o");
+  else if(LT=="layout")SRCS.forEach(function(s){add(s,SRC[s],dash,(r.bysrc||{})[s],(r.src0||{})[s],(r.bsrc||{})[s],(r.ck_src||{})[s],"o",s);if(held.some(function(h){return h.key==s})&&byRuns.indexOf(r)<0)byRuns.push(r)});
+  else LVLS.forEach(function(l){add(l,LVL[l],dash,null,(r.lvl0||{})[l],(r.blvl0||{})[l],(r.ck_lvl||{})[l],"o",l);if(held.some(function(h){return h.key==l})&&byRuns.indexOf(r)<0)byRuns.push(r)})});
  // Run colours are in the shared selector at the top; each legend names
- // only its own encodings.
+ // only its own encodings. By layout or level, colour is the layout or
+ // level and line style the run.
  function has(f){return held.some(f)}
- var heldLeg=(has(function(h){return h.sub})?'<span>'+sw("var(--fg)","")+' subset (first 100 blocks), each evaluation</span>':"")
-  +(has(function(h){return !h.sub})?'<span>'+msw("o")+' full set, each checkpoint</span>':"")
-  +PARTS.filter(function(p){return has(function(h){return h.part==p[0]})}).map(function(p){return '<span>'+sw("var(--fg)",p[2])+msw(p[0]=="nowcast"?"^":"s")+' '+p[1]+'</span>'}).join("")
+ var keyed=LT=="layout"?SRCS.map(function(s){return [s,SRC[s]]}):LT=="level"?LVLS.map(function(l){return [l,LVL[l]]}):[];
+ var heldLeg=keyed.filter(function(k){return has(function(h){return h.key==k[0]})}).map(function(k){return '<span><i style="background:'+k[1]+'"></i>'+k[0]+'</span>'}).join("")
+  +(keyed.length?byRuns.map(function(r){return '<span>'+sw("var(--fg)",STY[D.runs.indexOf(r)%4])+' '+r.label+'</span>'}).join(""):"")
+  +(has(function(h){return h.sub})?'<span>'+sw("var(--fg)","")+' subset (first 100 blocks), each evaluation</span>':"")
+  +(has(function(h){return !h.sub})?'<span>'+msw("o")+' full set, step 0 and each checkpoint</span>':"")
+  +(LT=="level"?'<span class=mut>by level: step 0 and checkpoints only (the trainer logs no level loss in between)</span>':"")
   +(mode=="base"&&runs.some(function(r){return r.held.length})?'<span class=mut>subset: no base Chronos-2 value</span>':"")
   +(mode=="start"&&has(function(h){return h.sub})?'<span class=mut>subset: relative to its first evaluation</span>':"");
  var trLeg=(runs.some(function(r){return r.live})?'<span><svg width=12 height=10><circle cx=6 cy=5 r=1.8 fill="var(--fg)" opacity=".35"/></svg> logged values (live run)</span>':"")+'<span>'+sw("var(--fg)","")+' rolling mean of 20</span>';
- var ttl="Held-out pooled loss, subset and full set";
- cards([{title:"Training loss"+suf,info:"train",series:tr,xmax:xmax,hl:hl,leg:trLeg},{title:ttl+suf,info:"held",series:held,xmax:xmax,hl:hl,leg:heldLeg},{title:"Held-out loss by source (colour source, style run)"+suf,info:"bysrc",series:by,xmax:xmax,hl:hl,leg:byLeg}]);
+ var ttl="Held-out loss, "+{total:"all steps",nowcast:"nowcast steps",forecast:"forecast steps",layout:"by layout",level:"by level"}[LT]+", subset and full set";
+ cards([{title:"Training loss"+suf,info:"train",series:tr,xmax:xmax,hl:hl,leg:trLeg},{title:ttl+suf,info:"held",series:held,xmax:xmax,hl:hl,leg:heldLeg}]);
+ [].forEach.call(document.querySelectorAll("[data-lt]"),function(b){b.classList.toggle("on",b.dataset.lt==LT)});
  var refs=ftSel.refsOn();
  $("lossrefs").innerHTML=refs.map(function(r){return '<span class="tog dis" title="'+r.label+' is a reference with no training or held-out loss">'+r.label+'</span>'}).join("");
 }
