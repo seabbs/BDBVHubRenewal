@@ -1,9 +1,6 @@
 version: "3"
 
-# Machine settings (config/local.env, see config/local.env.example) are
-# read by flowlib.localconfig only. Task's dotenv would expand `$HOME`
-# against the file alone and hand every job the result, which wins over
-# the file.
+# Machine settings (config/local.env) are read only by flowlib.localconfig.
 
 vars:
   SNAKEMAKE: uv run --group paper snakemake

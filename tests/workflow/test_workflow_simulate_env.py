@@ -3,15 +3,12 @@
 import re
 from pathlib import Path
 
+import pytest
+from flowlib import simulator
+from test_workflow_dryrun import dry_run
+
 ROOT = Path(__file__).parents[2]
-RULES = (ROOT / "workflow" / "rules" / "simulate.smk").read_text()
 SCRIPT = (ROOT / "scripts" / "finetune_simulate.R").read_text()
-
-
-def batch_shell():
-    """The shell of rule simulate_batch."""
-    rule = RULES.split("rule simulate_batch:", 1)[1].split("\nrule ", 1)[0]
-    return rule.split("shell:", 1)[1]
 
 
 def test_the_simulator_loads_epinowcast_only_from_its_library():
@@ -19,16 +16,24 @@ def test_the_simulator_loads_epinowcast_only_from_its_library():
     assert re.search(r"library\(epinowcast, lib\.loc = lib\)", SCRIPT)
 
 
-def test_a_batch_uses_the_machine_s_pinned_library():
-    shell = batch_shell()
-    assert "ENW_LIB={input.lib}" in shell or "ENW_LIB={params.lib}" in shell
+def test_the_pin_is_read_from_the_simulator(tmp_path):
+    assert re.fullmatch(r"[0-9a-f]{7,40}", simulator.epinowcast_sha())
+    other = tmp_path / "x.R"
+    other.write_text("x <- 1\n")
+    with pytest.raises(ValueError, match="epinowcast_sha"):
+        simulator.epinowcast_sha(other)
 
 
-def test_r_s_tools_come_from_the_system_paths():
-    # R puts the system libraries on LD_LIBRARY_PATH, so a bash or make
-    # from another prefix (such as linuxbrew) fails under it. Rscript is
-    # found first on the usual PATH, so the R is the same.
-    shell = batch_shell()
-    assert "rscript=$(command -v Rscript)" in shell
-    assert 'PATH="$(getconf PATH):$PATH"' in shell
-    assert '"$rscript" scripts/finetune_simulate.R' in shell
+def test_a_batch_runs_with_the_pinned_library_and_system_tools(tmp_path):
+    batch = tmp_path / "rounds" / "r4" / "sims" / "counts-30400.csv.gz"
+    out = dry_run(tmp_path, str(batch), extra=["-p", "--quiet", "host"])
+    assert out.returncode == 0, out.stderr
+    lib = tmp_path / "rlib" / f"epinowcast-{simulator.epinowcast_sha()}"
+    command = out.stdout.split("rule simulate_batch", 1)[1]
+    # The R found first on the usual PATH, then the system's tools first
+    # for the whole job command (R's own children among them).
+    assert command.index("rscript=$(command -v Rscript)") < command.index(
+        'PATH="$(getconf PATH):$PATH"'
+    )
+    assert f"ENW_LIB={lib} " in " ".join(command.split())
+    assert '"$rscript" scripts/finetune_simulate.R' in command

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from flowlib import simulator
 
 pytest.importorskip("snakemake")
 
@@ -97,9 +98,7 @@ def test_batches_already_simulated_are_kept(tmp_path):
 
 def _enw_lib(tmp_path):
     """The pinned epinowcast's library under the machine's ROOT."""
-    script = (ROOT / "scripts" / "finetune_simulate.R").read_text()
-    sha = re.search(r'epinowcast_sha <- "([0-9a-f]+)"', script)[1]
-    return tmp_path / "rlib" / f"epinowcast-{sha}"
+    return tmp_path / "rlib" / f"epinowcast-{simulator.epinowcast_sha()}"
 
 
 def test_simulate_installs_the_pinned_epinowcast_first(tmp_path):

@@ -5,7 +5,16 @@
 import functools
 import json
 
-from flowlib import grids, hosts, localconfig, manifest, notify, releases, segments
+from flowlib import (
+    grids,
+    hosts,
+    localconfig,
+    manifest,
+    notify,
+    releases,
+    segments,
+    simulator,
+)
 
 LOCAL = localconfig.read()
 HOST = LOCAL["HOST_NAME"]
@@ -57,18 +66,14 @@ def here(seed):
 
 # The epinowcast the simulator is pinned to (finetune_simulate.R's
 # `epinowcast_sha`), installed once a machine under ROOT.
-ENW_SHA = re.search(
-    r'epinowcast_sha <- "([0-9a-f]+)"',
-    Path("scripts/finetune_simulate.R").read_text(),
-)[1]
+ENW_SHA = simulator.epinowcast_sha()
 ENW_LIB = f"{LOCAL['ROOT']}/rlib/epinowcast-{ENW_SHA}"
 
 
 def batch_lib(wc):
-    """The pinned epinowcast, for a batch not yet simulated only.
+    """Already simulated batches take no library input.
 
-    Installing it, as a job of the same run, would otherwise make every
-    batch already simulated out of date.
+    So installing it never reruns them.
     """
     sims = Path(f"{ROUNDS_DIR}/r{wc.round}/sims")
     done = all(

@@ -31,12 +31,18 @@ rule epinowcast_lib:
         f"{ENW_LIB}.log",
     conda:
         TOOLS_ENV
+    threads: 1
+    resources:
+        mem_mb=4096,
     params:
         lib=lambda wc, output: str(Path(output[0]).parent),
         sha=ENW_SHA,
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
     shell:
-        # R CMD INSTALL of the archive GitHub serves for the commit, with
-        # the system's tools first, as the simulator runs.
+        # R CMD INSTALL of the archive GitHub serves for the commit, at nice
+        # 19 under the job's memory cap as a batch runs, with the system's
+        # tools first for the whole command. Its dependencies must already
+        # be in R's libraries.
         """
         exec >{log} 2>&1
         r=$(dirname "$(command -v Rscript)")
@@ -46,8 +52,8 @@ rule epinowcast_lib:
             https://github.com/epinowcast/epinowcast/archive/{params.sha}.tar.gz \
             | tar -xz -C "$src" --strip-components 1
         mkdir -p {params.lib}
-        PATH="$(getconf PATH):$PATH" "$r/R" CMD INSTALL \
-            --library={params.lib} "$src"
+        PATH="$(getconf PATH):$PATH" {params.prefix} nice -n 19 \
+            "$r/R" CMD INSTALL --library={params.lib} "$src"
         touch {output}
         """
 
@@ -88,10 +94,12 @@ rule simulate_batch:
         # The simulator must be the committed one, as the manifest records
         # the commit. A retry keeps the first attempt's log. R and Stan
         # write temporary files to a folder of the batch's own, removed
-        # however the batch ends. Rscript is the one on PATH, and the tools
-        # R starts (make, bash) are the system's: R puts the system
-        # libraries on LD_LIBRARY_PATH, under which a bash from another
-        # prefix (such as linuxbrew) fails.
+        # however the batch ends. Rscript is the one on PATH; the whole job
+        # command after it (the memory cap, timed.sh, nice and the tools R
+        # starts, such as make and bash) takes the system's tools first: R
+        # puts the system libraries on LD_LIBRARY_PATH, under which a bash
+        # from another prefix (such as linuxbrew) fails. Under a conda
+        # env's R this also puts the system compilers first.
         """
         if ! git diff --quiet HEAD -- scripts/finetune_simulate.R; then
             echo "scripts/finetune_simulate.R differs from HEAD" >{log}
