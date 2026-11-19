@@ -66,7 +66,7 @@ NEUTRALS = {
 
 def test_no_dashboard_file_holds_a_colour_except_neutrals_in_the_style():
     # Every data and accent colour comes from the shared map
-    # (bdbvhubrenewal.evaluation.labels): models, relations, layouts,
+    # (nowcasteval.labels): models, relations, layouts,
     # levels, runs, WIS parts and the page's accents.
     found = {}
     for path in sorted(PAGE.parent.rglob("*")):
@@ -83,7 +83,7 @@ def test_no_dashboard_file_holds_a_colour_except_neutrals_in_the_style():
 def test_the_page_writes_its_accents_from_the_shared_map():
     from flowlib.dashboard import page
 
-    from bdbvhubrenewal.evaluation import labels
+    from nowcasteval import labels
 
     css = page.ui_colours()
     for name, (light, dark) in labels.UI_COLOURS.items():

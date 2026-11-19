@@ -9,8 +9,8 @@ import pandas as pd
 import pytest
 from flowlib.dashboard import nowcasts, runs
 
-from bdbvhubrenewal.evaluation.nowcast import reporting_delay, rolling_truth
-from bdbvhubrenewal.evaluation.scoring import crps_sample
+from nowcasteval.nowcast import reporting_delay, rolling_truth
+from nowcasteval.scoring import crps_sample
 
 SEVEN = ("0.025", "0.1", "0.25", "0.5", "0.75", "0.9", "0.975")
 PAGE = (0.025, 0.25, 0.5, 0.75, 0.975)
@@ -280,7 +280,7 @@ def test_samples_are_scored_against_the_scorer_s_truth(tmp_path):
 
 
 def test_wis_parts_on_both_scales_sum_to_each_scale_s_wis(tmp_path):
-    from bdbvhubrenewal.evaluation.scoring import wis_quantile
+    from nowcasteval.scoring import wis_quantile
 
     _quantiles(
         tmp_path / "reference" / "2022-02-09.csv.gz",

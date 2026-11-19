@@ -21,7 +21,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from bdbvhubrenewal.evaluation import labels
+from nowcasteval import labels
 
 from .logs import CACHE, _size, checkpoints
 from .runs import Run

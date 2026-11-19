@@ -9,7 +9,6 @@ import pytest
 
 from bdbvhubrenewal.data import load_health_zones
 from bdbvhubrenewal.data.zones import hub_zones
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastTask,
@@ -28,6 +27,7 @@ from bdbvhubrenewal.forecasters.zones import (
 )
 from bdbvhubrenewal.submission.hub import to_hub_table, write_submission
 from bdbvhubrenewal.submission.validate import Hub, validate_submission
+from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastutils.hierarchy import province_of
 from nowcastutils.snapshots import weekly_counts
 

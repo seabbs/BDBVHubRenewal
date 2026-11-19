@@ -12,12 +12,12 @@ import pytest
 
 from bdbvhubrenewal.cli import main
 from bdbvhubrenewal.data import coherence_summary, national_coherence
-from bdbvhubrenewal.reporting.plots import plot_submission
 from bdbvhubrenewal.submission.fitting import (
     list_configs,
     randomwalk_config,
     register_config,
 )
+from nowcasteval.plots import plot_submission
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "tests" / "fixtures" / "data"
@@ -179,11 +179,7 @@ def test_national_coherence_reports_a_gap(target: pd.DataFrame) -> None:
 def test_cli_plot_ppc(tmp_path: Path) -> None:
     import numpy as np
 
-    from bdbvhubrenewal.evaluation.ppc import (
-        not_available,
-        summarise_draws,
-        write_ppc,
-    )
+    from nowcasteval.ppc import not_available, summarise_draws, write_ppc
 
     weeks = pd.date_range("2026-08-01", periods=10, freq="7D").strftime(
         "%Y-%m-%d"

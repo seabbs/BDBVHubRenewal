@@ -484,7 +484,7 @@ def test_checkpoint_tables_split_the_held_out_loss_by_horizon(tmp_path):
 
 
 def test_the_score_card_has_the_horizon_parts(tmp_path):
-    from bdbvhubrenewal.evaluation import labels
+    from nowcasteval import labels
 
     data = _gdata(page.sections(_machine(tmp_path))["nowcasts"])
     assert [h[0] for h in data["horizon"]] == list(labels.HORIZON_PARTS)

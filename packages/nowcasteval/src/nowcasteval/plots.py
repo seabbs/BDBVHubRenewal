@@ -1268,7 +1268,7 @@ def plot_location_grid(
 
     Examples
     --------
-    >>> from bdbvhubrenewal.reporting.plots import (
+    >>> from nowcasteval.plots import (
     ...     plot_location_grid, save_light_dark
     ... )
     >>> fig = plot_location_grid(forecasts, real, ["CD", "CD-IT"])
@@ -1433,7 +1433,7 @@ def plot_forecasts(
     Parameters
     ----------
     forecasts : pandas.DataFrame
-        Output of `bdbvhubrenewal.evaluation.backtest.run_forecasts`.
+        Output of `nowcasteval.backtest.run_forecasts`.
     target : pandas.DataFrame
         Target rows holding each forecast's vintage and the truth vintage.
     location : str
@@ -1461,7 +1461,7 @@ def plot_forecasts(
 
     Examples
     --------
-    >>> from bdbvhubrenewal.reporting.plots import plot_forecasts
+    >>> from nowcasteval.plots import plot_forecasts
     >>> fig = plot_forecasts(forecasts, real, "CD")  # from `run_forecasts`
     >>> fig.savefig("national.png")
     """
@@ -1602,11 +1602,7 @@ def plot_nowcast(
         sample trajectories, 50% and 90% intervals and median.
     """
     from bdbvhubrenewal.data import load_daily, load_delays, load_target
-    from bdbvhubrenewal.evaluation.backtest import (
-        load_config,
-        make_tasks,
-        run_forecasts,
-    )
+    from nowcasteval.backtest import load_config, make_tasks, run_forecasts
     from nowcastutils.base import get_model
 
     target = load_target(data_dir) if target is None else target

@@ -12,7 +12,7 @@ Each model is scored on its zone samples as it runs, the form submitted.
 Zones are scored on the zone count each later real vintage reports.
 `randomwalk` is scored on its samples as they are, with no delay.
 `randomwalknowcast`'s final-count samples are drawn as for provinces
-(`bdbvhubrenewal.evaluation.nowcast.draw_reported`) under its own zone
+(`nowcasteval.nowcast.draw_reported`) under its own zone
 delay at the origin.
 The energy score takes every zone and week of an origin and release as
 one vector, from the same drawn samples.
@@ -29,24 +29,20 @@ from pathlib import Path
 import pandas as pd
 
 from bdbvhubrenewal.data.simulate import SimulatedOutbreak
-from bdbvhubrenewal.evaluation.backtest import (
+from bdbvhubrenewal.forecasters.zones import (
+    ZoneAllocator,
+    zone_draws,
+    zone_task,
+)
+from nowcasteval.backtest import (
     BacktestConfig,
     energy_tasks,
     make_tasks,
     real_vintages,
     score_tasks,
 )
-from bdbvhubrenewal.evaluation.nowcast import complete_weeks, reported_samples
-from bdbvhubrenewal.evaluation.scoring import (
-    energy_scores,
-    relative_skill,
-    score_forecasts,
-)
-from bdbvhubrenewal.forecasters.zones import (
-    ZoneAllocator,
-    zone_draws,
-    zone_task,
-)
+from nowcasteval.nowcast import complete_weeks, reported_samples
+from nowcasteval.scoring import energy_scores, relative_skill, score_forecasts
 from nowcastutils.base import ForecastTask, ModelUnavailableError, get_model
 from nowcastutils.dates import as_date
 from nowcastutils.files import write_csv
@@ -462,7 +458,7 @@ def zone_relative_skill(
     Returns
     -------
     pandas.DataFrame
-        See `bdbvhubrenewal.evaluation.scoring.relative_skill`.
+        See `nowcasteval.scoring.relative_skill`.
     """
     return relative_skill(
         scores,

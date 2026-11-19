@@ -1248,7 +1248,7 @@ class FoundationModel:
     stream : str or None
         The task's random stream the draws are seeded from, the model's
         name by default. Models given one stream draw the same random
-        numbers (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
+        numbers (`nowcasteval.marginals.forecast_quantiles`).
     known : mapping or None
         Chronos-2's quantiles of tasks predicted ahead in few batched
         passes (`prefetch`); others are predicted when forecast.

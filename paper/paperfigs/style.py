@@ -1,8 +1,8 @@
 """Colours, dashes and the matplotlib theme for the paper figures.
 
-The ink colours are those of bdbv-hub-modelling's `reporting/plots.py`.
+The ink colours are those of bdbv-hub-modelling's `nowcasteval/plots.py`.
 Each model's colour, dash and display name are the shared ones of
-`bdbvhubrenewal.evaluation.labels`, which the dashboard and site use too.
+`nowcasteval.labels`, which the dashboard and site use too.
 The Chronos variants of one family share a colour: fine-tuned on ragged
 data is solid, zero-shot on ragged data dashed (hollow circles), and
 zero-shot on complete data dotted (hollow squares). Bars are filled with
@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from typing import Any, Final
 
 import matplotlib as mpl
-from bdbvhubrenewal.evaluation.labels import MODEL_STYLES
+from nowcasteval.labels import MODEL_STYLES
 
 __all__ = [
     "INK",

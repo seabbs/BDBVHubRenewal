@@ -43,7 +43,7 @@ there.
 A model with no snapshots stops the run.
 
 Scores are CRPS, log CRPS, coverage and bias
-(`bdbvhubrenewal.evaluation.scoring`)
+(`nowcasteval.scoring`)
 and every table counts its forecasts, $n$.
 The energy score is scored from the same drawn samples, one per origin,
 release, target and scale.
@@ -61,13 +61,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.scoring import (
+from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
+from nowcasteval.scoring import (
     SCORE_COLUMNS,
     energy_scores,
     relative_skill,
     score_forecasts,
 )
-from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 from nowcastutils.base import (
     NATIONAL,
     ForecastModel,
@@ -108,7 +108,7 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:
-    from bdbvhubrenewal.evaluation.backtest import BacktestConfig
+    from nowcasteval.backtest import BacktestConfig
 
 log = logging.getLogger(__name__)
 
@@ -689,7 +689,7 @@ def release_backtest(
     --------
     Score stored forecasts against the counts later releases reported.
 
-    >>> from bdbvhubrenewal.evaluation.nowcast import (
+    >>> from nowcasteval.nowcast import (
     ...     relative_crps, release_backtest
     ... )
     >>> result = release_backtest(

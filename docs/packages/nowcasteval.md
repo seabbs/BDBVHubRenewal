@@ -18,7 +18,7 @@ We score a sample forecast of one count with the CRPS, the weighted interval sco
 ```python
 import numpy as np
 
-from bdbvhubrenewal.evaluation.scoring import (
+from nowcasteval.scoring import (
     coverage_sample,
     crps_sample,
     wis_quantile,
@@ -52,7 +52,7 @@ The WIS comes with its three parts, dispersion, overprediction and underpredicti
 ```python
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.scoring import relative_skill, score_forecasts
+from nowcasteval.scoring import relative_skill, score_forecasts
 
 rows = []
 for model, rate in (("baseline", 20), ("candidate", 17)):
@@ -90,7 +90,7 @@ assert skill.set_index("model").loc["baseline", "relative_wis"] == 1.0
 `energy_sample` scores samples of a vector, such as the same week in several places, so that a forecast is rewarded for getting their dependence right.
 
 ```python
-from bdbvhubrenewal.evaluation.scoring import energy_sample
+from nowcasteval.scoring import energy_sample
 
 joint = rng.poisson([20, 5], size=(1000, 2))
 energy = energy_sample([18, 7], joint)

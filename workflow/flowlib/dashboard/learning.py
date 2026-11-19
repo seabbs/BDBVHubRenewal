@@ -19,9 +19,9 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from bdbvhubrenewal.evaluation import labels
 from flowlib.dashboard import logs, svg, training
 from flowlib.dashboard.runs import Run
+from nowcasteval import labels
 
 LORA = re.compile(r"\.lora_([AB])\.weight$")
 """A LoRA matrix, by side."""

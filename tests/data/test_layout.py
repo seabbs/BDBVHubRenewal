@@ -119,7 +119,7 @@ def test_model_code_imports_no_hub_zone_module() -> None:
         "bdbvhubrenewal.forecasters.foundation",
         "bdbvhubrenewal.forecasters.zones",
         "bdbvhubrenewal.forecasters.renewal",
-        "bdbvhubrenewal.evaluation.nowcast",
+        "nowcasteval.nowcast",
     ):
         assert HUB_ZONES not in _imported(module), module
 

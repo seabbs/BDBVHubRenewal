@@ -26,10 +26,10 @@ from bdbvhubrenewal.data import (
     load_delays,
     load_target,
 )
-from bdbvhubrenewal.evaluation import backtest as bt
-from bdbvhubrenewal.evaluation.nowcast import release_backtest
+from nowcasteval import backtest as bt
+from nowcasteval.nowcast import release_backtest
 from bdbvhubrenewal.forecasters import get_model
-from bdbvhubrenewal.reporting.plots import plot_location_grid
+from nowcasteval.plots import plot_location_grid
 
 # 1. Load the data.
 target, daily, delays = load_target(), load_daily(), load_delays()

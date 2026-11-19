@@ -67,7 +67,7 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     assert "teamA-weekly" in teams
     assert "CC0-1.0" in teams
     # The page names the comparison's configured draws per forecast.
-    from bdbvhubrenewal.evaluation.backtest import load_config
+    from nowcasteval.backtest import load_config
 
     n = load_config(ROOT / "config" / "backtest.toml").n_samples
     lead = (gen / "comparison-lead.md").read_text()
@@ -354,7 +354,7 @@ def test_scenario_scores_table(tmp_path: Path) -> None:
 
 
 def test_plot_scenarios() -> None:
-    from bdbvhubrenewal.reporting.plots import plot_scenarios
+    from nowcasteval.plots import plot_scenarios
 
     fig = plot_scenarios(
         _scenario_scores(), models=["randomwalk", "randomwalknowcast"]
@@ -622,7 +622,7 @@ def test_complete_target_text_names_models_with_no_complete_score() -> None:
 
 
 def test_backtest_and_nowcast_pages_name_the_backtest_draws() -> None:
-    from bdbvhubrenewal.evaluation.backtest import load_config
+    from nowcasteval.backtest import load_config
 
     cfg = load_config(ROOT / "config" / "backtest.toml")
     n, stored = cfg.score_samples, cfg.n_samples

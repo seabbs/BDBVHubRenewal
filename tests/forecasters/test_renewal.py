@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastModel,
@@ -21,6 +20,7 @@ from bdbvhubrenewal.forecasters import (
 )
 from bdbvhubrenewal.forecasters import renewal as rn
 from bdbvhubrenewal.submission.hub import model_abbr_for
+from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastutils.forecast import Forecast
 
 pytest.importorskip("pyrenew")
@@ -472,9 +472,9 @@ def test_chain_method_defaults_to_vectorized(
 def test_inputs_carry_the_release_pairs_of_earlier_files(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
     from bdbvhubrenewal.forecasters.renewal import vintage_inputs
     from bdbvhubrenewal.model import MAIN
+    from nowcasteval.backtest import BacktestConfig, make_tasks
 
     tasks = {
         t.vintage: t

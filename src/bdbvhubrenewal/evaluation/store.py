@@ -60,19 +60,19 @@ import pandas as pd
 
 from bdbvhubrenewal.data import load_daily, load_delays, load_target
 from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
-from bdbvhubrenewal.evaluation.backtest import (
+from bdbvhubrenewal.forecasters import (
+    ForecastModel,
+    ForecastTask,
+    get_model,
+    list_models,
+)
+from nowcasteval.backtest import (
     BacktestConfig,
     load_config,
     merge_by_model,
     real_vintages,
     run_forecasts,
     vintage_task,
-)
-from bdbvhubrenewal.forecasters import (
-    ForecastModel,
-    ForecastTask,
-    get_model,
-    list_models,
 )
 from nowcastutils.files import write_csv
 from nowcastutils.hierarchy import is_zone
@@ -115,7 +115,10 @@ FIT_FUNCTIONS: Final = {
         "fit",
         "fit_files",
     ),
-    "src/bdbvhubrenewal/evaluation/backtest.py": ("_fit_rows", "run_forecasts"),
+    "packages/nowcasteval/src/nowcasteval/backtest.py": (
+        "_fit_rows",
+        "run_forecasts",
+    ),
 }
 """The functions of the store and the backtest a stored fit runs.
 
@@ -125,10 +128,10 @@ it never refits.
 """
 
 KEY_SKIP: Final = (
-    "src/bdbvhubrenewal/evaluation/backtest.py",
+    "packages/nowcasteval/src/nowcasteval/backtest.py",
     "src/bdbvhubrenewal/evaluation/digest.py",
     "src/bdbvhubrenewal/evaluation/store.py",
-    "src/bdbvhubrenewal/reporting/plots.py",
+    "packages/nowcasteval/src/nowcasteval/plots.py",
     "src/bdbvhubrenewal/reporting/site.py",
 )
 """Loader, IO and report modules a model's code imports but a fit does not

@@ -18,8 +18,8 @@ from typing import Final
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from bdbvhubrenewal.evaluation.labels import model_label
 from matplotlib.figure import Figure
+from nowcasteval.labels import model_label
 
 from paperfigs.checkpoints import drop_checkpoints, drop_real_data
 from paperfigs.factors import factor_label

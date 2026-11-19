@@ -8,7 +8,6 @@ import pytest
 
 from bdbvhubrenewal.data import load_daily_zones
 from bdbvhubrenewal.data.zones import hub_zones
-from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.forecasters import get_model
 from bdbvhubrenewal.forecasters.zones import reconcile_zones
 from bdbvhubrenewal.reporting.hubtables import (
@@ -17,6 +16,7 @@ from bdbvhubrenewal.reporting.hubtables import (
     hub_tables,
     write_hub_tables,
 )
+from nowcasteval import backtest as bt
 from nowcastutils.base import NATIONAL
 from nowcastutils.hierarchy import is_zone, province_of
 from nowcastutils.snapshots import weekly_counts

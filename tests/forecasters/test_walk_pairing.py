@@ -10,9 +10,9 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.zones import hub_zones
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters.zones import zone_task
+from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastutils.snapshots import weekly_counts
 
 MODELS = ("randomwalk", "randomwalknowcast")

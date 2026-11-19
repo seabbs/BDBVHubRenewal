@@ -507,7 +507,7 @@ def score_forecasts(
     Score against the latest release, with `forecasts` from `run_forecasts`.
 
     >>> from bdbvhubrenewal.data import load_target, vintages
-    >>> from bdbvhubrenewal.evaluation.scoring import (
+    >>> from nowcasteval.scoring import (
     ...     score_forecasts, summarise_scores
     ... )
     >>> real = load_target().query("kind == 'real'")

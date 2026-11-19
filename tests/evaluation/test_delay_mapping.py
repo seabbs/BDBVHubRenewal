@@ -8,11 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.nowcast import (
-    delay_curves,
-    reported_samples,
-    week_shares,
-)
+from nowcasteval.nowcast import delay_curves, reported_samples, week_shares
 
 
 def _summary(location: str, shares: list[float]) -> pd.DataFrame:

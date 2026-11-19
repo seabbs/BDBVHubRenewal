@@ -28,7 +28,7 @@ The same nowcast with the reference week and the weeks after it.
 
     --8<-- "nowcast-tabs.md"
 
-The submission pull request embeds [`plot_nowcast`][bdbvhubrenewal.reporting.plots.plot_nowcast].
+The submission pull request embeds [`plot_nowcast`][nowcasteval.plots.plot_nowcast].
 
 --8<-- "zone-nowcast.md"
 

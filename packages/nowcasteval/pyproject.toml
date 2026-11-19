@@ -1,0 +1,24 @@
+[project]
+name = "nowcasteval"
+version = "0.1.0"
+description = "Evaluation of nowcasts and forecasts: proper scores by level, backtests over releases, trajectory pairing, model checks and score figures"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Sam Abbott", email = "sam.abbott@lshtm.ac.uk" }]
+requires-python = ">=3.13"
+# scoringrules is imported by `scoring` but is still a development
+# dependency of the workspace: declaring it here adds it to the runtime
+# export every fit key holds, so it is added with the next refit.
+dependencies = [
+  "matplotlib>=3.8,<4",
+  "numpy>=1.26,<3",
+  "pandas>=2.1,<4",
+  "nowcastutils",
+]
+
+[tool.uv.sources]
+nowcastutils = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.8,<0.14"]
+build-backend = "uv_build"
