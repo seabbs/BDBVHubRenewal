@@ -199,7 +199,8 @@ def test_team_forecasts_are_the_hub_s_quantiles_at_our_horizons(
 ) -> None:
     got = team_forecasts(submissions)
     assert set(got["model"]) == {"KIT", "Epiforecasts", "RKI"}
-    assert set(got["horizon"]) == {0, -7}
+    # Every one of the hub's 29 target days is kept.
+    assert set(got["horizon"]) == {0, -1, -3, -7}
     kit = got.loc[got["model"] == "KIT"]
     assert set(kit["location"]) == {"DE", "80+", "DE-BY"}
     assert (got.groupby(["model", "location", "horizon"]).size() == 7).all()
@@ -246,7 +247,8 @@ def test_unknown_teams_are_an_error(submissions: pd.DataFrame) -> None:
 def test_team_forecasts_replace_rki_errors_by_the_minus_one_day_nowcast(
     submissions: pd.DataFrame,
 ) -> None:
-    got = team_forecasts(submissions).set_index(["model", "quantile"])
+    got = team_forecasts(submissions)
+    got = got.loc[got["horizon"] == 0].set_index(["model", "quantile"])
     assert got.loc[("RKI", 0.5), "value"] == pytest.approx(90 * 4)
     assert got.loc[("RKI", 0.25), "value"] == pytest.approx(300)
 

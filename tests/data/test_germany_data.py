@@ -10,6 +10,7 @@ import pytest
 
 from bdbvhubrenewal.data.germany import (
     HORIZONS,
+    OFFSETS,
     hub_forecasts,
     hub_target,
     hub_triangle,
@@ -39,6 +40,11 @@ def triangle() -> pd.DataFrame:
 
 @pytest.fixture(scope="module")
 def tasks(triangle: pd.DataFrame):
+    return nowcast_tasks(triangle, NOWCAST, n_samples=20, seed=1, offsets=(0,))
+
+
+@pytest.fixture(scope="module")
+def every_day(triangle: pd.DataFrame):
     return nowcast_tasks(triangle, NOWCAST, n_samples=20, seed=1)
 
 
@@ -162,9 +168,48 @@ def test_dates_move_to_the_next_saturday(tasks) -> None:
         assert task.reference_date.weekday() == 5
         assert task.target_end_dates == tuple(
             (task.reference_date + dt.timedelta(days=h)).isoformat()
-            for h in sorted(HORIZONS)
+            for h in (-28, -21, -14, -7, 0)
         )
         assert task.daily_history["vintage"].max() == "2021-10-23"
+
+
+def test_the_hub_s_targets_are_every_day_0_to_28_back() -> None:
+    assert HORIZONS == tuple(range(0, -29, -1))
+    assert OFFSETS == tuple(range(7))
+
+
+def test_each_offset_ends_its_weeks_k_days_earlier_on_the_same_data(
+    every_day,
+) -> None:
+    # One states and one age groups task per offset.
+    assert len(every_day) == 2 * len(OFFSETS)
+    for k, task in enumerate(every_day[::2]):
+        ends = [dt.date.fromisoformat(e) for e in task.target_end_dates]
+        assert all(e.weekday() == 5 for e in ends)
+        # Dates move so the nowcast date less k is a Saturday; the data
+        # stop at the nowcast date, k days into the next week.
+        shift = task.reference_date - dt.date.fromisoformat(NOWCAST)
+        assert max(ends) == task.reference_date - dt.timedelta(days=k)
+        assert task.cutoff == task.reference_date.isoformat()
+        assert task.daily_history["vintage"].max() == task.cutoff
+        assert 0 <= shift.days <= 6
+        # Days back from the nowcast date: k, k + 7, ... up to 28.
+        back = sorted((task.reference_date - e).days for e in ends)
+        assert back == [k + 7 * j for j in range(5) if k + 7 * j <= 28]
+
+
+def test_every_target_day_is_forecast_once(every_day) -> None:
+    model = get_model("randomwalk")
+    out = pd.concat(
+        hub_forecasts(run_forecasts([model], [task]), task, NOWCAST)
+        for task in every_day
+    )
+    assert sorted(set(out["horizon"])) == sorted(HORIZONS)
+    assert (
+        pd.to_datetime(out["target_end_date"])
+        - pd.to_datetime(out["forecast_date"])
+    ).dt.days.equals(out["horizon"])
+    assert out.groupby(["location", "horizon"]).size().eq(20).all()
 
 
 def test_releases_are_the_counts_reported_by_each_report_date(
@@ -209,7 +254,7 @@ def test_models_forecast_the_tasks_and_map_back(tasks) -> None:
         hub_forecasts(run_forecasts([model], [task]), task, NOWCAST)
         for task in tasks
     )
-    assert set(out["horizon"]) == set(HORIZONS)
+    assert set(out["horizon"]) == {0, -7, -14, -21, -28}
     assert set(out["forecast_date"]) == {NOWCAST}
     assert (
         pd.to_datetime(out["target_end_date"])
