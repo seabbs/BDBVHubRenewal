@@ -208,7 +208,7 @@ dashboard:
         - {name: national, match: "^DE$"}
         - {name: states, match: "^DE-"}
         - {name: ages, match: "^(\\d\\d-\\d\\d|80\\+)$"}
-    # The held-out simulations (Sam 11:05). No scoring unit writes their
+    # The held-out simulations. No scoring unit writes their
     # nowcasts per checkpoint yet, so the selector lists them as empty
     # until one fills <SCORE_CACHE>/held_out.
     - key: held_out
