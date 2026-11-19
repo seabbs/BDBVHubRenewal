@@ -24,7 +24,7 @@ from bdbvhubrenewal.forecasters.chain import (
 )
 from bdbvhubrenewal.forecasters.obs import MAX_SIZE, PRIOR_SIZE
 from bdbvhubrenewal.forecasters.pooling import pool_matrix, source_index
-from nowcastutils.snapshots import snapshot_arrays, weekly_sums
+from nowcastutils.snapshots import SnapshotArrays, snapshot_arrays, weekly_sums
 
 PLACES = ("CD-HU", "CD-IT", "CD-NK", "CD-TO")
 
@@ -453,3 +453,22 @@ def test_earlier_releases_keep_the_delay_window(daily: pd.DataFrame) -> None:
     snap = snapshot_arrays(daily, "2026-10-09", provinces)
     assert fit_delay(snap, 1, Settings()) is None
     assert fit_delay(snap, 1, Settings(), longer=True) is not None
+
+
+def test_the_fallback_fits_through_the_given_delay(daily: pd.DataFrame) -> None:
+    # A delay function given to the chain also makes the longer-pair fit.
+    provinces = tuple(sorted(set(daily["location"]) - {"CD"}))
+    snap = snapshot_arrays(daily, "2026-10-09", provinces)
+    calls: list[bool] = []
+
+    def delay(
+        snap: SnapshotArrays,
+        o: int,
+        settings: Settings,
+        longer: bool = False,
+    ) -> chain.DelayFit | None:
+        calls.append(longer)
+        return fit_delay(snap, o, settings, longer=longer)
+
+    chain._latest_fit(snap, Settings(), delay)
+    assert calls == [False, True]
