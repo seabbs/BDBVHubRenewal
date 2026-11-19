@@ -61,6 +61,9 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
 <details>
 <summary>How the held-out data are protected</summary>
 
+- BDBV (Ebola) is entirely held out for the paper and SI.
+  During development some BDBV checkpoint scores were produced in error by the checkpoint-scoring workflow.
+  They were not used to choose models, settings or the training grid, and they are excluded from the paper analysis.
 - The held-out synthetic seeds and the first held-out German date are the `heldout` block of the config.
   A development run gets neither ([`paperpipe/config.py`](paperpipe/config.py)).
 - The German held-out benchmark rule runs only for the `paper` target.
