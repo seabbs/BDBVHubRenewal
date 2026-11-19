@@ -7,8 +7,6 @@ All are built on [PyRenew](https://github.com/CDCgov/PyRenew) and fit the hub's 
 ![Share of the last onset week reported by days since onset for each fitted renewal model, beside the random walk nowcast's.](../figures/renewal-delay-dark.svg#only-dark)
 
 - [Renewal models](../methods/model.md): the zone model, its single-patch province form, and the BVDOutbreakSize-informed model.
-- [Model building](../model-development/model-building.md): the ladder of models and their convergence checks.
-- [Development log](../model-development/log.md) and [score history](../model-development/score-history.md).
 - [Methods](methods.md): how the models work, from data to submission, with their limitations.
 
 Next: [Methods](methods.md).
