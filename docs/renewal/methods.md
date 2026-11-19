@@ -108,7 +108,9 @@ Each zone fit runs 2 chains of 500 warm-up and 1500 draws, keeping every other d
 `renewalsp` runs 2 chains of 500 warm-up and 750 draws per province.
 Each chain starts from its own draw from the prior.
 The walks are sampled non-centred and anchored at their mean over the fit, which removes a ridge between a walk's level and its first steps.
-In `renewalsp` the log Rt walk is the only Rt process, and the data pin its level closely, so we sample its weekly levels directly (centred) rather than its standardised steps (#330).
+In `renewalsp` the log Rt walk is the only Rt process.
+In a province with at least 250 cases by the cut-off, the data pin its level closely, so we sample its weekly levels directly (centred) rather than its standardised steps (#330).
+With fewer cases a centred walk funnels, so those provinces keep the non-centred walk.
 A fit runs on a 4-core CI runner in 1.4 to 3.1 hours at the origins 2026-10-17 to 2026-11-15 (#185).
 
 Each fit reports, for every parameter, the rank-normalised R-hat and the bulk and tail effective sample sizes[^vehtari].
@@ -136,7 +138,8 @@ The submission walks a chain of candidates, `renewalbvd`, `renewalsp`, `renewal`
   At the 2026-10-09 origin they could not forecast.
   Nor could `renewalsp` or the random walks, which need the same pair, so the submission chain has no fallback at such an origin (#365).
 - The province fits we replaced saturated the maximum tree depth in most draws, which made their convergence slow and fragile (#320).
-  The zone fits do not, but `renewalsp` still does (#330).
+  The zone fits do not.
+  Before #330, `renewalsp` did too in its largest province, which the centred walk fixed there.
 - In #185's backtest, scored against each later release, the zone fits beat the province fits at every level.
   On weeks complete at the newest release they were mixed at the province level.
   Both did worse than `randomwalknowcast` at the national level at the two latest origins.
