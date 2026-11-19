@@ -429,6 +429,18 @@ def test_score_runs_each_unit_for_a_checkpoint_and_the_reference(tmp_path):
     assert "land" not in jobs
 
 
+def test_units_wait_below_the_load_ceiling(tmp_path):
+    blocks = score_jobs(
+        tmp_path, {"score": {"labels": ["aaa"]}}, "MAX_LOAD=12\n", "zones"
+    )
+    units = [
+        b for b in blocks if re.match(r"rule score_(bdbv|zones|germany):", b)
+    ]
+    assert units
+    for block in units:
+        assert f"wait_for_room.sh 20 16 {tmp_path}/scores 12 " in block
+
+
 def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
     blocks = score_jobs(
         tmp_path, {"score": {"labels": ["aaa"]}}, target="zones"

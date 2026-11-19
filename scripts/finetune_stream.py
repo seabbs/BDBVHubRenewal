@@ -1313,8 +1313,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--univariate-share", type=float, default=ft.UNIVARIATE_SHARE
     )
-    # Real validation blocks (scripts/finetune_real_validation.py), scored
-    # at each checkpoint to choose among them; not trained on.
+    # Real validation blocks (`load_blocks`), scored at each checkpoint;
+    # not trained on. The workflow passes none: BDBV is held out.
     parser.add_argument("--real-validation", type=Path)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--device", default=os.environ.get("DEVICE", "auto"))
