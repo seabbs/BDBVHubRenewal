@@ -55,8 +55,6 @@ RULE_GROUPS = {
     "real_validation": "train",
     "verify_checkpoint": "publish",
     "publish_checkpoint": "publish",
-    "score_bdbv": "score",
-    "score_zones": "score",
     "score_germany": "score",
     "slots_check_shard": "score",
     "agg_sanity": "score",
@@ -65,7 +63,7 @@ RULE_GROUPS = {
 }
 """Each placed rule's group; any other rule is in `any`."""
 
-GPU_RULES = frozenset({"train_segment", "score_bdbv", "score_germany"})
+GPU_RULES = frozenset({"train_segment", "score_germany"})
 """The rules taking the `gpu` resource. Placed on a worker by their
 group, each also takes that worker's own `gpu_<worker>`, so the pooled
 GPUs are not shared across workers."""

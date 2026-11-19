@@ -63,7 +63,7 @@ Every target runs with one profile, `workflow/profiles/default`, and this machin
 
 Only `single` and `ssh` ship. Rules declare only their needs (`threads`, `mem_mb`, `gpu`), placement lives only in the local config, and any other `COMPUTE=<name>` runs with `workflow/profiles/<name>` and nothing else from `flowlib.compute`, so a cluster or cloud profile needs no code:
 
-- a cluster with a shared filesystem: add the executor plugin to the `paper` group (for SLURM, `snakemake-executor-plugin-slurm`) and a `workflow/profiles/<name>/config.yaml` with `executor: slurm`, `jobs`, the settings of `workflow/profiles/default` (`rerun-triggers: [mtime]`, `default-resources`, `set-threads`), the account and partition in `default-resources` (`slurm_account`, `slurm_partition`, `runtime`), and in `set-resources` where groups go (for example the GPU partition for `train_segment`, `score_bdbv` and `score_germany`; the rules' `gpu: 1` is the plugin's GPU request). No files move: every job sees ROOT;
+- a cluster with a shared filesystem: add the executor plugin to the `paper` group (for SLURM, `snakemake-executor-plugin-slurm`) and a `workflow/profiles/<name>/config.yaml` with `executor: slurm`, `jobs`, the settings of `workflow/profiles/default` (`rerun-triggers: [mtime]`, `default-resources`, `set-threads`), the account and partition in `default-resources` (`slurm_account`, `slurm_partition`, `runtime`), and in `set-resources` where groups go (for example the GPU partition for `train_segment` and `score_germany`; the rules' `gpu: 1` is the plugin's GPU request). No files move: every job sees ROOT;
 - a cloud batch service: add an executor plugin (`snakemake-executor-plugin-googlebatch` or `-kubernetes`) and a storage plugin (`snakemake-storage-plugin-gcs` or `-s3`), and in the profile `executor`, `default-storage-provider`, `default-storage-prefix` (the bucket), `shared-fs-usage: none` and the executor's project, region and machine settings. Files then move through the bucket, not rsync, and ROOT must be a path the storage prefix maps (see the plugin's docs).
 
 Neither is tested here.
@@ -118,11 +118,10 @@ Outputs are in `<RUN>/train/n<N>/`.
 ## 4. Score (`rules/score.smk`, `rules/followups.smk`)
 
 - `release_list`: the repository's releases, the only rule that reads the network; `task score` and each tick rerun it in a run of its own before scoring, as Snakemake 9 ends a run after a forced checkpoint without the jobs it unlocks. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
-- `bdbv_data`: the hub's data (`bdbvhubrenewal data`), or `task data`. Newer data reruns the BDBV units, which add only the new origins.
-- `score_bdbv`, `score_zones`, `score_germany`, `score_release`: the units of `bdbvhubrenewal.evaluation.checkpoint` for each checkpoint and the references, newest checkpoint first. BDBV units run before German ones. Each caches one file per origin or date and resumes from it.
-  Units run torch on the machine's device with `SCORE_THREADS` threads and the `gpu` resource. `score_zones` forecasts with the health zones in Chronos-2's block, as submitted, on the CPU with `score.zones_mem_mb`.
-- `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables.
-- `zones`: target, not part of `score`. It runs `score_zones` for every label, then writes the tables again with their zone rows. `score_table` takes zone rows only from finished zone units, so BDBV and German rows never wait for zones.
+- `score_germany`, `score_release`: the units of `bdbvhubrenewal.evaluation.checkpoint` for each checkpoint and the references, newest checkpoint first. Each caches one file per date and resumes from it.
+  Units run torch on the machine's device with `SCORE_THREADS` threads and the `gpu` resource.
+  BDBV is held out for the paper, so no BDBV unit runs.
+- `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables (BDBV rows already there stay).
 - `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
 
 After each slots checkpoint's scores:
