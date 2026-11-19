@@ -47,6 +47,8 @@ def git_commit():
 # From simulate.smk.
 
 SIM = config["simulate"]
+# The sim QC's thresholds as scripts/sim_qc.py's options (simulate.qc).
+SIM_QC_ARGS = " ".join(f"--{k.replace('_', '-')} {v}" for k, v in SIM["qc"].items())
 REMOTE = LOCAL["REMOTE"]
 REMOTE_ROUNDS = f"{LOCAL['REMOTE_ROOT'] or LOCAL['ROOT']}/rounds"
 

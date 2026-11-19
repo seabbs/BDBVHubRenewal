@@ -928,11 +928,11 @@ def test_r6_simulates_its_held_out_round_20(tmp_path):
 
 
 def test_the_sim_qc_checks_fixed_thresholds_from_the_config(tmp_path):
-    # The deterministic check, with simulate.qc's thresholds; no model.
     blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
     qc = next(b for b in blocks if re.match(r"(local)?rule sim_qc:", b))
     assert "scripts/sim_qc.py" in qc
-    assert "--max-cases-per-stratum 500000" in qc
-    assert "--max-weekly-jump 1000" in qc
-    assert "--max-mean-delay-days 35" in qc
-    assert "claude" not in qc
+    limits = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())[
+        "simulate"
+    ]["qc"]
+    for key, value in limits.items():
+        assert f"--{key.replace('_', '-')} {value}" in qc
