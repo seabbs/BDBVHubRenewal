@@ -32,6 +32,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import pickle
 import tomllib
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -56,7 +57,7 @@ from bdbvhubrenewal.data.germany import (
 from bdbvhubrenewal.evaluation.marginals import forecast_quantiles
 from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 from bdbvhubrenewal.evaluation.scoring import relative_skill, score_quantiles
-from bdbvhubrenewal.forecasters import get_model, list_models
+from bdbvhubrenewal.forecasters import ForecastTask, get_model, list_models
 from bdbvhubrenewal.forecasters.foundation import FoundationModel, prefetch
 
 log = logging.getLogger(__name__)
@@ -368,12 +369,35 @@ def asof_sums(
     return sums.loc[keep, cols].reset_index(drop=True)
 
 
+def _tasks(
+    triangle: pd.DataFrame,
+    date: str,
+    n_samples: int,
+    seed: int,
+    root: Path | None,
+) -> list[ForecastTask]:
+    """Return a date's tasks, from the store `root` if it holds them."""
+    if root is None:
+        return nowcast_tasks(triangle, date, n_samples, seed)
+    path = Path(root) / f"{date}.pkl"
+    if path.exists():
+        with path.open("rb") as f:
+            return list(pickle.load(f))
+    tasks = nowcast_tasks(triangle, date, n_samples, seed)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_bytes(pickle.dumps(tasks, protocol=pickle.HIGHEST_PROTOCOL))
+    tmp.rename(path)
+    return tasks
+
+
 def germany_forecasts(
     models: Sequence[str],
     triangle: pd.DataFrame,
     dates: Sequence[str],
     n_samples: int,
     seed: int,
+    tasks_dir: Path | None = None,
 ) -> pd.DataFrame:
     """Nowcast each date with each model, as quantiles at the hub's levels.
 
@@ -389,6 +413,11 @@ def germany_forecasts(
     n_samples, seed : int
         Samples per forecast where the quantiles come from samples, and
         their seed, the same for every model.
+    tasks_dir : pathlib.Path, optional
+        A store of each date's tasks (`<date>.pkl`): read where it holds
+        one, else built and written to it. The tasks are the same for
+        every checkpoint, so they are built once (`checkpoint.german_tasks_dir`
+        keys the store on what they are built from).
 
     Returns
     -------
@@ -398,7 +427,7 @@ def germany_forecasts(
         `quantile` and `value`, at `QUANTILE_LEVELS`
         (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
     """
-    tasks = {d: nowcast_tasks(triangle, d, n_samples, seed) for d in dates}
+    tasks = {d: _tasks(triangle, d, n_samples, seed, tasks_dir) for d in dates}
     every = [t for ts in tasks.values() for t in ts]
     # Chronos-2 is predicted for every date's tasks in a few batched passes.
     built = [

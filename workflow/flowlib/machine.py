@@ -9,6 +9,7 @@ Nothing about a machine is committed.
 
     python3 workflow/flowlib/machine.py args     # Snakemake options
     python3 workflow/flowlib/machine.py device   # cuda, mps or cpu
+    python3 workflow/flowlib/machine.py budget   # cores, mem_mb, gpu (JSON)
 """
 
 from __future__ import annotations
@@ -85,7 +86,9 @@ def torch_env(
     none of those settings: `XLA_FLAGS` makes XLA's Eigen pool
     single-threaded, kept beside any flags already set (as
     `bdbvhubrenewal.devices` keeps them). `CHRONOS_BATCH` in the local
-    config, if set, is the series in one Chronos-2 forward pass.
+    config, if set, is the series in one Chronos-2 forward pass, and
+    `SCORE_DATES` the German dates a scoring unit forecasts together, and
+    `PRECISION` the precision Chronos-2 forecasts in, `auto` by default.
     """
     env = {"DEVICE": device or _device(cfg, path)}
     env |= dict.fromkeys(THREAD_VARS, str(threads))
@@ -93,8 +96,10 @@ def torch_env(
     if EIGEN not in flags:
         flags.append(EIGEN)
     env["XLA_FLAGS"] = " ".join(flags)
-    if cfg.get("CHRONOS_BATCH"):
-        env["CHRONOS_BATCH"] = str(cfg["CHRONOS_BATCH"])
+    for key in ("CHRONOS_BATCH", "SCORE_DATES"):
+        if cfg.get(key):
+            env[key] = str(cfg[key])
+    env["PRECISION"] = str(cfg.get("PRECISION") or "auto")
     return env
 
 
@@ -166,5 +171,9 @@ if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "args"
     if what == "device":
         print(device(cfg))
+    elif what == "budget":
+        import json
+
+        print(json.dumps({**budget(cfg), "gpu": max(1, gpus())}))
     else:
         print(" ".join(args(cfg)))

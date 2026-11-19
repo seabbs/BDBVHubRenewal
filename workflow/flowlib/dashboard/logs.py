@@ -21,10 +21,12 @@ from typing import Any
 STEP = re.compile(
     r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[train\] step (\d+): "
     r"loss ([\d.eE+-]+), held-out \([^)]*\) ([\d.eE+-]+)"
+    r"(?: \(nowcast ([\d.eE+-]+), forecast ([\d.eE+-]+)\))?"
     r"(?:, by source ((?:[\w+]+ [\d.eE+-]+(?:, |$))+))?"
 )
-"""A logged step of the trainer: time, step, loss, held-out loss, and the
-held-out loss by source (any source names) every few hundred steps."""
+"""A logged step of the trainer: time, step, loss, held-out loss, its
+nowcast and forecast parts if logged, and the held-out loss by source
+(any source names) every few hundred steps."""
 
 SOURCE = re.compile(r"([\w+]+) ([\d.eE+-]+)")
 """One source and its loss in a step's `by source` list."""
@@ -67,7 +69,12 @@ class Log:
                 "step": int(g[1]),
                 "loss": _float(g[2]),
                 "held": _float(g[3]),
-                "src": {k: float(v) for k, v in SOURCE.findall(g[4] or "")},
+                "parts": (
+                    {"nowcast": float(g[4]), "forecast": float(g[5])}
+                    if g[4] is not None
+                    else {}
+                ),
+                "src": {k: float(v) for k, v in SOURCE.findall(g[6] or "")},
             }
 
     def rows(self) -> list[dict[str, Any]]:

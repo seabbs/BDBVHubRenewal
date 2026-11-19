@@ -145,3 +145,19 @@ def test_exclusions_are_gathered_into_one_file(tmp_path):
     out = tmp_path / "excluded.csv"
     segments.gather_exclusions([a, b, tmp_path / "none.csv"], out)
     assert segments.excluded(out) == {"30101-0002"}
+
+
+def test_batches_run_in_seed_order():
+    # Training reads the batches in seed order, so a run over several
+    # rounds finishes the first round's batches before the next's.
+    got = [
+        segments.batch_priority(s, 15, 30000)
+        for s in (32100, 32101, 32139, 32200, 33039)
+    ]
+    assert got == sorted(got, reverse=True)
+    assert len(set(got)) == len(got)
+
+
+def test_a_batch_s_priority_stays_between_the_trainer_and_scoring():
+    for seed in (30000, 32100, 39999, 45000):
+        assert 15 <= segments.batch_priority(seed, 15, 30000) < 16

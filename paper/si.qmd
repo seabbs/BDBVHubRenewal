@@ -226,23 +226,12 @@ The layouts of the training blocks and their shares.
 - Non-summing parents apply only where a block holds both the country and its places.
 - @tbl-block-combinations gives the realised share of each combination.
 
+Each training block is built as follows.
+
 - A training block cuts one draw's releases at one cut-off and lays them out as the ragged layout does, with the target past the last complete step the outbreak's final counts.
 - The longest lag $D$ is drawn from 2 to 7 weeks, or 14 to 49 days, so the model is not tied to one $D$.
 - Four or more flat places are grouped into regions, with region totals.
 - The blocks with more than one series have as targets all levels, leaves and the national total, or leaves only, in equal shares.
-- Blocks are packed into batches by size within a memory budget, which also sets the largest block.
-
-::: {.callout-warning title="To reconcile with the tables above (moved from the site, training design r6)"}
-A block holds the totals over places and over ages as well as the strata, so every aggregate is the exact sum of the series below it.
-A block is daily (25%), weekly (25%) or 3-day (15%).
-Or it is daily with a weekly row per place (12.5%), a 7-day rolling-sum row per place (12.5%), a 3-day row per place (5%) or a 3-day rolling-sum row per place (5%).
-A weekly or 3-day row has a value on each period's last day only; a rolling-sum row has one on every day, as the German target's 7-day sums do.
-A block's releases run up to its cut-off at a cadence that follows its steps.
-Daily blocks have daily releases (60%), weekly releases as the BDBV hub's (20%), daily releases with one in five missed (10%), or weekday releases only (10%).
-3-day and weekly blocks have releases every 3 or 7 days (80%), or the same with one in five missed (20%).
-Up to `r5` every block had weekly releases, so a daily block's lag series had a value in one cell in seven.
-A round of 40 batches of 21 simulations is one block.
-:::
 
 ::: {#tbl-block-combinations}
 {{< include build/tables/si/block-combinations.md >}}
@@ -312,10 +301,47 @@ The simulation grid, epidemic and places: each crossed factor's levels and the c
 The simulation grid, reporting and observation: as @tbl-grid-epidemic.
 :::
 
+We draw every continuous setting from a named sampling distribution of the simulation settings, which states what we believe likely outbreaks look like (@tbl-grid-distributions).
+We checked these distributions by comparing simulated summaries with real data (@tbl-grid-comparison).
+
+- We drew 1,000 settings across the grid's cells and computed, with no model fitted, each one's fastest daily growth, peak and total count per stratum, delay mean and 95th centile, share reported by days 7, 14 and 28, relative noise at large counts and weekday effect (`scripts/sim_settings_check.R`).
+- We computed the same summaries for every series of the German hospitalisation data [@Wolffram2023] and of the BDBV hub's data (`scripts/sim_settings_real.py`).
+- We narrowed a distribution only where its 99th centile went beyond every real series.
+- This truncated the delay median, mean and log sd at 10 days, 21 days and 2, which kept the 95th centile of the delay at most 54 days against 50 for the longest real series.
+- We widened daily growth to 0.2, as BDBV's series grew by up to 0.21 a day (doubling in 3.4 days) early in the outbreak.
+- We set outbreak sizes so the German national series (a peak of 1,748 a day) and BDBV's provinces (a few cases) both fall inside the central 90% of simulated peaks.
+- Simulated noise at large counts is below Germany's, whose measure also holds trend and holiday effects.
+- Half of the simulations have no reporting shock, and a quarter each have backlogs or outages.
+- Published doubling times for Ebola in West Africa, 16 to 30 days [@placeholder], fall inside the simulated range.
+
+::: {#tbl-grid-distributions}
+{{< include build/tables/si/grid-distributions.md >}}
+
+Sampling distributions of the continuous simulation settings, read from the simulator's code, with the reason for each.
+:::
+
+::: {#tbl-grid-comparison}
+| summary | simulated 1% / 5% / 50% / 95% / 99% | Germany | BDBV |
+| --- | --- | --- | --- |
+| fastest daily growth rate | -0.099 / -0.036 / 0.037 / 0.1 / 0.15 | 0.031 to 0.065 | 0.034 to 0.21 |
+| doubling time at it (days) | 4.7 / 6.6 / 17 / 87 / 286 | 11 to 22 | 3.4 to 20 |
+| peak daily count per series | 0.41 / 1.3 / 53 / 2,217 / 7,792 | 19 to 1,748 | 0 to 84 |
+| total count per series | 30 / 87 / 3,365 / 86,253 / 206,523 | 2,470 to 393,767 | 0 to 11,165 |
+| mean delay (days) | 1.1 / 1.7 / 6 / 15 / 17 | 4.2 to 11 | 6.7 to 15 |
+| 95th centile of the delay (days) | 4 / 6 / 20 / 48 / 54 | 17 to 50 | 18 to 27 |
+| share reported by day 7 | 0.35 / 0.41 / 0.72 / 0.98 / 1 | 0.64 to 0.85 | 0 to 0.73 |
+| share reported by day 14 | 0.55 / 0.63 / 0.9 / 1 / 1 | 0.78 to 0.94 | 0.67 to 0.92 |
+| share reported by day 28 | 0.8 / 0.84 / 0.99 / 1 / 1 | 0.89 to 0.98 | 0.67 to 1 |
+| relative noise at large counts (500 or more a day) | 0.0098 / 0.012 / 0.032 / 0.07 / 0.095 | 0.099 to 0.22 | - |
+| weekday effect, max / min | 1 / 1 / 1 / 3.6 / 5.6 | 2.3 to 10 | - |
+| backlog size (x mean delay) | 2 / 2.4 / 3.7 / 5.5 / 6.3 | - | - |
+
+Simulated summaries (centiles over 1,000 drawn settings) against the range over the series of each real data set.
+:::
+
 ![Six contrasting simulations of the grid, from pilot simulations: the final daily counts (black) and the counts known at releases 40%, 65% and 90% of the way through each outbreak (dashed), summed over strata.](build/figures/si/sim-examples.png){#fig-sim-examples}
 
 Outbreaks run 16 to 52 weeks.
-Outbreak sizes have a median of about 3,700 cases, with 90% between 70 and 84,000.
 
 The grid has two limitations.
 Simulated strata are less sparse than BDBV's provinces: the share of stratum-weeks with no cases reaches {{< meta evidence.realism.zero_share.sim_q95 >}} at the 95% point of the simulations, against {{< meta evidence.realism.zero_share.BDBV >}} for BDBV.

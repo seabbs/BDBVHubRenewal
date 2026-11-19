@@ -6,6 +6,22 @@
 # Simulation rounds to make or read, as round numbers.
 rounds: []
 
+# Each grid's rounds, held-out round and training sources: a run takes
+# its grid's unless `finetune` sets them. A round's number sets its seeds
+# and its release `sims-r<N>`, so no two grids share a round
+# (flowlib.grids): r6 has new rounds, round 20 held out and 21 to 30
+# trained on, and never overwrites r5's.
+grid_rounds:
+  r5:
+    rounds: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    held_round: 9
+    sources: [daily, weekly, 3day, daily+weekly, daily+3day]
+  r6:
+    rounds: [21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+    held_round: 20
+    sources: [daily, weekly, 3day, daily+weekly, daily+rolling7, daily+3day,
+      daily+rolling3]
+
 # Whether `finetune` trains only the next segment, not every one in
 # reach. A scheduled tick sets it (flowlib.schedule), so each run ends
 # after one segment and the next run plans afresh.
@@ -35,10 +51,12 @@ finetune:
   # from `seed_file` (one seed a line, in order). The held-out round is
   # one whole grid block, and the ten rounds after it the ten blocks
   # trained on. The trainer monitors the first `holdout` simulations of
-  # the held-out round; the scoring workflow scores it whole.
-  rounds: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+  # the held-out round; the scoring workflow scores it whole. Unset
+  # (null), the rounds, held-out round and sources are the grid's
+  # (grid_rounds).
+  rounds: null
   seed_file: null
-  held_round: 9
+  held_round: null
   holdout: 90
   # Where the batches come from: `local` (this machine's rounds),
   # `remote` (the rounds host's, REMOTE in config/local.env) or `release`
@@ -47,17 +65,13 @@ finetune:
   # Chronos-2's recipe: one draw of each simulation cut at `cuts`
   # cut-offs, the learning rate falling linearly to zero over the
   # `outbreaks` simulations, and the series bias at its own rate `bias_lr`.
-  # r6: grid r5's simulations, cut with release cadences that follow
-  # each layout (CADENCES in scripts/finetune_chronos.py) and with
-  # rolling-sum layouts beside the period-total ones (SOURCE_SHARES).
-  grid: r6
+  grid: r5
   draws: 1
   cuts: 32
   subset_seed: 1
   learning_rate: 1.0e-5
   bias_lr: 1.0e-3
-  sources:
-    [daily, weekly, 3day, daily+weekly, daily+rolling7, daily+3day, daily+rolling3]
+  sources: null
   univariate_share: 0.2
   chunk: 250
   # Steps between the trainer's held-out evaluations: the monitor on the
@@ -70,7 +84,7 @@ finetune:
   # scripts/finetune_evaluate.py and carries on). Training is the same.
   eval: local
   series_bias: true
-  note: continuous r6
+  note: continuous r5
   # The real validation blocks (scripts/finetune_real_validation.py) and
   # the delay table they are cut from; null leaves them out.
   real_validation: output/finetune/real-validation.pkl
@@ -143,20 +157,18 @@ dashboard:
   # [,role=..]). Role: baseline (scores are relative to it), start (each
   # run's curve starts from it, dashed) or other (dotted, the default).
   references:
+    # Each takes its paper model's display name and colour
+    # (bdbvhubrenewal.evaluation.labels: MODEL_LABELS, MODEL_STYLES).
     - key: zero
-      label: zero-shot ragged
-      colour: "#16a34a"
+      paper_model: fm_chronos_daily_ragged
       model: "^(?!randomwalknowcast$)(?!.*_complete$)"
       checkpoint: zero-shot
       role: start
     - key: complete
-      label: complete-only
-      colour: "#9333ea"
+      paper_model: fm_chronos_daily_complete
       model: "_complete$"
       checkpoint: zero-shot
     - key: rw
-      label: randomwalknowcast
-      # Its colour in the paper figures (paperfigs.style).
       paper_model: randomwalknowcast
       model: "^randomwalknowcast$"
       role: baseline

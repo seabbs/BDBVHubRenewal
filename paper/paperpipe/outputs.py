@@ -18,6 +18,7 @@ from typing import Final
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from bdbvhubrenewal.evaluation.labels import model_label
 from matplotlib.figure import Figure
 
 from paperfigs.checkpoints import drop_checkpoints, drop_real_data
@@ -226,6 +227,17 @@ def _figures(
         .to_dict()
     )
 
+    def over_time(location: str) -> dict:
+        # Panel A of the main results: the shown origins overlaid at one
+        # place, each nowcast over its horizons against the truth.
+        return {
+            "baseline": baseline,
+            "nowcast": True,
+            "location": location,
+            "origins": origins,
+            "truth": truth,
+        }
+
     def by_origin(location: str, stratum: str = "all") -> Figure:
         rows = [(o, location, stratum, f"origin {o:%Y-%m-%d}") for o in origins]
         return nowcast_panels(forecasts, observations, truth, models, rows, rel)
@@ -250,7 +262,7 @@ def _figures(
                 main,
                 factors=factors,
                 models=models,
-                **shown,
+                **over_time(panels_[0][0]),
             ),
             "si-nowcasts": by_place(panels_),
             "si-factors": si_scores_by_factor(main, factors, baseline),
@@ -286,7 +298,7 @@ def _figures(
                 scores,
                 split=split,
                 models=models,
-                **shown,
+                **over_time(national),
             ),
             "si-nowcasts": by_place(other_places(forecasts, national)),
             "si-places": si_place_dots(scores, models, baseline),
@@ -645,7 +657,20 @@ def score_tables(
 
 
 def to_markdown(table: pd.DataFrame, digits: int = 3) -> str:
-    """Return a table as a Markdown pipe table, numbers to `digits`."""
+    """Return a table as a Markdown pipe table, numbers to `digits`.
+
+    Models are shown by their display names (`evaluation.labels`).
+    """
+    # Model ids are shown by their display names; missing ones stay blank.
+    table = table.assign(
+        **{
+            c: table[c].map(
+                lambda m: model_label(m) if isinstance(m, str) else m
+            )
+            for c in table.columns
+            if c in ("model", "Model")
+        }
+    )
 
     def cell(v: object) -> str:
         if isinstance(v, float):

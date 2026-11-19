@@ -110,6 +110,11 @@ def test_the_evaluator_scores_a_snapshot_as_the_trainer_would(tmp_path):
         model, val, 100
     )
     assert np.isfinite(got["eval_loss"])
+    # Each total comes with its nowcast and forecast parts.
+    for name in ("eval_loss", "held_out_loss", "real_validation_loss"):
+        assert got[f"{name}_nowcast"] + got[f"{name}_forecast"] == (
+            pytest.approx(got[name], rel=1e-6)
+        )
 
 
 def test_held_out_blocks_round_trip_with_their_count(tmp_path):

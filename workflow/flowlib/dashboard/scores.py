@@ -196,7 +196,8 @@ def wis_bars(
     dict
         (study, level) -> bars, each with `series`, `label`, `colour`,
         `n`, `cells` (forecast cells scored), `wis` and `parts`
-        (component -> value).
+        (component -> value), and `log` (its `wis` and `parts` on the
+        log scale) where the row has `log_wis` and `log_<part>`.
     """
     which = Classifier(run_list, references, excluded)
     order = [r.key for r in run_list] + [r.key for r in references]
@@ -219,6 +220,17 @@ def wis_bars(
         total = num(r.get("wis"))
         if total is None or any(v is None for v in parts.values()):
             continue
+        log_parts = {p: num(r.get(f"log_{p}")) for p in WIS_PARTS}
+        log_total = num(r.get("log_wis"))
+        log = (
+            {
+                "wis": round(log_total, 4),
+                "parts": {p: round(v or 0.0, 4) for p, v in log_parts.items()},
+            }
+            if log_total is not None
+            and all(v is not None for v in log_parts.values())
+            else None
+        )
         n = int(num(r.get("outbreaks")) or 0) if series in runs_ else 0
         label, colour = named[series]
         out.setdefault((r.get("study", ""), r.get("level", "")), {})[
@@ -232,6 +244,7 @@ def wis_bars(
             "cells": int(num(r.get("n")) or 0),
             "wis": round(total, 4),
             "parts": {p: round(v or 0.0, 4) for p, v in parts.items()},
+            **({"log": log} if log else {}),
         }
     return {
         key: [
