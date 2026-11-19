@@ -44,7 +44,7 @@ simulate:
 finetune:
   # The continuous run, one training
   # segment per prefix (`--until`), in <RUN>/train/n<N>/. It trains on
-  # 8,400 outbreaks, ten of grid r5's balanced blocks of 840.
+  # 8,400 outbreaks, ten of grid r6's balanced blocks of 840.
   prefixes: [250, 500, 750, 1000, 2000, 4000, 8400]
   outbreaks: 8400
   # Training seeds: the rounds' batches in seed order, or a fixed list
@@ -65,7 +65,7 @@ finetune:
   # Chronos-2's recipe: one draw of each simulation cut at `cuts`
   # cut-offs, the learning rate falling linearly to zero over the
   # `outbreaks` simulations, and the series bias at its own rate `bias_lr`.
-  grid: r5
+  grid: r6
   draws: 1
   cuts: 32
   subset_seed: 1
@@ -84,6 +84,8 @@ finetune:
   # rule runs it yet, so offloaded checkpoints have no held-out losses).
   eval: local
   series_bias: true
+  # The live r6 run's checkpoints carry this note, and the note is part of
+  # the settings hash, so it stays as written to reproduce them.
   note: continuous r5
   # Real validation blocks the trainer scores each checkpoint on, or null.
   # Null: BDBV is held out for the paper, so no BDBV blocks are scored in

@@ -15,7 +15,7 @@ DESIGN = {
     "holdout": 90,
     "outbreaks": 8400,
     "prefixes": [250, 500, 750, 1000, 2000, 4000, 8400],
-    "grid": "r5",
+    "grid": "r6",
     "draws": 1,
     "cuts": 32,
     "learning_rate": 1e-5,
@@ -118,9 +118,10 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
 
     args = fs.build_parser().parse_args(_trainer_args(tmp_path))
     assert args.until == 250
-    assert args.grid == "r5"
-    # The held-out round 9, every batch: seeds 30900 to 30939.
-    assert args.held_out_seeds == [30900, 30939]
+    # Main's default is the live r6 run: held-out round 20, seeds 32000
+    # to 32039 (grid_rounds).
+    assert args.grid == "r6"
+    assert args.held_out_seeds == [32000, 32039]
     assert args.holdout == 90
     assert args.outbreaks == 8400
     assert args.prefixes == [250, 500, 750, 1000, 2000, 4000, 8400]
@@ -131,7 +132,7 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     assert args.learning_rate == 1e-5
     assert args.series_bias
     assert args.bias_lr == 1e-3
-    assert args.sources == CONFIG["grid_rounds"]["r5"]["sources"]
+    assert args.sources == CONFIG["grid_rounds"]["r6"]["sources"]
     assert args.univariate_share == 0.2
     assert args.chunk == 250
     # The held-out evaluations' cadence comes from the config.
