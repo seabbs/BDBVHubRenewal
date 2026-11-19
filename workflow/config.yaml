@@ -77,6 +77,10 @@ finetune:
   bias_lr: 1.0e-3
   sources: null
   univariate_share: 0.2
+  # Days after the cut-off a training block's horizon, and so the loss,
+  # runs to (null: the whole horizon, to four weeks ahead). Checkpoint
+  # scoring covers every horizon either way.
+  loss_horizon_days: null
   chunk: 250
   # Steps between the trainer's held-out evaluations: the monitor on the
   # first 100 held-out blocks, and by source (100 blocks a source) on a

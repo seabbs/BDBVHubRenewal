@@ -278,6 +278,11 @@ EVAL_EVERY = 100
 OUTPUT_PATCH = 16
 """Chronos-2's output patch length."""
 
+LOSS_HORIZON_DAYS: int | None = None
+"""Days after the cut-off that a training block's horizon, and so its
+loss, runs to; None for the whole horizon, to `AHEAD_WEEKS` past the
+cut-off's week."""
+
 SIM_DELAY_WEEKS = 8
 """The simulations' longest delay in weeks, after which a count is
 complete, unless an outbreak's settings give `max_delay` in days."""
@@ -288,17 +293,26 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _pad(block: dict, context: int) -> dict:
+def _pad(
+    block: dict,
+    context: int,
+    loss_days: int | None = None,
+    days_per_step: int = 1,
+) -> dict:
     """Pad a block to `context` steps and its horizon in whole patches.
 
     Chronos-2 predicts in patches of `OUTPUT_PATCH` steps, so a block's
     prediction length is its horizon, its nowcast and forecast steps,
     rounded up to whole patches; the steps past the horizon are missing.
-    Long context is cropped. The arrays are numpy, so blocks are cut
-    without torch; the trainer makes them tensors
+    With `loss_days`, the horizon stops at the nowcast steps and the
+    steps covering `loss_days` days after them, of `days_per_step` days
+    each. Long context is cropped. The arrays are numpy, so blocks are
+    cut without torch; the trainer makes them tensors
     (`finetune_stream.tensors`).
     """
     start, h = block["start"], block["horizon"]
+    if loss_days is not None:
+        h = min(h, block["nowcast"] + -(-loss_days // days_per_step))
     length = -(-h // OUTPUT_PATCH) * OUTPUT_PATCH
     x = block["context"]
     keep = min(start, context)
@@ -311,6 +325,7 @@ def _pad(block: dict, context: int) -> dict:
         "n_covariates": block["n_covariates"],
         "n_future_covariates": block["n_future_covariates"],
         "prediction_length": length,
+        "nowcast": block["nowcast"],
     }
 
 
@@ -530,7 +545,9 @@ def outbreak_blocks(
                 continue
             if block["start"] < 2:
                 continue
-            padded = _pad(block, CONTEXT)
+            padded = _pad(
+                block, CONTEXT, LOSS_HORIZON_DAYS, DAYS_PER_STEP[source]
+            )
             levels = target_levels(places)
             padded["levels"] = tuple(levels[i] for i in block["target_places"])
             padded["places"] = tuple(places)

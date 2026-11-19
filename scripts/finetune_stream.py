@@ -192,6 +192,16 @@ def bias_settings(bias: bool, lr: float = 0.0) -> dict:
     }
 
 
+def horizon_settings(loss_days: int | None) -> dict:
+    """Return the loss horizon's entries of a checkpoint's settings."""
+    length = f"each block's horizon in whole patches of {ft.OUTPUT_PATCH} steps"
+    if loss_days is not None:
+        length += (
+            f", the horizon stopping {loss_days} days after the cut-off's step"
+        )
+    return {"loss_horizon_days": loss_days, "prediction_length": length}
+
+
 def param_groups(model, lr: float, bias_lr: float = 0.0) -> list[dict]:
     """Return the optimiser's groups: the adapter at `lr`, the bias at its own.
 
@@ -505,12 +515,14 @@ def init_worker(
     draws: int | None = None,
     subset_seed: int = 0,
     grid: str = ft.DESIGN,
+    loss_days: int | None = None,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     global DRAWS_PER_PASS, SUBSET_SEED
     ft.use_design(grid)
     ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
     ft.UNIVARIATE_SHARE = univariate
+    ft.LOSS_HORIZON_DAYS = loss_days
     DRAWS_PER_PASS, SUBSET_SEED = draws, subset_seed
 
 
@@ -1317,6 +1329,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--univariate-share", type=float, default=ft.UNIVARIATE_SHARE
     )
+    # Days after the cut-off the training loss covers (and the held-out
+    # loss, cut the same way); none: the whole horizon.
+    parser.add_argument("--loss-horizon-days", type=int)
     # Real validation blocks (`load_blocks`), scored at each checkpoint;
     # not trained on. The workflow passes none: BDBV is held out.
     parser.add_argument("--real-validation", type=Path)
@@ -1421,6 +1436,7 @@ def main() -> None:
     ft.check_sources(ft.SOURCES)
     ft.check_package(Path(__file__).parents[1])
     ft.UNIVARIATE_SHARE = args.univariate_share
+    ft.LOSS_HORIZON_DAYS = args.loss_horizon_days
     global EXCLUDE_FILE, DRAWS_PER_PASS, SUBSET_SEED
     EXCLUDE_FILE = args.exclude
     DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
@@ -1493,6 +1509,7 @@ def main() -> None:
             DRAWS_PER_PASS,
             SUBSET_SEED,
             args.grid,
+            ft.LOSS_HORIZON_DAYS,
         ),
     )
     held_pairs, empty = cut_in_workers(
@@ -1598,9 +1615,7 @@ def main() -> None:
         ),
         "batch_size": args.batch_size,
         "context": ft.CONTEXT,
-        "prediction_length": (
-            f"each block's horizon in whole patches of {ft.OUTPUT_PATCH} steps"
-        ),
+        **horizon_settings(ft.LOSS_HORIZON_DAYS),
         "seed": args.seed,
         "note": args.note,
     }
