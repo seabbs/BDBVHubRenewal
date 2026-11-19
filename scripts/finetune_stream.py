@@ -298,8 +298,10 @@ def check_pairs(model, pairs: tuple[str, ...], source) -> None:
     ValueError
         If `source` holds bias pairs other than `model`'s.
     """
+    if not pairs:
+        return
     have = series_bias.model_pairs(model)
-    if have and pairs and tuple(pairs) != tuple(have):
+    if have and tuple(pairs) != tuple(have):
         raise ValueError(
             f"{source} holds series bias pairs {list(pairs)}, this run "
             f"{list(have)}: continue it with the code it was trained with"
