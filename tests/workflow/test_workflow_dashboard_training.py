@@ -2,6 +2,7 @@
 
 import json
 
+import pytest
 from flowlib.dashboard import logs, runs, training
 
 
@@ -167,3 +168,31 @@ def test_a_live_run_before_its_first_checkpoint_maps_through_its_chunks():
 def test_with_nothing_known_steps_map_at_the_given_rate():
     pairs = training.anchors([], {})
     assert training.sims_at(pairs, 600, spo=6.0) == 100
+
+
+def test_a_run_from_the_workflow_decays_over_its_simulations(tmp_path):
+    # Snakemake starts the trainer: no pid file, so no command line. The
+    # settings say the rate falls over the run's simulations (`default`).
+    n = tmp_path / "train" / "n250"
+    n.mkdir(parents=True)
+    (n / "settings.json").write_text(
+        json.dumps(
+            {
+                "learning_rate": 1e-5,
+                "lr_decay": "linear to zero over the outbreaks",
+            }
+        )
+    )
+    got = training.run_params(tmp_path, [], 3000, "", (250, 8400), sims=2100)
+    assert got["lr_outbreaks"] == 8400
+    assert got["current"]["adapter"] == pytest.approx(1e-5 * 0.75)
+
+
+def test_the_step_a_checkpoint_is_saved_at_comes_from_planned_chunks():
+    cks = [("n250", {"steps": 1500, "n_outbreaks": 250}, None)]
+    pairs = training.anchors(cks, {0: (250, 1500), 250: (500, 1400)})
+    # n500's chunk is planned: its step is known.
+    assert training.step_at(pairs, 500) == (2900, True)
+    # n750 is not: at the run's mean rate so far, 5.8 steps a simulation.
+    assert training.step_at(pairs, 750) == (4350, False)
+    assert training.step_at([(0, 0)], 250, spo=4.0) == (1000, False)

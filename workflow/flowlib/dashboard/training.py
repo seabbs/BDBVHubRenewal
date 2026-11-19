@@ -30,8 +30,14 @@ def run_params(
     step: int | None,
     args: str,
     default: Sequence[int],
+    sims: float | None = None,
 ) -> dict[str, Any]:
     """Return a run's schedule.
+
+    `default` are the run's checkpoint sizes, the last its simulations,
+    unless the trainer's command line `args` names them; `sims` is the
+    simulations trained by `step`, for the current rate of a run that
+    decays over simulations.
 
     Returns
     -------
@@ -57,9 +63,12 @@ def run_params(
     # Runs without a step count decay over `--outbreaks`, as their
     # settings record (`lr_decay`); older runs with settings but no
     # `lr_decay` kept a constant rate.
+    # A trainer the workflow starts leaves no command line: its run's
+    # simulations are the last of `default`.
     m = re.search(r"--outbreaks\s+(\d+)", args)
     decays = last.get("lr_decay") or not settings
-    lr_outbreaks = int(m.group(1)) if m and decays and not lr_steps else 0
+    total = int(m.group(1)) if m else max(default, default=0)
+    lr_outbreaks = total if decays and not lr_steps else 0
     groups: dict[str, float] = {}
     base_name = (
         "LoRA" if last.get("lora") or "--series-bias" in args else "adapter"
@@ -107,10 +116,12 @@ def run_params(
     for g, base in groups.items():
         if g in logged:
             current[g] = logged[g][-1][1]
+        elif lr_steps and step is not None:
+            current[g] = base * max(0.0, 1 - step / lr_steps)
+        elif lr_outbreaks and sims is not None:
+            current[g] = base * max(0.0, 1 - sims / lr_outbreaks)
         elif step is not None:
-            current[g] = (
-                base * max(0.0, 1 - step / lr_steps) if lr_steps else base
-            )
+            current[g] = base
     return {
         "lr_steps": lr_steps,
         "lr_outbreaks": lr_outbreaks,
@@ -159,6 +170,27 @@ def anchors(
         if before in known and last not in known:
             known[last] = known[before] + steps
     return sorted((st, n) for n, st in known.items())
+
+
+def step_at(
+    pairs: Sequence[tuple[int, int]], n: int, spo: float = 1.0
+) -> tuple[int, bool]:
+    """Return the step at which `n` simulations are trained, from `anchors`.
+
+    With whether it is planned: a checkpoint or a planned chunk ends at
+    `n`. Otherwise past the last pair at the run's mean rate so far, or
+    `spo` steps a simulation if no pair is known past step 0.
+    """
+    pairs = list(pairs) or [(0, 0)]
+    for s, k in pairs:
+        if k == n:
+            return s, True
+    for (s0, n0), (s1, n1) in pairwise(pairs):
+        if n0 < n < n1:
+            return round(s0 + (s1 - s0) * (n - n0) / (n1 - n0)), False
+    s1, n1 = pairs[-1]
+    rate = s1 / n1 if n1 else spo
+    return round(s1 + (n - n1) * rate), False
 
 
 def sims_at(
