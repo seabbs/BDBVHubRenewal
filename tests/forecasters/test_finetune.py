@@ -271,6 +271,19 @@ def test_a_parent_need_not_be_the_sum_of_its_children() -> None:
     assert lag.iloc[0] > pd.Timedelta(0)
 
 
+def test_unallocated_cases_thin_revisions_that_remove_reports() -> None:
+    from bdbvhubrenewal.forecasters.finetune import country_counts
+
+    counts = _two_places()
+    counts.loc[counts.index[::3], "count"] *= -1
+    rng = np.random.default_rng(1)
+    places, total = country_counts(counts, "unallocated", rng)
+    assert total.equals(counts)
+    removed = counts["count"] < 0
+    assert (places.loc[removed, "count"] <= 0).all()
+    assert (places["count"].abs() <= counts["count"].abs()).all()
+
+
 def test_blocks_carry_a_parent_that_does_not_sum() -> None:
     counts = _two_places()
     cutoffs = ["2026-09-23", "2026-09-30"]
