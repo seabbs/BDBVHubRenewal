@@ -1011,20 +1011,26 @@ def accumulate(indices: list[int], backward, zero, skip) -> float:
     """Return a batch's loss, accumulating its gradients by `backward`.
 
     The gradients are clear when it starts (`finite_step`). If memory runs
-    out, they are cleared (`zero`) and the batch is run again in halves,
-    and so on; a single block that still does not fit is left out
-    (`skip`). Every other block is used once.
+    out, they are cleared and the memory freed (`zero`) and the batch is
+    run again in halves, and so on. A single block that runs out is run
+    once more, in case the memory was held for a moment by another
+    process, and if it still does not fit it is left out (`skip`). Every
+    other block is used once, and the blocks used share the gradient as
+    a batch of them alone would. A batch with every block left out
+    returns nan.
     """
     parts = [indices]
+    retried: set = set()
     retry = False
     while True:
         if retry:
             zero()
         retry = True
         values, sizes = [], []
+        total = sum(len(p) for p in parts)
         try:
             for part in parts:
-                values.append(backward(part, len(part) / len(indices)))
+                values.append(backward(part, len(part) / total))
                 sizes.append(len(part))
             return (
                 float(np.average(values, weights=sizes)) if values else np.nan
@@ -1032,7 +1038,9 @@ def accumulate(indices: list[int], backward, zero, skip) -> float:
         except RuntimeError as error:
             if "out of memory" not in str(error):
                 raise
-            if len(part) == 1:
+            if len(part) == 1 and part[0] not in retried:
+                retried.add(part[0])
+            elif len(part) == 1:
                 skip(part[0])
                 parts = [p for p in parts if p is not part]
             else:
@@ -1803,7 +1811,15 @@ def main() -> None:
             optimiser.zero_grad()
             value = accumulate(list(indices), backward, zero, skip)
             if not finite_step(params, optimiser, value):
-                log(f"step {step + 1}: no update (loss {value})")
+                left_out = sum(s["step"] == step + 1 for s in skipped)
+                why = (
+                    "every block too large for memory"
+                    if left_out == len(indices)
+                    else f"loss {value}"
+                )
+                # The step still counts, so the schedule, the evaluation
+                # steps and consumed.txt keep their step numbers.
+                log(f"step {step + 1}: no update ({why})")
             # Batches differ in shape, so cached buffers pile up unless they
             # are freed every step.
             free_memory()
