@@ -48,8 +48,8 @@ The long table every study writes is in [`schema.md`](schema.md).
 <summary>The targets</summary>
 
 - `development`: the development synthetic seeds and the German first half.
-  It never reads the held-out data.
-- `paper`: the held-out synthetic seeds and both German halves, split at `heldout.germany_from`.
+  It never reads the held-out data and has no Ebola study.
+- `paper`: the held-out synthetic seeds, both German halves, split at `heldout.germany_from`, and the Ebola study, every round from `heldout.ebola_from` scored.
 - `render`: renders `main.qmd` and `si.qmd` from the run set by `render` in [`workflow/config.yaml`](workflow/config.yaml), `development` by default, running it first if it has not been published.
   After a paper run, use `task render -- --config render=paper`.
 
@@ -61,10 +61,19 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
 <details>
 <summary>How the held-out data are protected</summary>
 
+- BDBV (Ebola) is held out from the fine-tuned model's development.
+  We did not tune the training grid, recipe or settings on BDBV scores.
+  The Ebola case study is run once, after the models are finalised, as held-out evaluation, and development builds skip it.
+  It is not blind.
+  We knew the structure of the data and its challenges (weekly releases, reporting delays, downward revisions, sparse zones) from submitting other models to the hub, and this informed the simulation design.
+  Some BDBV checkpoint scores were produced in error during development.
+  They were not used to choose models or settings and are excluded from the analysis.
 - The held-out synthetic seeds and the first held-out German date are the `heldout` block of the config.
   A development run gets neither ([`paperpipe/config.py`](paperpipe/config.py)).
 - The German held-out benchmark rule runs only for the `paper` target.
-- The `table` rule fails if a development forecast table holds a held-out seed or German date.
+- The `table` rule fails if a development forecast table holds a held-out seed, a German date or any Ebola row.
+- The paper hides the Ebola results when the run has none, which needs Quarto 1.4 or later (`when-meta`).
+- The evidence figures and numbers read no BDBV scores.
 - Development German data stop at the split, with releases up to D days after it for the truth of the last dates.
 - CI runs the development target.
   The `paper` target runs only when the Pages workflow is dispatched with `paper_target: paper`.

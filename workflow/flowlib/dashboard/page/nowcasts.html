@@ -10,9 +10,12 @@
 <select id=gspd><option value=0.5>0.5x</option>
 <option value=1 selected>1x</option><option value=2>2x</option></select>
 </label>
-<label>Dates overlaid <select id=gnd><option>1</option><option>2</option>
-<option>3</option><option>4</option></select></label>
-<label>every <select id=gstep><option value=1>1 week</option>
+<label>View <select id=gmode><option value=0>one nowcast date</option>
+<option value=1>nowcasts over time</option></select></label>
+<label id=gmodl hidden>Model <select id=gmod></select></label>
+<label id=gndl hidden>Origins <select id=gnd><option>2</option><option>3</option>
+<option>4</option><option>6</option><option>8</option><option>12</option></select></label>
+<label id=gstepl hidden>every <select id=gstep><option value=1>1 week</option>
 <option value=2>2 weeks</option><option value=4>4 weeks</option></select>
 </label>
 <label>y-axis fits <select id=gyfit><option value=0>90% (or 95%) intervals</option>

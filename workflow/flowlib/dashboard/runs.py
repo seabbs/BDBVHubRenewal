@@ -34,8 +34,11 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-PALETTE = ("#2563eb", "#db2777", "#ea580c", "#0d9488", "#7c3aed", "#65a30d")
-"""Colours of runs that name none, in order."""
+from bdbvhubrenewal.evaluation import labels
+
+PALETTE = labels.RUN_SHADES
+"""Colours of runs that name none, in order (`labels.RUN_SHADES`; the
+context names and colours every run as the fine-tuned model)."""
 
 RUN_FIELDS = {
     "label",
@@ -92,6 +95,8 @@ class Reference:
     model: str
     checkpoint: str | None = None
     role: str = "other"
+    dash: str = ""
+    """Line style from the shared map (`solid`, `dashed`, `dotted`)."""
 
     def matches(self, row: Mapping[str, str]) -> bool:
         """Whether a score or forecast row is this reference's."""
@@ -232,15 +237,17 @@ def make_reference(
     colour: str | None = None,
     checkpoint: str | None = None,
     role: str | None = None,
+    dash: str | None = None,
 ) -> Reference:
     """Return a reference matched on rows by `model` and `checkpoint`."""
     return Reference(
         key=key,
         label=label or key,
-        colour=colour or "#6b7280",
+        colour=colour or labels.NEUTRAL,
         model=model,
         checkpoint=checkpoint,
         role=_role(role or "other"),
+        dash=dash or "",
     )
 
 
@@ -270,6 +277,7 @@ def load_references(
             colour=e.get("colour"),
             checkpoint=e.get("checkpoint"),
             role=e.get("role"),
+            dash=e.get("dash"),
         )
     for s in cli:
         r = parse_reference(s)

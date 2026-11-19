@@ -16,7 +16,7 @@
 # each round's manifest lists them, or from the sims-r<N> releases
 # (`release`). A segment is planned only once its batches can be had: the
 # training seeds count up to the first batch not yet listed, and nothing
-# trains before the whole held-out round is (`listed_batches`, listed
+# trains before the whole validation round is (`listed_batches`, listed
 # afresh each time a run plans). From the rounds host, its rounds'
 # manifests and QC exclusions are mirrored in <RUN>/rounds/.
 
@@ -68,19 +68,6 @@ rule seed_list:
     localrule: True
     run:
         Path(output[0]).write_text("".join(f"{s}\n" for s in training_seeds()))
-
-
-rule real_validation:
-    input:
-        FT["delays"] or [],
-    output:
-        FT["real_validation"] or "no-real-validation",
-    log:
-        f"{RUN}/logs/real-validation.log",
-    conda:
-        TOOLS_ENV
-    shell:
-        "uv run python scripts/finetune_real_validation.py {input} {output} > {log} 2>&1"
 
 
 rule train_segment:
@@ -187,7 +174,7 @@ rule train_segment:
 
 rule checkpoint_check:
     # A report, never a gate: does checkpoint `check_at` beat zero-shot on
-    # the held-out simulations and the BDBV pseudo-origins?
+    # the held-out simulations?
     input:
         f"{TRAIN}/n{CHECK}/settings.json",
     output:
@@ -195,8 +182,6 @@ rule checkpoint_check:
     log:
         f"{RUN}/logs/n{CHECK}-check.log",
     localrule: True
-    params:
-        zero_shot=FT["zero_shot_real"],
     run:
         check_report(input, output, params, wildcards)
 

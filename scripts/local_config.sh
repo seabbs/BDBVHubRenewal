@@ -9,7 +9,7 @@
 #   REMOTE          host holding the rounds and the shared mailbox, as ssh
 #                   names it; empty: this machine
 #   ROOT, MAILBOX   the rounds folder and mailbox of the machine that
-#                   simulates (scripts/sim_rounds*.sh)
+#                   simulates (workflow/rules/simulate.smk)
 #   REMOTE_ROOT, REMOTE_MAILBOX
 #                   the same as seen from here: paths on REMOTE, or ROOT
 #                   and MAILBOX when there is none

@@ -4,7 +4,8 @@
 # scripts/finetune_simulate.R with exactly `draws` observation draws, and
 # is grid block r: 40 batches of 21 are its 840 simulations. Into
 # <ROOT>/rounds/r<r>/sims/. Each batch gets a manifest row, the round's
-# manifest joins them, the sim QC (scripts/sim_qc.py) reviews the round,
+# manifest joins them, the sim QC (scripts/sim_qc.py) checks the round
+# against fixed thresholds (simulate.qc),
 # and `round_ready` writes the seed lists and READY last. Every
 # simulation is kept: QC exclusions are a list (qc/excluded.csv).
 #
@@ -83,13 +84,16 @@ rule simulate_batch:
         sim_slots=1,
     params:
         sims=lambda wc, output: Path(output.counts).parent,
-        batch=SIM["batch"],
+        # A top-up batch: its planned cells and their number (topup.smk).
+        batch=batch_size,
+        cells=batch_cells,
         draws=SIM["draws"],
         seed_base=SIM["seed_base"],
         lib=ENW_LIB,
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         min_free=LOCAL["MIN_FREE_GB"],
         min_disk=LOCAL["MIN_DISK_GB"],
+        max_load=LOCAL["MAX_LOAD"],
     shell:
         # The simulator must be the committed one, as the manifest records
         # the commit. A retry keeps the first attempt's log. R and Stan
@@ -106,13 +110,13 @@ rule simulate_batch:
             exit 1
         fi
         workflow/scripts/wait_for_room.sh {params.min_free} {params.min_disk} \
-            {params.sims}
+            {params.sims} {params.max_load}
         [ -s {log} ] && mv {log} {params.sims}/logs/{wildcards.seed}.first.log
         tmp={params.sims}/tmp/{wildcards.seed}
         rm -rf "$tmp" && mkdir -p "$tmp"
         trap 'rm -rf "$tmp"' EXIT
         rscript=$(command -v Rscript)
-        TMPDIR="$tmp" ENW_DRAWS={params.draws} \
+        TMPDIR="$tmp" ENW_DRAWS={params.draws} ENW_CELLS="{params.cells}" \
             ENW_SEED_BASE={params.seed_base} ENW_LIB={params.lib} \
             PATH="$(getconf PATH):$PATH" {params.prefix} \
             workflow/scripts/timed.sh \
@@ -191,8 +195,12 @@ rule sim_qc:
         TOOLS_ENV
     params:
         round_dir=lambda wc, input: Path(input[0]).parent,
+        # The thresholds (simulate.qc). The profiles rerun on mtime only,
+        # so a round already checked keeps its exclusions.
+        limits=SIM_QC_ARGS,
     shell:
-        "uv run python scripts/sim_qc.py {params.round_dir} > {log} 2>&1"
+        "uv run python scripts/sim_qc.py {params.round_dir} {params.limits} "
+        "> {log} 2>&1"
 
 
 rule round_ready:

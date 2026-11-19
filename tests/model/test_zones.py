@@ -11,8 +11,10 @@ from bdbvhubrenewal.data.zones import zone_places
 from bdbvhubrenewal.model import MAIN, build_model, model_args
 from bdbvhubrenewal.model.inputs import vintage_from_tables
 from bdbvhubrenewal.model.zones import (
+    ZoneInfections,
     build_zone_model,
     nested_basis,
+    single_patch,
     zone_vintage_from_tables,
 )
 
@@ -145,6 +147,30 @@ def test_one_zone_per_province_is_the_province_model(
     z_model = build_zone_model(zoned, anchor=False)
     _, params = _params(p_model, province)
     assert _density(z_model, zoned, params) == pytest.approx(
+        _density(p_model, province, params), rel=1e-5
+    )
+
+
+@pytest.mark.parametrize("places", [SIM_LOCATIONS[:1], SIM_LOCATIONS])
+def test_the_province_model_is_the_zone_model_one_place_a_patch(
+    outbreak, sim_tables, table, places
+):
+    # renewalsp fits one place at a time: the zone model with that place
+    # as its only patch.
+    day = VINTAGE_DAYS[-1]
+    target, delays = sim_tables[day]
+    province = vintage_from_tables(
+        target, delays, vintage_date(outbreak, day), places, table
+    )
+    patched = single_patch(province)
+    assert patched.parents.tolist() == list(range(len(places)))
+    assert patched.parent_names == list(places)
+    p_model = build_model(province)
+    # One model: the province builder is the zone builder.
+    assert isinstance(p_model.latent, ZoneInfections)
+    z_model = build_zone_model(patched, anchor=False)
+    _, params = _params(p_model, province)
+    assert _density(z_model, patched, params) == pytest.approx(
         _density(p_model, province, params), rel=1e-5
     )
 

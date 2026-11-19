@@ -369,3 +369,26 @@ def test_relative_rows_mean_the_wis_components():
         row["dispersion"] + row["overprediction"] + row["underprediction"]
         == 3.0
     )
+
+
+def test_tables_score_no_bdbv_held_out_for_the_paper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # BDBV is held out entirely (Sam, 2026-11-19): the tables compute no
+    # BDBV rows; rows already in them stay.
+    def no_bdbv(*_a, **_k):
+        raise AssertionError("BDBV rows computed")
+
+    monkeypatch.setattr(ck, "bdbv_rows", no_bdbv)
+    monkeypatch.setattr(
+        ck, "germany_rows", lambda *_a: pd.DataFrame(columns=ck.COLUMNS)
+    )
+    old = pd.DataFrame(
+        [{"study": "ebola", "rule": ck.RULE, "checkpoint": "old",
+          "level": "national", "model": "m"}]
+    )  # fmt: skip
+    evidence = tmp_path / "scores.csv"
+    old.reindex(columns=ck.COLUMNS).to_csv(evidence, index=False)
+    ck.table(tmp_path, evidence, tmp_path / "checkpoints.csv", [])
+    kept = pd.read_csv(evidence)
+    assert kept["study"].tolist() == ["ebola"]

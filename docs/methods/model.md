@@ -3,13 +3,14 @@
 The three renewal models, with the maths of each.
 { .page-subtitle }
 
+There is no renewal paper, so this page and [Methods](../renewal/methods.md) are the methods reference for the renewal models.
 The data and notation are on the [Data methods page](data.md#target-and-notation).
 How the models are built in code and sampled is on the [Implementation](implementation.md) page.
 
 ## Overview
 
 `renewal` fits the health zones with recent cases together, nests them in their provinces, pools them and links them by importation.
-`renewalbvd` fits the same zones ([`forecasters/zonerenewal.py`](https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/forecasters/zonerenewal.py), [`model/zones.py`](https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/model/zones.py)).
+`renewalbvd` fits the same zones ([`forecasters/zonerenewal.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/src/bdbvhubrenewal/forecasters/zonerenewal.py), [`model/zones.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/src/bdbvhubrenewal/model/zones.py)).
 Their provinces are the sums of their zones, and the country is the sum of the provinces.
 `renewalsp` fits the place model to each province on its own, with no pooling or importation.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
@@ -277,7 +278,7 @@ $$
 
 - $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between zones, with $\varepsilon \sim \text{Beta}(1, 100)$.
 - $K$ is a row-normalised gravity kernel, $K_{qz} \propto N_z e^{-D_{qz}/300\,\text{km}}$ for $q \ne z$, with $D$ the great-circle distance between zone centroids.
-- $N_z$ is the zone's WorldPop 2025 count and its centroid is that of its largest polygon, both from the map behind the province centres ([`zone_centres.csv`](https://github.com/seabbs/BDBVHubRenewal/blob/main/src/bdbvhubrenewal/data/zone_centres.csv)).
+- $N_z$ is the zone's WorldPop 2025 count and its centroid is that of its largest polygon, both from the map behind the province centres ([`zone_centres.csv`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/src/bdbvhubrenewal/data/zone_centres.csv)).
   The 19 hub zones the map lacks, none with a case, take their province's centre and mean zone population.
 - $\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)$ is the share at risk.
   $S_z$ starts at $\nu$ less the seed, so infections never exceed $\nu N_z$.

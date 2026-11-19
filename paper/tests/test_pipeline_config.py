@@ -133,23 +133,32 @@ def test_development_reads_releases_up_to_d_days_after_the_split() -> None:
     check_no_heldout_releases(_obs("2022-04-01", "2022-06-01"), paper, 40)
 
 
-def test_development_leaves_out_the_scored_ebola_rounds() -> None:
+def test_development_runs_no_held_out_study() -> None:
+    from paperpipe.config import HELD_OUT_STUDIES, run_studies
+
+    studies = ("synthetic", "germany", "ebola")
+    assert HELD_OUT_STUDIES == ("ebola",)
+    assert run_studies(studies, "development") == ("synthetic", "germany")
+    assert run_studies(studies, "paper") == studies
+
+
+def test_paper_run_scores_every_ebola_round() -> None:
     cfg = _config()
     first = pd.Timestamp(cfg["heldout"]["ebola_from"])
-    dev = run_settings(cfg, "development")
     paper = run_settings(cfg, "paper")
-    assert (dev.ebola_before, dev.ebola_split) == (first, None)
     assert (paper.ebola_before, paper.ebola_split) == (None, first)
 
 
-def test_guard_rejects_scored_ebola_rounds() -> None:
+def test_guard_rejects_any_ebola_row_in_development() -> None:
     cfg = _config()
     dev = run_settings(cfg, "development")
     first = pd.Timestamp(cfg["heldout"]["ebola_from"])
     before = first - pd.Timedelta(days=7)
-    check_no_heldout(_table("ebola", "CD", f"{before:%Y-%m-%d}"), dev)
-    with pytest.raises(ValueError, match="Ebola"):
-        check_no_heldout(_table("ebola", "CD", f"{first:%Y-%m-%d}"), dev)
+    for day in (before, first):
+        with pytest.raises(ValueError, match="Ebola"):
+            check_no_heldout(_table("ebola", "CD", f"{day:%Y-%m-%d}"), dev)
+    paper = run_settings(cfg, "paper")
+    check_no_heldout(_table("ebola", "CD", f"{before:%Y-%m-%d}"), paper)
 
 
 def test_fine_tuned_rows_wait_for_a_checkpoint_of_the_final_run() -> None:

@@ -5,9 +5,11 @@ The workflow config (`workflow/config.yaml`) names the held-out sets in its
 Ebola rounds from `ebola_from` on, and the synthetic outbreaks of
 `synthetic_seeds`. `run_settings` turns the config into the settings of
 one run. A `development` run gets the development seeds and only the
-German dates before `germany_from` and Ebola rounds before `ebola_from`.
+German dates before `germany_from`.
+The Ebola study is held out entirely (`HELD_OUT_STUDIES`): only a `paper`
+run has it (`run_studies`).
 A `paper` run gets the held-out seeds and every date, split at
-`germany_from` and `ebola_from`.
+`germany_from`, with every Ebola round from `ebola_from` scored.
 `check_no_heldout` fails if a development forecast table holds held-out
 rows.
 """
@@ -15,13 +17,14 @@ rows.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
 import pandas as pd
 
 __all__ = [
+    "HELD_OUT_STUDIES",
     "MODES",
     "RunSettings",
     "check_no_heldout",
@@ -29,12 +32,16 @@ __all__ = [
     "keep_finetuned",
     "last_release",
     "run_settings",
+    "run_studies",
     "seed_of",
     "synthetic_location",
 ]
 
 MODES: Final = ("development", "paper")
 """Run modes: `development` leaves out the held-out sets, `paper` uses them."""
+
+HELD_OUT_STUDIES: Final = ("ebola",)
+"""Studies held out entirely: only a `paper` run has them."""
 
 _SEED: Final = re.compile(r"^s?(\d+)-")
 
@@ -151,6 +158,18 @@ def run_settings(config: Mapping[str, Any], mode: str) -> RunSettings:
     )
 
 
+def run_studies(studies: Sequence[str], mode: str) -> tuple[str, ...]:
+    """Return the studies a run in `mode` has, in the given order.
+
+    A `development` run leaves out `HELD_OUT_STUDIES`.
+    """
+    if mode not in MODES:
+        raise ValueError(f"Unknown mode {mode!r}; use one of {MODES}.")
+    if mode == "paper":
+        return tuple(studies)
+    return tuple(s for s in studies if s not in HELD_OUT_STUDIES)
+
+
 def synthetic_location(seed: int, name: str) -> str:
     """Return a synthetic location code that carries its simulation seed."""
     return f"s{seed}-{name}"
@@ -227,9 +246,9 @@ def check_no_heldout(forecasts: pd.DataFrame, settings: RunSettings) -> None:
     Raises
     ------
     ValueError
-        If a German origin is on or after the held-out date, an Ebola
-        origin is on or after the first scored round, or a synthetic
-        location comes from a held-out seed.
+        If a German origin is on or after the held-out date, the table
+        has Ebola rows, or a synthetic location comes from a held-out
+        seed.
     """
     if settings.mode != "development":
         return
@@ -242,14 +261,10 @@ def check_no_heldout(forecasts: pd.DataFrame, settings: RunSettings) -> None:
             f"{len(late)} German rows are from held-out dates "
             f"(from {settings.heldout_from:%Y-%m-%d})."
         )
-    ebola = forecasts.loc[forecasts["study"] == "ebola"]
-    scored = ebola.loc[
-        pd.to_datetime(ebola["origin_date"]) >= settings.ebola_from
-    ]
-    if not scored.empty:
+    held = forecasts.loc[forecasts["study"].isin(HELD_OUT_STUDIES)]
+    if not held.empty:
         raise ValueError(
-            f"{len(scored)} Ebola rows are from scored rounds "
-            f"(from {settings.ebola_from:%Y-%m-%d})."
+            f"{len(held)} Ebola rows: the Ebola study is held out entirely."
         )
     synthetic = forecasts.loc[forecasts["study"] == "synthetic"]
     seeds = synthetic["location"].map(seed_of)

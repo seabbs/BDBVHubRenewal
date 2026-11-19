@@ -57,13 +57,31 @@ def batch_priority(seed: int, base: float, seed_base: int) -> float:
     return base + 1 - (rank + 1) / (BATCH_SPAN + 1)
 
 
+def check_eval(mode: str) -> None:
+    """Raise if the trainer's evaluation is offloaded.
+
+    No rule scores an offloaded run's snapshots yet, so its checkpoints
+    would have no held-out losses and could not be published.
+    """
+    if mode != "local":
+        raise ValueError(
+            f"finetune.eval: {mode} needs rules that score the trainer's "
+            "snapshots, which the workflow does not have yet: use local"
+        )
+
+
+ROUND_SEEDS = 100
+"""Batch seeds each round has, `base` + 100 r on (the simulator's
+`grid_index`, scripts/finetune_simulate.R)."""
+
+
 def round_seeds(round_: int, base: int, batches: int) -> list[int]:
-    """Return a round's batch seeds, `base` + 100 r on.
+    """Return a round's first `batches` batch seeds, `base` + 100 r on.
 
     A round is one grid block (`grid_index` in
     scripts/finetune_simulate.R), so must match the simulator's.
     """
-    first = base + 100 * round_
+    first = base + ROUND_SEEDS * round_
     return list(range(first, first + batches))
 
 

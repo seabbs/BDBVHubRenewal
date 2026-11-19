@@ -126,3 +126,52 @@ def test_held_out_blocks_round_trip_with_their_count(tmp_path):
     assert np.array_equal(got[1]["context"], val[1]["context"], equal_nan=True)
     with pytest.raises(ValueError, match="3"):
         fe.load_blocks(path, n=4)
+
+
+def _snapshot_run(tmp_path, monkeypatch, n_validation: int) -> Path:
+    """A run with a step snapshot and its held-out blocks, base stubbed."""
+    monkeypatch.setattr(fe, "load_base", lambda _device: tiny_model())
+    train = tmp_path / "train"
+    train.mkdir()
+    val = blocks()
+    fs.save_blocks(val, train / fs.HELD_OUT_BLOCKS)
+    where = train / "evals" / "step-0000100"
+    fs.save_snapshot(
+        trained(),
+        where,
+        {
+            "step": 100,
+            "kinds": ["monitor", "by_source"],
+            "batch_size": 100,
+            "n_validation": n_validation,
+        },
+    )
+    return where
+
+
+@pytest.mark.usefixtures("short_context")
+def test_main_scores_a_snapshot_as_its_request_asks(tmp_path, monkeypatch):
+    where = _snapshot_run(tmp_path, monkeypatch, n_validation=4)
+    out = tmp_path / "result.json"
+    fe.main([str(where), "--train", str(tmp_path / "train"), "--out", str(out)])
+    got = json.loads(out.read_text())
+    assert got["step"] == 100
+    assert got["kinds"] == ["monitor", "by_source"]
+    assert {"eval_loss", "eval_loss_nowcast", "by_source"} <= set(got)
+    assert "held_out_loss" not in got
+    assert not out.with_name(out.name + ".tmp").exists()
+
+
+@pytest.mark.usefixtures("short_context")
+def test_main_refuses_blocks_that_are_not_the_runs(tmp_path, monkeypatch):
+    where = _snapshot_run(tmp_path, monkeypatch, n_validation=5)
+    with pytest.raises(ValueError, match="4 held-out blocks"):
+        fe.main(
+            [
+                str(where),
+                "--train",
+                str(tmp_path / "train"),
+                "--out",
+                str(tmp_path / "result.json"),
+            ]
+        )
