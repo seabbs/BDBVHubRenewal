@@ -97,8 +97,13 @@ def test_loss_runs_carry_the_nowcast_and_forecast_parts(tmp_path):
     )
     run = runs.make_run("r", str(folder), live=True)
     rows = [
-        {"step": 100, "held": 0.4, "parts": {"nowcast": 0.1, "forecast": 0.3}},
-        {"step": 200, "held": 0.39, "parts": {}},
+        {
+            "step": 100,
+            "loss": 0.5,
+            "held": 0.4,
+            "parts": {"nowcast": 0.1, "forecast": 0.3},
+        },
+        {"step": 200, "loss": 0.5, "held": 0.39, "parts": {}},
     ]
     cks = [
         (
