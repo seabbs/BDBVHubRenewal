@@ -220,3 +220,8 @@ def weekly_sums(
     last = snap.cut[r] if upto is None else upto
     days = np.arange(snap.week.size) <= last
     return week_sum(snap, snap.counts[:, r, :] * days)
+
+
+def weekly_counts(daily: pd.DataFrame, vintage: str) -> pd.DataFrame:
+    """Stub."""
+    raise NotImplementedError

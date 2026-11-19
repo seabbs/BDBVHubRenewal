@@ -75,3 +75,35 @@ def test_generic_data_modules_import_no_hub_data_code() -> None:
 def test_snapshots_hold_no_hub_location_codes() -> None:
     assert not {"NATIONAL", "parent_code"} & _defs("data/snapshots.py")
     assert "CD" not in (PKG / "data/snapshots.py").read_text()
+
+
+def _imports_from(rel: str, module: str) -> set[str]:
+    tree = ast.parse((PKG / rel).read_text())
+    return {
+        a.name
+        for n in ast.walk(tree)
+        if isinstance(n, ast.ImportFrom) and n.module == module
+        for a in n.names
+    }
+
+
+def test_zone_levels_and_weekly_counts_are_generic() -> None:
+    assert {"is_zone", "province_of"} <= _defs("data/hierarchy.py")
+    assert "weekly_counts" in _defs("data/snapshots.py")
+    moved = {"is_zone", "province_of", "weekly_zone_counts"}
+    assert not moved & _defs("data/zones.py")
+    for path in PKG.rglob("*.py"):
+        rel = path.relative_to(PKG).as_posix()
+        names = _imports_from(rel, "bdbvhubrenewal.data.zones")
+        assert not names & moved, (rel, names & moved)
+
+
+def test_model_code_imports_no_hub_zone_module() -> None:
+    for rel in (
+        "forecasters/base.py",
+        "forecasters/foundation.py",
+        "forecasters/zones.py",
+        "forecasters/renewal.py",
+        "evaluation/nowcast.py",
+    ):
+        assert "bdbvhubrenewal.data.zones" not in _imported(rel), rel
