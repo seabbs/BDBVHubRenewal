@@ -52,7 +52,6 @@ RULE_GROUPS = {
     "simulate_batch": "simulate",
     "epinowcast_lib": "simulate",
     "train_segment": "train",
-    "real_validation": "train",
     "verify_checkpoint": "publish",
     "publish_checkpoint": "publish",
     "score_bdbv": "score",
