@@ -79,9 +79,9 @@ finetune:
   # multiple of it. They only score: the steps trained are the same.
   eval_every: 200
   by_source_every: 200
-  # Where the trainer's held-out evaluation runs: `local` (in the trainer,
-  # as before) or `offload` (the trainer saves adapter snapshots for
-  # scripts/finetune_evaluate.py and carries on). Training is the same.
+  # Where the trainer's held-out evaluation runs: `local` (in the trainer)
+  # or `offload` (adapter snapshots for scripts/finetune_evaluate.py; no
+  # rule runs it yet, so offloaded checkpoints have no held-out losses).
   eval: local
   series_bias: true
   note: continuous r5
