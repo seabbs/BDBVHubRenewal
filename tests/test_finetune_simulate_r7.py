@@ -447,3 +447,69 @@ cat("delay_mean", median(draw_setting("delay_mean", 1e5)) < 5.5, "\\n")
         )
     )
     assert set(out.values()) == {"TRUE"}
+
+
+@needs_rscript
+def test_onsets_follow_infections_by_the_incubation_delay(tmp_path):
+    out = values_of(
+        values(
+            run_r7(
+                """
+pmf <- incubation_pmf(5)
+cat("mean", round(sum((seq_along(pmf) - 1) * pmf), 1), "\\n")
+x <- matrix(0, 40, 2); x[10, ] <- c(100, 50)
+y <- convolve_rows(x, list(pmf, pmf))
+cat("kept", isTRUE(all.equal(colSums(y), c(100, 50) * 1, tolerance = 1e-6)),
+  "\\n")
+cat("none_before", all(y[1:9, ] == 0), "\\n")
+""",
+                tmp_path,
+            )
+        )
+    )
+    assert 4.4 <= float(out["mean"]) <= 5.1
+    assert out["kept"] == "TRUE"
+    assert out["none_before"] == "TRUE"
+
+
+@needs_rscript
+@pytest.mark.parametrize("structure", ["shared", "pooled", "independent"])
+def test_layer_values_vary_across_strata_as_their_structure_says(
+    structure, tmp_path
+):
+    out = values_of(
+        values(
+            run_r7(
+                f"""
+set.seed(9)
+a <- stratum_values("{structure}", 6L, "ascertainment", probability = TRUE)
+m <- stratum_values("{structure}", 6L, "incubation_mean")
+cat("n", length(a) == 6 && length(m) == 6, "\\n")
+cat("range", all(a > 0 & a < 1) && all(m > 0), "\\n")
+cat("same", length(unique(a)) == 1 && length(unique(m)) == 1, "\\n")
+""",
+                tmp_path,
+            )
+        )
+    )
+    assert out["n"] == "TRUE"
+    assert out["range"] == "TRUE"
+    assert out["same"] == ("TRUE" if structure == "shared" else "FALSE")
+
+
+@needs_rscript
+def test_r7_has_a_structure_factor_for_observation_and_reporting(tmp_path):
+    out = values_of(
+        values(
+            run_r7(
+                """
+f <- grid_factors()
+cat("obs", paste(f$observation_strata, collapse = ";"), "\\n")
+cat("rep", paste(f$reporting_strata, collapse = ";"), "\\n")
+""",
+                tmp_path,
+            )
+        )
+    )
+    assert out["obs"] == "shared;pooled;independent"
+    assert out["rep"] == "shared;pooled;independent"
