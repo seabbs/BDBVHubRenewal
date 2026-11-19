@@ -470,3 +470,22 @@ def test_wis_parts_are_told_apart_by_fill_and_stack_in_one_order(tmp_path):
         "underprediction": "hatch-down",
     }
     assert data["stack"] == ["underprediction", "dispersion", "overprediction"]
+
+
+def test_checkpoint_tables_split_the_held_out_loss_by_horizon(tmp_path):
+    ctx = _machine(tmp_path)
+    s = ctx.runs[0].folder / "train" / "n250" / "settings.json"
+    settings = json.loads(s.read_text())
+    settings |= {"held_out_loss_nowcast": 0.15, "held_out_loss_forecast": 0.26}
+    s.write_text(json.dumps(settings))
+    out = page.build(ctx)
+    assert "<th>nowcast part<th>forecast part" in out
+    assert "<td>0.4100<td>0.1500<td>0.2600" in out
+
+
+def test_the_score_card_has_the_horizon_parts(tmp_path):
+    from bdbvhubrenewal.evaluation import labels
+
+    data = _gdata(page.sections(_machine(tmp_path))["nowcasts"])
+    assert [h[0] for h in data["horizon"]] == list(labels.HORIZON_PARTS)
+    assert {h[0]: h[2] for h in data["horizon"]} == labels.HORIZON_FILLS

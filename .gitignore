@@ -42,7 +42,7 @@ docs/figures/*.json
 results/fit-store.json
 results/delay-summary.csv
 
-# Machine settings (scripts/local_config.sh); see config/local.env.example.
+# Machine settings (workflow/flowlib/localconfig.py); see config/local.env.example.
 config/local.env
 # A machine's own Snakemake profile (config/profile.example).
 config/profile/

@@ -22,6 +22,8 @@ from typing import Final
 
 __all__ = [
     "CATEGORICAL",
+    "HORIZON_FILLS",
+    "HORIZON_PARTS",
     "LAYOUT_COLOURS",
     "LEVEL_COLOURS",
     "MODEL_LABELS",
@@ -51,6 +53,20 @@ MODEL_LABELS: Final[dict[str, str]] = {
     "epinowcast": "epinowcast",
 }
 """Display name of each model id."""
+
+HORIZON_PARTS: Final[dict[str, str]] = {
+    "nowcast": "Nowcast (reference dates up to the nowcast date)",
+    "forecast": "Forecast (reference dates after it)",
+}
+"""The two parts of a horizon a score is split into, as the held-out loss,
+the dashboard and the paper split them."""
+
+HORIZON_FILLS: Final[dict[str, str]] = {
+    "nowcast": "solid",
+    "forecast": "hatch-cross",
+}
+"""How each horizon part fills a bar in its model's colour: the forecast
+part cross-hatched, so it differs from the WIS parts' single hatches."""
 
 NEUTRAL: Final = "#6b7280"
 """Colour of a series with none of its own (a hub team, an unknown id)."""
