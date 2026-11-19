@@ -81,6 +81,7 @@ __all__ = [
     "load_target",
     "national_coherence",
     "newly_missing",
+    "province_places",
     "release_id",
     "release_updates",
     "revision_table",
@@ -243,6 +244,30 @@ PROVINCE_CENTRES: Final[dict[str, tuple[float, float]]] = {
 
 See `load_province_centres`.
 """
+
+
+def province_places(locations: Sequence[str]) -> pd.DataFrame:
+    """Return provinces' populations and centres, as task places.
+
+    Parameters
+    ----------
+    locations : sequence of str
+        Province codes.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `location`, `population` (`PROVINCE_POPULATIONS`),
+        `latitude` and `longitude` (`PROVINCE_CENTRES`).
+    """
+    return pd.DataFrame(
+        {
+            "location": list(locations),
+            "population": [float(PROVINCE_POPULATIONS[p]) for p in locations],
+            "latitude": [PROVINCE_CENTRES[p][0] for p in locations],
+            "longitude": [PROVINCE_CENTRES[p][1] for p in locations],
+        }
+    )
 
 
 # --------------------------------------------------------------------------

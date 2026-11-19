@@ -262,3 +262,34 @@ def test_loss_runs_carry_checkpoint_losses_by_layout_and_level(tmp_path):
     assert got["ck_lvl"] == {"national": [[250, 0.3]], "leaf": [[250, 0.5]]}
     assert got["lvl0"] == {"national": 0.4, "leaf": 0.6}
     assert got["blvl0"] == got["lvl0"]
+
+
+def test_an_offloaded_run_s_losses_reach_the_loss_plot(tmp_path):
+    # WP10: the trainer logs no held-out losses; the evaluate rules write
+    # them per step, and the plot reads them as if logged.
+    folder = tmp_path / "run"
+    train = folder / "train"
+    (train / "evals").mkdir(parents=True)
+    (train / "history.json").write_text(
+        json.dumps([{"step": 0}, {"step": 200, "loss": 0.45}])
+    )
+    (train / "evals" / "step-0000000.json").write_text(
+        json.dumps(
+            {"step": 0, "held_out_loss": 0.5, "by_source": {"weekly": 0.3}}
+        )
+    )
+    (train / "evals" / "step-0000200.json").write_text(
+        json.dumps({"step": 200, "by_source": {"weekly": 0.25}})
+    )
+    run = runs.make_run("r", str(folder), live=True)
+    got = training.loss_run(
+        run,
+        rows=[],
+        checkpoints=[],
+        sims=lambda s: s / 4,
+        base=None,
+        colour="#111",
+    )
+    assert got["full0"] == 0.5
+    assert got["bysrc"] == {"weekly": [[50, 0.25]]}
+    assert got["train"] == [[50, 0.45]]

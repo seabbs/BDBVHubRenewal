@@ -39,3 +39,25 @@ def test_the_tag_follows_the_series_bias(
     monkeypatch.setattr(sys, "argv", ["x", str(tmp_path), str(out)])
     publish_checkpoint.main()
     assert json.loads(out.read_text())["tag"] == tag
+
+
+@pytest.mark.parametrize("offloaded", [False, True])
+def test_an_offloaded_checkpoint_s_losses_go_with_its_release(
+    publish_checkpoint, monkeypatch, tmp_path, offloaded
+):
+    # WP10: the evaluate rules' sidecar is uploaded beside the settings.
+    (tmp_path / "settings.json").write_text(json.dumps({"hash": "abc"}))
+    if offloaded:
+        (tmp_path / "held-out.json").write_text('{"held_out_loss": 0.2}')
+    calls = []
+    monkeypatch.setattr(publish_checkpoint.fs, "publish", lambda *_: None)
+    monkeypatch.setattr(
+        publish_checkpoint.subprocess, "run", lambda cmd, **_: calls.append(cmd)
+    )
+    out = tmp_path / "published.json"
+    monkeypatch.setattr(sys, "argv", ["x", str(tmp_path), str(out)])
+    publish_checkpoint.main()
+    assert len(calls) == int(offloaded)
+    if offloaded:
+        assert calls[0][:4] == ["gh", "release", "upload", "chronos-ft-abc"]
+        assert str(tmp_path / "held-out.json") in calls[0]

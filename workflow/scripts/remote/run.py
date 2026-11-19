@@ -8,8 +8,10 @@ machine's own root and checkout the jobscript runs as it is. Elsewhere:
 the worker's checkout must be at this commit; the inputs are pushed by
 rsync; the worker's Snakemake runs the job with the coordinator's run
 settings; then the log, and on success the outputs and
-`params.copy_back`, are pulled back. The exit code is written last, so
-the status script reports success only once the files are here.
+`params.copy_back`, are pulled back. Files a job reads that no rule
+declares (`params.copy_in`) are pushed with its inputs if they exist.
+The exit code is written last, so the status script reports success
+only once the files are here.
 """
 
 import fcntl
@@ -112,6 +114,11 @@ def elsewhere(cfg: dict, worker: compute.Worker, rec: dict) -> int:
     inputs = files(job.get("input"))
     back = files(job.get("output")) + files(job.get("log"))
     extra = files(job.get("params", {}).get("copy_back"))
+    inputs += [
+        p
+        for p in files(job.get("params", {}).get("copy_in"))
+        if Path(p).exists()
+    ]
     dirs = {str(Path(at(p)).parent) for p in inputs + back + extra}
     mk = "mkdir -p " + " ".join(q(d) for d in sorted(dirs))
     if subprocess.run(compute.on(worker, mk)).returncode:

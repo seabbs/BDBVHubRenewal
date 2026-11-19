@@ -96,3 +96,18 @@ def test_centred_needs_a_random_walk():
             half_life_rv=DeterministicVariable("h", 6.0),
             centred=True,
         )
+
+
+def test_centred_with_no_free_step_holds_the_start():
+    # A fit axis of `frozen + 1` days has no free level, as the
+    # non-centred walk handles: the walk holds its start.
+    rw = NonCentredRandomWalk(
+        DeterministicVariable("sd", 0.5), frozen=2, n_fit=3, centred=True
+    )
+    with trace() as tr:
+        x = seed(rw.sample, rng_seed=0)(
+            5, initial_value=jnp.ones(2), n_processes=2, name_prefix="w"
+        )
+    assert "w_x" not in tr
+    np.testing.assert_allclose(x[:3], 1.0)
+    assert x.shape == (5, 2)

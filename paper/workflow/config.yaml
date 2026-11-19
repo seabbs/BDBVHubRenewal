@@ -50,7 +50,7 @@ synthetic:
   simulations:
     development: ../output/finetune/development
     # Simulation round 9's folder under the rounds folder (ROOT in
-    # config/local.env), one grid block of 840 held out whole (#311).
+    # config/local.env), one grid block of 840 held out whole.
     paper: $ROOT/rounds/r9/sims
   # The synthetic runner's forecasts of them, with its
   # observations and factors beside them.
@@ -118,9 +118,8 @@ nowcasts:
   national: {germany: DE, ebola: CD}
   models:
     # The main nowcast and score figures of every study show the same four
-    # models (Sam, 2026-11-18): the baseline, zero-shot Chronos-2 on
-    # complete data and on the ragged layout, and the fine-tuned ragged
-    # model, all daily. Every other model is in the SI only.
+    # models: the baseline, zero-shot Chronos-2 on complete data and on the
+    # ragged layout, and the fine-tuned ragged model, all daily. Every other model is in the SI only.
     synthetic: &main_models
       - randomwalknowcast
       - fm_chronos_daily_complete
@@ -159,8 +158,8 @@ evidence:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
     path: evidence/bdbv-lagfix/fm-summary-after.csv
   # The walks' scores with no pairing and the rolling rho_p, by study and
-  # level, on development data (#253's `summarise_pairing` rows). Pending:
-  # bdbv-timesfm's rows on evidence/fm-copula.
+  # level, on development data (`summarise_pairing` rows). Pending:
+  # the rows on evidence/fm-copula.
   si_copula: null
   # Each walk model's rho_p by origin, the rows of its rounds' copula.json
   # (model, origin, n_scores, rho_provinces, n_pairs, fallback). Pending.
@@ -196,7 +195,7 @@ development:
 # Only the `paper` target reads them.
 heldout:
   # Outbreaks simulated with seeds the fine-tune never saw: round 9, one
-  # grid block of 840 (40 batches of 21, seeds 30900 to 30939, #311).
+  # grid block of 840 (40 batches of 21, seeds 30900 to 30939).
   synthetic_seeds: [
     30900, 30901, 30902, 30903, 30904, 30905, 30906, 30907, 30908, 30909,
     30910, 30911, 30912, 30913, 30914, 30915, 30916, 30917, 30918, 30919,

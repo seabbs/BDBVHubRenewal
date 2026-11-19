@@ -4,6 +4,7 @@ import base64
 import dataclasses
 import json
 import shutil
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -1041,6 +1042,32 @@ def test_the_archive_holds_the_fit_the_store_holds_at_record_time(
     assert list(empty.columns) == list(store_archive.COLUMNS)
 
 
+def test_a_stored_fit_with_zones_archives_its_own_zones(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    tmp_path: Path,
+) -> None:
+    # A zone fit stores its zones (`ZONES_FILE`). With no candidate config
+    # the archive still gives them to the hub table, beside the stored
+    # samples, so its zones are the ones the model would submit (#366).
+    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
+
+    root = tmp_path / "store"
+    task = tasks[sorted(tasks)[-1]]
+    fit = store.fit(fitted_flat, task, {}, "c")
+    body = base64.b64encode(b"zones").decode()
+    store.write_fit(root, dataclasses.replace(fit, files={ZONES_FILE: body}))
+    hub = _Hub()
+    store_archive.archive(
+        root, task, task, {fitted_flat: None}, {}, hub, lambda _: "c"
+    )
+    call = hub.calls[fitted_flat]
+    assert call["config"] is None
+    assert call["files"] == [ZONES_FILE]
+    assert call["forecast"] is not None
+
+
 def test_a_model_that_fails_leaves_the_others_archived(
     fitted_flat: str,
     tasks: dict[str, ForecastTask],
@@ -1258,4 +1285,47 @@ def test_the_archive_s_store_task_keys_zone_models_as_the_store(
     reads = ["fm_chronos_weekly_complete"]
     assert store.current_keys({latest: task}, reads, sampler, "c") == (
         store.current_keys({latest: stored}, reads, sampler, "c")
+    )
+
+
+def test_the_dependency_export_names_no_workspace_package(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # `# via <package>` lines would change every key when modules move
+    # between packages.
+    seen: list[list[str]] = []
+
+    def run(args, **_):
+        seen.append(list(args))
+        return subprocess.CompletedProcess(args, 0, stdout="")
+
+    monkeypatch.setattr(store.subprocess, "run", run)
+    store._export.cache_clear()
+    store._export(".", "lock-for-this-test")
+    assert "--no-annotate" in seen[0]
+
+
+def test_places_key_only_the_models_that_read_them(
+    tasks: dict[str, ForecastTask],
+) -> None:
+    from dataclasses import replace
+
+    latest = max(tasks)
+    moved = {
+        v: replace(
+            t,
+            imputation_delay=np.array([1.0]),
+            places=t.places.assign(population=1.0),
+        )
+        for v, t in tasks.items()
+    }
+    sampler = store.samplers()
+    walk = ["randomwalk"]
+    assert store.current_keys(moved, walk, sampler, "c") == (
+        store.current_keys(tasks, walk, sampler, "c")
+    )
+    assert tasks[latest].places is not None
+    renewal = ["renewal"]
+    assert store.current_keys(moved, renewal, sampler, "c") != (
+        store.current_keys(tasks, renewal, sampler, "c")
     )

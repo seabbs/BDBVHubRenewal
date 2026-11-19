@@ -14,17 +14,26 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
+from typing import Final
 
 import pandas as pd
 
 from bdbvhubrenewal.data.hierarchy import is_zone
-from bdbvhubrenewal.data.tidy import load_daily_zones, load_health_zones
+from bdbvhubrenewal.data.tidy import (
+    load_daily_zones,
+    load_health_zones,
+    load_locations,
+)
 
 __all__ = [
+    "PLACE_COLUMNS",
     "ZoneData",
+    "hub_places",
     "hub_zones",
     "load_zone_data",
+    "zone_places",
 ]
 
 
@@ -87,3 +96,45 @@ def hub_zones(tasks_json: Path | str) -> tuple[str, ...]:
             for key in ("required", "optional"):
                 codes.update(loc.get(key) or [])
     return tuple(sorted(c for c in codes if is_zone(c)))
+
+
+PLACE_COLUMNS: Final = ("location", "population", "latitude", "longitude")
+"""The columns of a task's places (`ForecastTask.places`)."""
+
+
+def zone_places() -> pd.DataFrame:
+    """Health zone populations and centres, as places.
+
+    Centroids and WorldPop counts of the hub's mapped health zones, from
+    `zone_centres.csv` (see its header). A zone the map lacks has no
+    row. The zone model places it in its province
+    (`forecasters.zonerenewal`).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `PLACE_COLUMNS`.
+    """
+    path = files("bdbvhubrenewal.data").joinpath("zone_centres.csv")
+    with path.open() as f:
+        table = pd.read_csv(f, comment="#")
+    table = table.rename(columns={"worldpop": "population"})
+    return table.loc[:, list(PLACE_COLUMNS)]
+
+
+def hub_places(data_dir: Path | str | None = None) -> pd.DataFrame:
+    """Return the places of the hub's tasks: country, provinces and zones.
+
+    Parameters
+    ----------
+    data_dir : pathlib.Path or str, optional
+        Directory holding the tidy tables (`load_locations`).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `PLACE_COLUMNS`: the country and provinces
+        (`load_locations`), then the mapped zones (`zone_places`).
+    """
+    provinces = load_locations(data_dir).loc[:, list(PLACE_COLUMNS)]
+    return pd.concat([provinces, zone_places()], ignore_index=True)

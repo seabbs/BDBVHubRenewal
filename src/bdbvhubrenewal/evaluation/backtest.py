@@ -21,6 +21,7 @@ Every real vintage but the latest is backtested.
 from __future__ import annotations
 
 import datetime as dt
+import functools
 import json
 import logging
 import os
@@ -39,6 +40,7 @@ from bdbvhubrenewal.data.dates import (
     epiweek_end,
     reference_date_for_vintage,
 )
+from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.data.releases import cutoff_lags, release_cutoff
 from bdbvhubrenewal.data.simulate import (
     SCENARIO_RT_SCALE,
@@ -49,7 +51,7 @@ from bdbvhubrenewal.data.simulate import (
     simulate_outbreak,
 )
 from bdbvhubrenewal.data.tidy import delays_for_vintage
-from bdbvhubrenewal.data.zones import ZoneData
+from bdbvhubrenewal.data.zones import ZoneData, hub_places
 from bdbvhubrenewal.evaluation.nowcast import TRUTH_LEVEL
 from bdbvhubrenewal.evaluation.scoring import energy_scores, score_forecasts
 from bdbvhubrenewal.forecasters.base import (
@@ -340,6 +342,16 @@ def forecast_locations(vintage_rows: pd.DataFrame) -> tuple[str, ...]:
     return tuple(sorted(set(prov["location"])))
 
 
+def _imputation_delay(vintage: str) -> np.ndarray:
+    """Return the hub's imputation delay at a release, read-only.
+
+    Tasks share it, so none may change it in place.
+    """
+    pmf = hub_delay_pmf(vintage)
+    pmf.setflags(write=False)
+    return pmf
+
+
 def make_tasks(
     target: pd.DataFrame,
     delays: pd.DataFrame | None,
@@ -348,6 +360,7 @@ def make_tasks(
     history: pd.DataFrame | None = None,
     daily: pd.DataFrame | None = None,
     zones: ZoneData | None = None,
+    places: pd.DataFrame | None = None,
 ) -> list[ForecastTask]:
     """Build one task per vintage in a target table.
 
@@ -377,6 +390,9 @@ def make_tasks(
         The health-zone tables. A real task gets the weekly and daily rows
         on or before its vintage as `zone_history` and
         `zone_daily_history`, and the codes as `zone_codes`.
+    places : pandas.DataFrame, optional
+        Every task's places (`ForecastTask.places`). Defaults to
+        `data.zones.hub_places()` from the default data directory.
 
     Returns
     -------
@@ -407,6 +423,9 @@ def make_tasks(
     """
     tasks = []
     source = target if history is None else history
+    if places is None:
+        places = hub_places()
+    imputation = functools.cache(_imputation_delay)
     for (kind, vintage), rows in target.groupby(["kind", "vintage"]):
         mine = source["kind"] == kind
         past_target = source.loc[mine & (source["vintage"] <= vintage)]
@@ -435,6 +454,8 @@ def make_tasks(
                 target_history=past_target if not past_target.empty else None,
                 daily_history=_daily_for(daily, str(kind), str(vintage)),
                 **_zone_fields(zones, str(kind), str(vintage)),
+                imputation_delay=imputation(str(vintage)),
+                places=places,
                 locations=forecast_locations(rows),
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,
@@ -464,6 +485,7 @@ def vintage_task(
     extra_weeks: int = 0,
     *,
     zones: ZoneData | None = None,
+    places: pd.DataFrame | None = None,
 ) -> tuple[ForecastTask, str]:
     """Build the task of one real vintage, as the submission fits it.
 
@@ -487,6 +509,8 @@ def vintage_task(
         one, so its fit also covers the next round's weeks.
     zones : ZoneData, optional
         The health-zone tables (`make_tasks`).
+    places : pandas.DataFrame, optional
+        The task's places (`make_tasks`).
 
     Returns
     -------
@@ -508,6 +532,7 @@ def vintage_task(
         history=real,
         daily=daily,
         zones=zones,
+        places=places,
     )[0]
     return task, note
 

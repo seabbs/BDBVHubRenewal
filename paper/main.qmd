@@ -36,14 +36,22 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - **The gap.**
   - Real-time case counts are incomplete because of reporting delays.
   - Generic forecasting models do not use the reporting structure, so they treat incomplete recent counts as final.
+  - Hub models built on foundation models correct for delays outside the model, not by adapting it.
+  - They apply a revision or chain-ladder nowcast first, or raise the most recent weeks [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
   - Key references: [@hohle; @Johnson2025; @reichCollaborativeHubsMaking2022].
 - **Context.**
   - Nowcasting methods model reporting delays directly.
   - Time series foundation models forecast new series with no training on them.
+  - They are now used widely in operational forecast hubs, for influenza, COVID-19 and RSV, mostly zero-shot, among them Chronos-2, TimesFM and Moirai [@flusight_hub; @placeholder; @respicast_si_hub; @Ansari2025; @Das2024a; @Woo2024].
+  - Some hub models fine-tune a foundation model on real surveillance data [@dhauser_fluchronos; @fluxengine_atlas].
+  - Neural networks built for epidemic forecasting include DEFSI and EpiDeep [@placeholder], GLEAM-AI, a surrogate trained on simulations [@nu_ucsd_gleam_ai], Mantis, trained on mechanistic simulations [@Dudley2026], the UMass axial transformer, pretrained on simulated seasons [@umass_axial], and ACCIDDA-Chromantis, delay-aware networks trained on real revisions [@accidda_chromantis].
+  - Mantis and the axial model use simulations to teach transmission dynamics for forecasting.
+  - Synthetic data can instead teach a model reporting delays and surveillance quirks, such as right truncation, changing delays, mixed reporting cadences and places that nest, set in realistic renewal epidemics.
   - Training on domain-specific synthetic data has precedent: KernelSynth for Chronos [@Ansari2024], ForecastPFN [@Dooley2023], prior-fitted networks [@Muller2022; @Hollmann2025], and Mantis for outbreaks [@Dudley2026].
   - Key references: [@mcgough2020nowcasting; @gunther2021nowcasting; @Wolffram2023; @Ansari2024; @Das2024a; @Woo2024; @Rasul2023; @Garza2023; @Aksu2024; @Shchur2025; @Kalahasti2026; @Dudley2025].
 - **What we did.**
   - We fine-tuned Chronos-2, a general time series foundation model, on simulated outbreaks rather than training a model from scratch.
+  - We aimed to keep the foundation model's own forecasting and add delay handling, so the loss covers the nowcast and one week ahead only.
   - We evaluated it on held-out simulations, on the German COVID-19 hospitalisation nowcast hub, and on the Ebola forecasting hub, partly prospectively.
   - Key references: [@Ansari2025; @Johnson2025].
 :::
@@ -141,9 +149,10 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 ::: {.callout-note title="Plan"}
 - We compare with the hub's models, relative to the hub's baseline, and evaluate as the hub did.
 - We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, against the data as reported 40 days later [@Wolffram2023].
-- We score the hub's target, 7-day sums, ending on each nowcast date and 7, 14, 21 and 28 days before it.
+- We score the hub's target, 7-day sums, ending on each day from the nowcast date to 28 days before it.
 - We score only the hub's targets, and the SI adds our models' forecasts up to 4 weeks after the nowcast date.
-- Hub weeks end on Saturdays, so every date of a nowcast moves forward to the next Saturday and back again for scoring.
+- Our models forecast weeks ending on Saturdays, so each nowcast date gives seven sets of forecasts, one for each weekday offset $k$ from 0 to 6.
+- For offset $k$, every date moves forward so that $k$ days before the nowcast date is a Saturday, and back again for scoring.
 - We score each model on its own quantiles at the hub's seven levels, and the weekly Chronos-2 models, which lack some, are interpolated linearly.
 - As @Wolffram2023 did, we replace one team's erroneous values by its nowcast of the day before, and fill another's missing 10% quantiles from a normal through its 2.5% and 25% quantiles.
 - We score models that give samples, and sums over days, on the quantiles of 1,000 draws with common random numbers.
@@ -183,7 +192,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 Each section has a figure panel.
 Every panel shows the same four models, named Random walk nowcast, Zero-shot (complete data only), Zero-shot (delays) and Fine-tuned (delays) in every figure and table.
 The case studies' score panels also show the hub's baseline, which their scores are relative to.
-All three Chronos-2 models use one layout, daily counts and daily lag series with each place's weekly totals as a target row.
+All three Chronos-2 models use one layout, daily counts and daily lag series, and the fine-tuned model also has each place's weekly totals as a target row.
 Every other comparison, and the hub teams beyond the hub's baseline, is in the SI.
 Each panel shows:
 
@@ -203,7 +212,7 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 ::: {#tbl-live-summary}
 {{< include build/tables/si/live-summary.md >}}
 
-Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half and WIS and log WIS on the BDBV release backtest, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss, with each cell's simulations in brackets. The SI gives every checkpoint (Checkpoint curve). {{< meta evidence.live.label >}} Development data only.
+Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss, with each cell's simulations in brackets. The SI gives every checkpoint (Checkpoint curve). {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Held-out synthetic data
@@ -311,11 +320,15 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
 
 ::: {.callout-note title="Plan"}
 - **Summary** of what we did.
+- **Comparison with other work.**
+  - Hub models built on zero-shot foundation models correct for delays before the model sees the data, while our model learns the delays itself [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
+  - Hub models fine-tuned on real surveillance data state no delay handling [@dhauser_fluchronos; @fluxengine_atlas].
+  - Mantis and the UMass axial model use simulations to teach transmission dynamics, while we use them to teach reporting delays and keep the foundation model's own forecasting [@Dudley2026; @umass_axial].
 - **Strengths and weaknesses.**
   - We used one foundation model, one source of synthetic data and two case studies.
   - We did not compare with epinowcast, or, for the synthetic study, with the model that generated the data.
   - We did not compare directly with a custom neural network trained for this task.
-    The Chromantis hub submission is one such model, and appears in the Ebola case study only as one of the hub teams' forecasts [@bdbv_modeling_hub_2026].
+    The ACCIDDA-Chromantis hub submission is one such model, with delay-aware networks trained on real revisions, and appears in the Ebola case study only as one of the hub teams' forecasts [@accidda_chromantis; @bdbv_modeling_hub_2026].
   - The Ebola case study is held out from model development but not blind.
     We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.
     A few Ebola checkpoint scores were produced in error during development and were not used to choose models or settings.
@@ -323,7 +336,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Fine-tuning ran on a laptop, so it needs no shared compute.
   - The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
   - Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.
-  - We used one layout, daily counts and daily lag series with weekly totals as a target row, and could also have included weekly lag series in the block.
+  - We used one layout, daily counts and daily lag series, with weekly totals as a target row in the fine-tuned model, and could also have included weekly lag series in the block.
   - We fine-tuned on blocks of at most 364 steps of history but forecast with all available data.
   - We did not test whether this affects Chronos-2's handling of longer histories, which matters most for long series such as the German daily data.
   - Fine-tuning used the laptop's GPU, which made it several times faster than its CPU.

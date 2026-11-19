@@ -51,9 +51,6 @@ scores: rounds-host:bdbv-rounds/scores/tables/checkpoint-scores.csv
 datasets:
   - key: germany
     source: rounds-host:bdbv-rounds/scores/germany-days/
-  - key: bdbv
-    source: rounds-host:bdbv-rounds/scores/bdbv/
-    truth_source: data/target.csv
 
 # Extra tables (CSV) and notes (text), both shown under Tables, each with a
 # label and a path (local, or "host:path").

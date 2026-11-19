@@ -161,7 +161,10 @@ class NonCentredRandomWalk(TemporalProcess):
             if self.half_life_rv is None
             else 0.5 ** (1.0 / self.half_life_rv())
         )
-        if self.centred:
+        if self.centred and n_free == 0:
+            # No free level: the walk holds its start, as below.
+            free = jnp.zeros((0, n_processes))
+        elif self.centred:
             # The levels themselves, with N(0, sd) steps from x0, one walk
             # per process. Relative to x0 instead, the data would pin only
             # x0 plus each level, a long direction for NUTS.

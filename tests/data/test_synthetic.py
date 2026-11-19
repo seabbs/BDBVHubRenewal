@@ -128,7 +128,9 @@ def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: i
         list(s.locations)
     ].to_numpy()
     pop = np.array([PROVINCE_POPULATIONS[q] for q in s.locations])
-    table = pd.DataFrame({"location": s.locations, "population": pop})
+    from bdbvhubrenewal.data.tidy import province_places
+
+    table = province_places(s.locations)
     w = mixing_matrix(
         jnp.asarray(model_kernel(s.locations, table)),
         s.importation,

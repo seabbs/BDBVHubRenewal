@@ -312,6 +312,7 @@ def test_release_unit_writes_settings_and_release(tmp_path, monkeypatch):
     def fake(cmd, **_kw):
         class Out:
             stdout = json.dumps({"name": "n", "body": "b"})
+            returncode = 0
 
         if "download" in cmd:
             out = cmd[cmd.index("-O") + 1]
@@ -324,6 +325,41 @@ def test_release_unit_writes_settings_and_release(tmp_path, monkeypatch):
         "grid": "r5"
     }
     assert (tmp_path / "heldout" / "abc-release.json").exists()
+
+
+def test_release_unit_merges_an_offloaded_release_s_held_out_losses(
+    tmp_path, monkeypatch
+):
+    def fake(cmd, **_kw):
+        class Out:
+            stdout = json.dumps(
+                {
+                    "name": "n",
+                    "body": "b",
+                    "assets": [{"name": "held-out.json"}],
+                }
+            )
+            returncode = 0
+
+        if "download" in cmd:
+            out = cmd[cmd.index("-O") + 1]
+            pattern = cmd[cmd.index("-p") + 1]
+            data = (
+                {"grid": "r6"}
+                if pattern == "settings.json"
+                else {"held_out_loss": 0.2, "grid": "x"}
+            )
+            Path(out).write_text(json.dumps(data))
+        return Out()
+
+    monkeypatch.setattr(ck.subprocess, "run", fake)
+    ck.release_unit(tmp_path, "abc")
+    got = json.loads((tmp_path / "heldout" / "abc.json").read_text())
+    assert got == {"grid": "r6", "held_out_loss": 0.2}
+    release = json.loads(
+        (tmp_path / "heldout" / "abc-release.json").read_text()
+    )
+    assert release == {"name": "n", "body": "b"}
 
 
 def test_cached_draws_keep_the_7day_target(tmp_path):

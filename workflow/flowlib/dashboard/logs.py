@@ -18,6 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from bdbvhubrenewal.evaluation.sidecar import SIDECAR, with_sidecar
+
 STEP = re.compile(
     r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[train\] step (\d+): "
     r"loss ([\d.eE+-]+), held-out \([^)]*\) ([\d.eE+-]+)"
@@ -231,8 +233,11 @@ def checkpoints(folder: Path | str) -> list[tuple[str, dict, float | None]]:
     for d in sorted(Path(folder).glob("train/n*"), key=lambda p: _size(p.name)):
         s = CACHE.get(d / "settings.json")
         if isinstance(s, dict):
+            side = CACHE.get(d / SIDECAR)
+            s = with_sidecar(s, side if isinstance(side, dict) else None)
+            latest = d / SIDECAR if side else d / "settings.json"
             try:
-                mtime = (d / "settings.json").stat().st_mtime
+                mtime = latest.stat().st_mtime
             except OSError:
                 mtime = None
             out.append((d.name, s, mtime))

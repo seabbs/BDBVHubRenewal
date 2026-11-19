@@ -13,6 +13,7 @@ import numpyro
 import pytest
 from jax import enable_x64
 
+from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.model import MAIN, build_model, model_args
 from bdbvhubrenewal.model.inputs import vintage_from_tables
 
@@ -32,6 +33,7 @@ def real_vintage(table, config):
         locations,
         table,
         config,
+        imputation_delay=hub_delay_pmf(vintage),
     )
 
 

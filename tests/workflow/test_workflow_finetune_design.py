@@ -145,6 +145,21 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     assert args.eval == CONFIG["finetune"]["eval"] == "local"
 
 
+def test_the_loss_horizon_comes_from_the_config(tmp_path):
+    pytest.importorskip("pandas")
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import finetune_stream as fs
+
+    # The full horizon until a run's config sets one.
+    assert CONFIG["finetune"]["loss_horizon_days"] is None
+    args = fs.build_parser().parse_args(_trainer_args(tmp_path))
+    assert args.loss_horizon_days is None
+    args = fs.build_parser().parse_args(
+        _trainer_args(tmp_path, {"loss_horizon_days": 7})
+    )
+    assert args.loss_horizon_days == 7
+
+
 def test_an_r6_run_holds_out_round_20_and_trains_on_21_to_30(tmp_path):
     pytest.importorskip("pandas")
     sys.path.insert(0, str(ROOT / "scripts"))
