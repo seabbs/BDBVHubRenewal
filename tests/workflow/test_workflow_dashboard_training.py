@@ -224,3 +224,41 @@ def test_a_falling_logged_rate_is_a_decay_even_without_lr_decay(tmp_path):
     ]
     got = training.run_params(tmp_path, hist, 800, "", (250, 8400), sims=160)
     assert got["lr_outbreaks"] == 8400
+
+
+def test_loss_runs_carry_checkpoint_losses_by_layout_and_level(tmp_path):
+    # Sam 11:10: the Loss type selector draws by layout and by level too.
+    folder = tmp_path / "run"
+    (folder / "train").mkdir(parents=True)
+    (folder / "train" / "history.json").write_text(
+        json.dumps(
+            [
+                {
+                    "step": 0,
+                    "held_out_loss": 0.5,
+                    "by_level": {"national": 0.4, "leaf": 0.6},
+                }
+            ]
+        )
+    )
+    run = runs.make_run("r", str(folder), live=True)
+    cks = [
+        (
+            "n250",
+            {
+                "steps": 1000,
+                "n_outbreaks": 250,
+                "held_out_loss": 0.35,
+                "held_out_loss_by_source": {"daily": 0.3, "weekly": 0.2},
+                "held_out_loss_by_level": {"national": 0.3, "leaf": 0.5},
+            },
+            None,
+        )
+    ]
+    got = training.loss_run(
+        run, [], cks, sims=lambda s: s / 4, base=None, colour="#111"
+    )
+    assert got["ck_src"] == {"daily": [[250, 0.3]], "weekly": [[250, 0.2]]}
+    assert got["ck_lvl"] == {"national": [[250, 0.3]], "leaf": [[250, 0.5]]}
+    assert got["lvl0"] == {"national": 0.4, "leaf": 0.6}
+    assert got["blvl0"] == got["lvl0"]

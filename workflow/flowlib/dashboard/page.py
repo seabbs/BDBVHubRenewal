@@ -539,6 +539,16 @@ def lr_card(
     )
 
 
+LOSS_TYPES = {
+    "total": "total",
+    "nowcast": "nowcast",
+    "forecast": "forecast",
+    "layout": "by layout",
+    "level": "by level",
+}
+"""The held-out loss types the Loss panel offers (Sam, 19 Nov)."""
+
+
 def loss_section(ctx: Context, live: Run, st: Status) -> str:
     """Return the loss controls and the client-side loss plots' data."""
     cks = {r.key: _checkpoints(r) for r in ctx.runs}
@@ -552,7 +562,9 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
     for r in ctx.runs:
         base = own.get(r.base or "") if r.base else None
         refs = (
-            {k: base[k] for k in ("full0", "src0", "parts0")} if base else None
+            {k: base[k] for k in ("full0", "src0", "parts0", "lvl0")}
+            if base
+            else None
         )
         out.append(
             training.loss_run(
@@ -581,6 +593,14 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
         "<button class=tog data-rng=zoom>live run</button>"
         "<button class=tog data-rng=full>full range</button>"
         + tip("lossscale")
+        + "</div>"
+        # Which held-out loss the held-out panel draws, for every run.
+        + '<div class="sctl modebar"><span class=mut>Loss type</span>'
+        + "".join(
+            f"<button class=tog data-lt={k}>{v}</button>"
+            for k, v in LOSS_TYPES.items()
+        )
+        + tip("losstype")
         + "</div>"
     )
     return (

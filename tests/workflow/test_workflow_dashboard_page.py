@@ -439,3 +439,9 @@ def test_speed_and_etas_come_from_the_status_file_when_steps_are_sparse(
     assert "simulations/min" in tile
     eta = out.split("ETA n8000", 1)[1].split("</div></div>", 1)[0]
     assert "n/a" not in eta
+
+
+def test_the_loss_panel_offers_each_loss_type(tmp_path):
+    out = page.build(_machine(tmp_path))
+    for k in ("total", "nowcast", "forecast", "layout", "level"):
+        assert f"data-lt={k}>" in out

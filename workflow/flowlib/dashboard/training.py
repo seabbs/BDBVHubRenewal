@@ -351,7 +351,28 @@ def loss_run(
     for st, src in sorted(evals, key=lambda e: e[0]):
         for k, v in src.items():
             by.setdefault(k, []).append([x(st), round(v, 5)])
-    base = base or {"full0": full0, "src0": src0, "parts0": parts0}
+    lvl0 = h0.get("by_level") or next(
+        (
+            s.get("held_out_loss_by_level_start")
+            for _, s, _ in checkpoints
+            if isinstance(s.get("held_out_loss_by_level_start"), dict)
+        ),
+        {},
+    )
+
+    def by_key(field: str) -> dict[str, list[list[float]]]:
+        out: dict[str, list[list[float]]] = {}
+        for nm, s, _ in checkpoints:
+            for k, v in (s.get(field) or {}).items():
+                out.setdefault(k, []).append([at(nm, s), round(float(v), 5)])
+        return out
+
+    base = base or {
+        "full0": full0,
+        "src0": src0,
+        "parts0": parts0,
+        "lvl0": lvl0,
+    }
     return {
         "key": run.key,
         "label": run.label,
@@ -386,4 +407,10 @@ def loss_run(
         "src0": src0,
         "bsrc": base["src0"],
         "bysrc": by,
+        # Checkpoints' full-set loss by layout and by level, and the level
+        # losses at step 0; the trainer logs no level losses in between.
+        "ck_src": by_key("held_out_loss_by_source"),
+        "ck_lvl": by_key("held_out_loss_by_level"),
+        "lvl0": lvl0,
+        "blvl0": base.get("lvl0") or {},
     }
