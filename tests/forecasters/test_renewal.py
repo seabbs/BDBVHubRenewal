@@ -90,9 +90,12 @@ def test_renewal_model_fits_provinces_only_on_their_own(
 
 
 def test_model_config_applies_overrides() -> None:
-    # renewalsp fits one province's series, so the share at risk is fixed.
+    # renewalsp fits one province's series, so the share at risk is fixed
+    # and its Rt walk is centred.
     single = rn.model_config(rn.VARIANTS["renewalsp"])
-    assert single == replace(rn.engine().MAIN, national=True, depletion=False)
+    assert single == replace(
+        rn.engine().MAIN, national=True, depletion=False, centred_rt=True
+    )
     assert rn.VARIANTS["renewalsp"].per_province
     assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 

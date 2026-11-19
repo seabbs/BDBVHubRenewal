@@ -189,6 +189,10 @@ class ModelConfig:
         The Dirichlet-multinomial (default) has $1/\sqrt{\psi} \sim
         \text{HalfNormal}(0.1)$, with $\psi$ capped at $10^4$, so that
         thousands of pooled delays do not make the delay overconfident.
+    centred_rt : bool
+        Sample the levels of the shared log Rt walk (`log_rt_baseline_x`)
+        rather than its standardised steps (`NonCentredRandomWalk`), for
+        a fit where the data pin that walk (one place, #330).
     """
 
     national: bool = False
@@ -203,6 +207,7 @@ class ModelConfig:
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
         "dirichlet-multinomial"
     )
+    centred_rt: bool = False
 
 
 MAIN = ModelConfig()
@@ -333,6 +338,7 @@ def _named_walk(
     n_weeks: int,
     ar: bool = False,
     forecast_half_life: float | None = None,
+    centred: bool = False,
 ) -> TemporalProcess:
     """Weekly walk frozen over the seeding period, fitted on the data weeks.
 
@@ -340,7 +346,8 @@ def _named_walk(
     forecast pass. With `ar`, the walk is AR(1) with a half-life of
     LogNormal(log 6 weeks, 0.6) (BVDOutbreakSize deviations: 42 days).
     With `forecast_half_life`, the forecast steps revert towards 0
-    (`NonCentredRandomWalk`).
+    (`NonCentredRandomWalk`). With `centred`, the fitted levels are
+    sampled rather than the standardised steps.
     """
     sd_rv = DistributionalVariable(name, dist.HalfNormal(sd))
     frozen = GEN_INT_LENGTH // 7
@@ -355,6 +362,7 @@ def _named_walk(
         n_fit=frozen + n_weeks,
         half_life_rv=half_life,
         forecast_half_life=forecast_half_life,
+        centred=centred,
     )
     return WeeklyTemporalProcess(inner, start_dow=SUNDAY)
 

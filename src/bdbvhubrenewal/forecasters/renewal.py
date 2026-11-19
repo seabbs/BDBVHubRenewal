@@ -228,8 +228,13 @@ VARIANTS: Final[dict[str, Variant]] = {
             "renewalsp",
             "Single patch: renewal fitted to each province's series on its "
             "own, with no pooling or coupling; national is their sum.",
-            # One series cannot inform the share at risk.
-            overrides={"national": True, "depletion": False},
+            # One series cannot inform the share at risk, and pins its Rt
+            # walk, whose levels are then sampled (#330).
+            overrides={
+                "national": True,
+                "depletion": False,
+                "centred_rt": True,
+            },
             per_province=True,
         ),
         Variant(

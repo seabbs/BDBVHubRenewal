@@ -323,12 +323,22 @@ def _zone_walk(
     ar: bool = False,
     forecast_half_life: float | None = None,
     anchor: bool = True,
+    centred: bool = False,
 ) -> TemporalProcess:
-    """`model._named_walk`, anchored at the mean for `ANCHORED` walks."""
+    """`model._named_walk`, anchored at the mean for `ANCHORED` walks.
+
+    Raises
+    ------
+    ValueError
+        If a centred walk would be anchored.
+    """
     from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 
-    process = _named_walk(name, sd, n_weeks, ar, forecast_half_life)
-    if not anchor or name not in ANCHORED:
+    anchored_walk = anchor and name in ANCHORED
+    if centred and anchored_walk:
+        raise ValueError(f"{name} is anchored, so it cannot be centred.")
+    process = _named_walk(name, sd, n_weeks, ar, forecast_half_life, centred)
+    if not anchored_walk:
         return process
     inner = process.inner
     anchored = MeanAnchoredWalk(
@@ -1007,8 +1017,11 @@ def build_zone_model(
         n_weeks: int,
         ar: bool = False,
         forecast_half_life: float | None = None,
+        centred: bool = False,
     ) -> TemporalProcess:
-        return _zone_walk(name, sd, n_weeks, ar, forecast_half_life, anchor)
+        return _zone_walk(
+            name, sd, n_weeks, ar, forecast_half_life, anchor, centred
+        )
 
     if data.parents is None:
         raise ValueError("A zone model needs each zone's province.")
@@ -1076,6 +1089,7 @@ def build_zone_model(
             0.2,
             fit_weeks(data, config),
             forecast_half_life=FORECAST_RT_HALF_LIFE,
+            centred=config.centred_rt,
         ),
         subpop_rt_deviation_process=_zone_walk_a(
             "rt_dev_sd", 0.1, fit_weeks(data, config), ar=True
