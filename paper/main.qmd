@@ -117,9 +117,15 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
-- We simulate outbreaks of up to 52 weeks with epinowcast over a crossed grid of epidemic process, trajectory, places and age groups, reporting delays and their changes, report days, reporting shocks and observation noise (SI).
-- The outbreaks range from one wave to several, with cases spread over many places or concentrated in a few, delays that drift, step, bunch or slow down, and NB1 or Poisson noise.
-- We checked the grid's ranges against published values for several diseases, the case studies among them.
+- We simulate outbreaks over a grid in four layers (SI).
+- Layer 1, infections: a renewal process with susceptible depletion in each place and age group, with R(t) following one of several transmission paths, shifts in R(t), immune escape, imports and mixing between strata.
+- Layer 2, observation: ascertainment and NB1 or Poisson count noise.
+- Layer 3, reporting delays: a delay distribution, through epinowcast's observation model, that is static or changes over time.
+- Layer 4, the reporting system: report days, bunching, backlogs, outages and revisions, including cases reported in error and later removed, so a release can exceed the final count.
+- Layer 1 is the epidemic setting the delays sit in, and layers 2 to 4 are what fine-tuning teaches.
+- The workflow simulates outbreaks from the grid's config and writes every grid summary and figure, so a change to the grid regenerates them.
+- We checked the grid's summaries against the German development half and published values for several diseases.
+- Figure (planned): "The simulation grid against real outbreaks. (A) Summary statistics of the simulated outbreaks against the German development half and published ranges for other diseases: the share of training cut-offs in each epidemic phase, rises, outbreak sizes, growth rates, R, the generation time and reporting delays. (B) A few example simulations: final counts and counts reported by the nowcast date."
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @Ansari2024; @Dooley2023; @Muller2022; @Hollmann2025].
 :::
 

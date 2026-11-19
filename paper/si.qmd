@@ -303,10 +303,64 @@ The dashboard was built with the help of a large language model.
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
-- We describe the simulation in full, with the epinowcast model it uses.
-- We give the grid in two tables, epidemic and reporting, with six example simulations, and compare the simulations with published disease parameters.
+- We describe the simulation in four layers: infections, observation, reporting delays and the reporting system.
+- Layer 1 is the epidemic setting, and layers 2 to 4 are the delays and surveillance quirks fine-tuning teaches.
+- The workflow simulates outbreaks from the grid's config and writes the grid summary table and every figure below, so a change to the grid regenerates them.
+- Every continuous setting is drawn from a named sampling distribution, given with its reason in the grid tables.
+- These workflow outputs replace the grid tables, checks and example simulations that follow the layers, which are from the previous grid.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
+
+#### Layer 1: infections
+
+::: {.callout-note title="Plan"}
+- Each place and age group follows a renewal process with susceptible depletion, and strata infect one another through a mixing matrix.
+- R(t) follows one of the transmission paths (growth, decline, flat, a sharp or gradual rise and fall, a fall and rise, oscillating and several waves), with places sharing, correlating or lagging their paths.
+- Shifts in R(t) mostly react to the epidemic, down while effective R is above 1 and up while it is below.
+- In established and endemic settings, immune escape events return part of the immune to the susceptible pool and raise R(t).
+- The generation time mean is drawn on a continuous scale covering influenza to Ebola.
+- The window opens either at seeding or on an epidemic already running, with imports and mid-outbreak seeding of places.
+- Figure (planned): "Layer 1, infections. One panel per transmission path: daily infections of one simulated outbreak, with R(t) and effective R below."
+:::
+
+#### Layer 2: observation
+
+::: {.callout-note title="Plan"}
+- A share of infections is ascertained as cases.
+- Counts have NB1 or Poisson noise, with a drawn dispersion that varies between strata.
+- Figure (planned): "Layer 2, observation. Infections of one simulated outbreak against its expected and observed cases, for low and high ascertainment and for Poisson and NB1 noise."
+:::
+
+#### Layer 3: reporting delays
+
+::: {.callout-note title="Plan"}
+- epinowcast's observation model turns cases into reports by reference and report date.
+- The reporting delay has a drawn family and mean, and differs between places and age groups.
+- The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change.
+- Figure (planned): "Layer 3, reporting delays. (A) The mean reporting delay by reference date for each kind of delay change. (B) The delay distributions drawn across the grid."
+:::
+
+#### Layer 4: the reporting system
+
+::: {.callout-note title="Plan"}
+- Reports carry report-day effects, and some outbreaks report on weekdays only.
+- Reports can bunch, and reporting shocks add backlogs or outages.
+- Revisions are not part of epinowcast's model but are true of real data, so we apply them to the release triangle afterwards, in a drawn share of simulations.
+- Some cases are reported in error, appear in releases for a time and are then removed, so a release can exceed the final count.
+- Some cases are filed under a nearby reference day and moved later.
+- The target is still the final count, and lag series can then fall from one lag to the next.
+- Releases follow a daily, 3-day or weekly cadence, some with missed releases (Training blocks).
+- Figure (planned): "Layer 4, the reporting system. One outbreak through each quirk (none, weekdays only, bunching, backlog, outage and revisions): final counts against the counts reported by the nowcast date."
+:::
+
+#### All layers
+
+::: {.callout-note title="Plan"}
+- Figure (planned): "All layers combined. Sample simulations across the grid's settings, each with its final counts and counts reported by the nowcast date, and a strip of the mean reporting delay over time."
+- The main text figure compares the grid's summaries with the German development half and other diseases.
+:::
+
+#### Grid settings and checks
 
 {{< include build/tables/si/epinowcast-model.md >}}
 
@@ -325,8 +379,8 @@ The simulation grid, reporting and observation: as @tbl-grid-epidemic.
 We draw every continuous setting from a named sampling distribution of the simulation settings, which states what we believe likely outbreaks look like (@tbl-grid-distributions).
 We checked these distributions by comparing simulated summaries with real data (@tbl-grid-comparison).
 
-- We drew 1,000 settings across the grid's cells and computed, with no model fitted, each one's fastest daily growth, peak and total count per stratum, delay mean and 95th centile, share reported by days 7, 14 and 28, relative noise at large counts and weekday effect (`scripts/sim_settings_check.R`).
-- We computed the same summaries for every series of the German hospitalisation data [@Wolffram2023] and of the BDBV hub's data (`scripts/sim_settings_real.py`).
+- We drew 1,000 settings across the grid's cells and computed, with no model fitted, each one's fastest daily growth, peak and total count per stratum, delay mean and 95th centile, share reported by days 7, 14 and 28, relative noise at large counts and weekday effect.
+- We computed the same summaries for every series of the German hospitalisation data [@Wolffram2023] and of the BDBV hub's data.
 - We narrowed a distribution only where its 99th centile went beyond every real series.
 - This truncated the delay median, mean and log sd at 10 days, 21 days and 2, which kept the 95th centile of the delay at most 54 days against 50 for the longest real series.
 - We widened daily growth to 0.2, as BDBV's series grew by up to 0.21 a day (doubling in 3.4 days) early in the outbreak.
