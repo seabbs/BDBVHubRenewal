@@ -2,10 +2,10 @@
 """Health zones: the hub's zone codes and zone tables.
 
 Zone codes are `CD-XX-NN`, with `CD-XX` the province
-(`bdbvhubrenewal.data.hierarchy`).
+(`nowcastutils.hierarchy`).
 The hub lists all 519 as optional locations in `hub-config/tasks.json`.
 Weekly zone counts come from the hub's daily zone onsets
-(`daily_zones.csv.gz`) through `bdbvhubrenewal.data.snapshots.weekly_counts`,
+(`daily_zones.csv.gz`) through `nowcastutils.snapshots.weekly_counts`,
 known plus imputed.
 They equal the zone rows of the hub's `time-series.csv`.
 """
@@ -20,12 +20,12 @@ from typing import Final
 
 import pandas as pd
 
-from bdbvhubrenewal.data.hierarchy import is_zone
 from bdbvhubrenewal.data.tidy import (
     load_daily_zones,
     load_health_zones,
     load_locations,
 )
+from nowcastutils.hierarchy import is_zone
 
 __all__ = [
     "PLACE_COLUMNS",

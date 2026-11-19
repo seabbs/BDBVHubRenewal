@@ -8,8 +8,6 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data import load_health_zones
-from bdbvhubrenewal.data.hierarchy import province_of
-from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
@@ -30,6 +28,8 @@ from bdbvhubrenewal.forecasters.zones import (
 )
 from bdbvhubrenewal.submission.hub import to_hub_table, write_submission
 from bdbvhubrenewal.submission.validate import Hub, validate_submission
+from nowcastutils.hierarchy import province_of
+from nowcastutils.snapshots import weekly_counts
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "tests" / "fixtures" / "data"

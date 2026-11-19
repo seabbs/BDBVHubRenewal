@@ -46,17 +46,17 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbvhubrenewal.data.files import write_csv
-from bdbvhubrenewal.data.hierarchy import is_zone
-from bdbvhubrenewal.forecasters.base import (
+from bdbvhubrenewal.forecasters.zones import with_zones
+from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
     ForecastTask,
     get_model,
     register_model,
 )
-from bdbvhubrenewal.forecasters.forecast import Forecast
-from bdbvhubrenewal.forecasters.zones import with_zones
+from nowcastutils.files import write_csv
+from nowcastutils.forecast import Forecast
+from nowcastutils.hierarchy import is_zone
 
 if TYPE_CHECKING:
     from bdbvhubrenewal.data.bvd import BvdRelease
@@ -576,8 +576,8 @@ def vintage_inputs(
     bdbvhubrenewal.model.Vintage
         The model inputs.
     """
-    from bdbvhubrenewal.data.releases import release_pairs
     from bdbvhubrenewal.model.inputs import vintage_from_tables
+    from nowcastutils.releases import release_pairs
 
     pairs = None
     if task.delay_history is not None:
@@ -1662,7 +1662,7 @@ def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:
 
     Returns
     -------
-    bdbvhubrenewal.forecasters.forecast.Forecast
+    nowcastutils.forecast.Forecast
         Province samples, the unassigned component and the reported
         provinces.
     """

@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 from scipy.special import ndtri
 
-from bdbvhubrenewal.forecasters.base import NATIONAL
+from nowcastutils.base import NATIONAL
 
 __all__ = [
     "MAX_RHO",

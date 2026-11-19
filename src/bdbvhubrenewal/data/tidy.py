@@ -51,9 +51,9 @@ from typing import Any, Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.data.files import write_csv
-from bdbvhubrenewal.data.releases import latest_onset_days
+from nowcastutils.dates import as_date, epiweek_end
+from nowcastutils.files import write_csv
+from nowcastutils.releases import latest_onset_days
 
 __all__ = [
     "COHERENCE_HANDLING",
@@ -1017,7 +1017,7 @@ def load_target(data_dir: Path | str | None = None) -> pd.DataFrame:
         `location`, `location_name`, `target_end_date` (the Saturday
         ending the week), `observed`, `imputed` and `total`, as in
         `tidy_target`, and `cutoff`, the release's latest onset day
-        (`bdbvhubrenewal.data.releases.latest_onset_days`).
+        (`nowcastutils.releases.latest_onset_days`).
 
     Examples
     --------

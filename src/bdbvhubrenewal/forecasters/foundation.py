@@ -41,18 +41,18 @@ from typing import Any, ClassVar, Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.dates import as_date, epiweek_end
-from bdbvhubrenewal.data.hierarchy import province_of
 from bdbvhubrenewal.forecasters import series_bias
-from bdbvhubrenewal.forecasters.base import (
+from bdbvhubrenewal.forecasters.chain import start_weeks
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
     ForecastTask,
     ModelUnavailableError,
     register_model,
 )
-from bdbvhubrenewal.forecasters.chain import start_weeks
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from nowcastutils.dates import as_date, epiweek_end
+from nowcastutils.hierarchy import province_of
 
 __all__ = [
     "ADAPTER_FILES",

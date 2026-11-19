@@ -9,13 +9,13 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data import load_daily_zones
-from bdbvhubrenewal.data.hierarchy import is_zone, province_of
-from bdbvhubrenewal.data.snapshots import weekly_counts
 from bdbvhubrenewal.data.zones import hub_zones, load_zone_data
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters import renewal as rn
 from bdbvhubrenewal.forecasters.zones import ZoneAllocator, with_zones
+from nowcastutils.hierarchy import is_zone, province_of
+from nowcastutils.snapshots import weekly_counts
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "tests" / "fixtures" / "data"

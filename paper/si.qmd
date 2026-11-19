@@ -303,9 +303,9 @@ The dashboard was built with the help of a large language model.
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
-- We describe the simulation in four layers: infections, observation, reporting delays and the reporting system.
-- Each layer has a subsection with a short description, a figure and a table of its sampling distributions, and a fifth figure combines the layers.
-- Layer 1 is the epidemic setting, and layers 2 to 4 are the delays and surveillance quirks fine-tuning teaches.
+- We describe the simulation in five layers: infections, observation, reporting delays, the reporting system, and strata and aggregation.
+- Each layer has a subsection with a short description, a figure and a table of its sampling distributions, and a further figure combines the layers.
+- Layer 1 is the epidemic setting, and layers 2 to 5 are the delays and surveillance quirks fine-tuning teaches.
 - The workflow simulates outbreaks from the grid's config and writes every table and figure below, so a change to the grid regenerates them.
 - These workflow outputs replace the grid tables, example simulations and comparisons after the layers.
 - The published ranges for other diseases (@tbl-sim-diseases) are replaced by the sourced reference-values table, which the main text's coverage panel reads.
@@ -316,11 +316,11 @@ The dashboard was built with the help of a large language model.
 
 ::: {.callout-note title="Plan"}
 - We simulate infections in each place and age group by a renewal process with susceptible depletion, and strata infect one another through a mixing matrix.
-- R(t) follows one of the transmission paths (growth, decline, flat, a sharp or gradual rise and fall, a fall and rise, oscillating and several waves), and places share, correlate or lag their paths.
+- R(t) follows one of the transmission paths (growth, decline, flat, a sharp or gradual rise and fall, a fall and rise, oscillating and several waves).
 - We add shifts in R(t) that mostly react to the epidemic, down while effective R is above 1 and up while it is below.
 - In established and endemic settings, immune escape events return part of the immune to the susceptible pool and raise R(t).
 - We draw the generation time mean on a continuous scale covering influenza to Ebola.
-- The window opens either at seeding or on an epidemic already running, with imports and mid-outbreak seeding of places.
+- The window opens either at seeding or on an epidemic already running, with imports.
 - Figure (planned): "Layer 1, infections. One panel per transmission path: daily infections of one simulated outbreak, with R(t) and effective R below."
 - Table (planned): "Layer 1, sampling distributions of the infection settings, each with its reason."
 :::
@@ -359,10 +359,22 @@ The dashboard was built with the help of a large language model.
 - Table (planned): "Layer 4, sampling distributions of the reporting system settings, each with its reason."
 :::
 
+#### Layer 5: strata and aggregation
+
+::: {.callout-note title="Plan"}
+- We draw how many places and age groups an outbreak has and how they nest, in regions and in places by ages.
+- Places interact through mixing, share, correlate, lag or keep independent their R(t) paths, and can be seeded part way through the outbreak.
+- Each layer's settings are shared across strata, partially pooled or independent.
+- Aggregates are either the exact sum of their strata or do not add up, with a share of cases reported only at the aggregate or an aggregate reported later than its strata.
+- The share of aggregates that do not add up, the unallocated share and the aggregate's lag are drawn from named distributions in the grid config.
+- Figure (planned): "Layer 5, strata and aggregation. One simulated system: leaf series, group totals and the national series, with one aggregate that does not add up and the leaves' partially pooled reporting delays."
+- Table (planned): "Layer 5, sampling distributions of the strata and aggregation settings, each with its reason."
+:::
+
 #### All layers
 
 ::: {.callout-note title="Plan"}
-- We combine the four layers in every simulation.
+- We combine the five layers in every simulation.
 - Figure (planned): "All layers combined. Sample simulations across the grid's settings, each with its final counts and counts reported by the nowcast date, and a strip of the mean reporting delay over time."
 - The main text figure compares the grid's summaries with the German development half and other diseases.
 :::

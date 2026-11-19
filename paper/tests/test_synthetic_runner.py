@@ -12,12 +12,8 @@ import numpy as np
 import pandas as pd
 import pytest
 import yaml
-from bdbvhubrenewal.data.hierarchy import parent as parent_of
-from bdbvhubrenewal.forecasters.base import (
-    NATIONAL,
-    ModelUnavailableError,
-    get_model,
-)
+from nowcastutils.base import NATIONAL, ModelUnavailableError, get_model
+from nowcastutils.hierarchy import parent as parent_of
 
 from paperdata import synthetic_runner as synthetic
 

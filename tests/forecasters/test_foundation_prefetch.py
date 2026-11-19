@@ -13,7 +13,7 @@ import pytest
 from bdbvhubrenewal.data.zones import ZoneData, hub_zones
 from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import foundation, get_model, series_bias
-from bdbvhubrenewal.forecasters.base import ForecastTask
+from nowcastutils.base import ForecastTask
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("torch") is None, reason="needs torch"

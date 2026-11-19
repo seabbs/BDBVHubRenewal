@@ -1,30 +1,42 @@
-"""Where shared helpers live before the packages move (WP2a, WP2b).
+"""Where shared helpers live across the workspace packages.
 
-The generic modules go to `nowcastutils`, which may not import the hub
-data code that goes to `bdbvhub`.
+The generic modules are in `nowcastutils`, which may not import the hub
+data code. Modules are named by import path, so the checks follow them
+when they move between packages.
 """
 
 from __future__ import annotations
 
 import ast
+import importlib.util
 from pathlib import Path
 
-PKG = Path(__file__).resolve().parents[2] / "src/bdbvhubrenewal"
-
 GENERIC = (
-    "data/dates.py",
-    "data/files.py",
-    "data/hierarchy.py",
-    "data/releases.py",
-    "data/snapshots.py",
-    "forecasters/base.py",
+    "nowcastutils.dates",
+    "nowcastutils.files",
+    "nowcastutils.hierarchy",
+    "nowcastutils.releases",
+    "nowcastutils.snapshots",
+    "nowcastutils.base",
 )
 
+HUB_ZONES = "bdbvhubrenewal.data.zones"
 
-def _defs(rel: str) -> set[str]:
-    tree = ast.parse((PKG / rel).read_text())
+
+def _file(module: str) -> Path:
+    spec = importlib.util.find_spec(module)
+    assert spec is not None, module
+    assert spec.origin is not None, module
+    return Path(spec.origin)
+
+
+def _tree(module: str) -> ast.Module:
+    return ast.parse(_file(module).read_text())
+
+
+def _defs(module: str) -> set[str]:
     out = set()
-    for node in tree.body:
+    for node in _tree(module).body:
         if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
             out.add(node.name)
         elif isinstance(node, (ast.Assign, ast.AnnAssign)):
@@ -35,12 +47,20 @@ def _defs(rel: str) -> set[str]:
     return out
 
 
-def _imported(rel: str) -> set[str]:
-    tree = ast.parse((PKG / rel).read_text())
+def _imported(module: str) -> set[str]:
     return {
         n.module
-        for n in ast.walk(tree)
+        for n in ast.walk(_tree(module))
         if isinstance(n, ast.ImportFrom) and n.module
+    }
+
+
+def _imports_from(module: str, source: str) -> set[str]:
+    return {
+        a.name
+        for n in ast.walk(_tree(module))
+        if isinstance(n, ast.ImportFrom) and n.module == source
+        for a in n.names
     }
 
 
@@ -51,72 +71,67 @@ def test_generic_helpers_live_in_generic_modules() -> None:
         "latest_onset_days",
         "release_cutoff",
         "release_pairs",
-    } <= _defs("data/releases.py")
-    assert "write_csv" in _defs("data/files.py")
-    assert "MissingSnapshots" in _defs("forecasters/base.py")
-    assert "Forecast" in _defs("forecasters/forecast.py")
+    } <= _defs("nowcastutils.releases")
+    assert "write_csv" in _defs("nowcastutils.files")
+    assert "MissingSnapshots" in _defs("nowcastutils.base")
+    assert "Forecast" in _defs("nowcastutils.forecast")
 
 
 def test_hub_release_labels_live_with_the_hub_data() -> None:
-    assert {"ORIGINAL_AS_OF", "release_id"} <= _defs("data/tidy.py")
-    assert not {"ORIGINAL_AS_OF", "release_id"} & _defs("data/releases.py")
+    hub = _defs("bdbvhubrenewal.data.tidy")
+    assert {"ORIGINAL_AS_OF", "release_id"} <= hub
+    labels = {"ORIGINAL_AS_OF", "release_id"}
+    assert not labels & _defs("nowcastutils.releases")
 
 
-def test_generic_data_modules_import_no_hub_data_code() -> None:
-    allowed = {
-        f"bdbvhubrenewal.{m.removesuffix('.py').replace('/', '.')}"
-        for m in GENERIC
-    }
-    for rel in (m for m in GENERIC if m.startswith("data/")):
-        own = {m for m in _imported(rel) if m.startswith("bdbvhubrenewal")}
-        assert own <= allowed, (rel, own - allowed)
+def test_generic_modules_import_only_generic_modules() -> None:
+    for module in GENERIC:
+        own = {
+            m
+            for m in _imported(module)
+            if m.split(".")[0] in ("bdbvhubrenewal", "bdbvhub")
+        }
+        assert not own, (module, own)
 
 
 def test_snapshots_hold_no_hub_location_codes() -> None:
-    assert not {"NATIONAL", "parent_code"} & _defs("data/snapshots.py")
-    assert "CD" not in (PKG / "data/snapshots.py").read_text()
-
-
-def _imports_from(rel: str, module: str) -> set[str]:
-    tree = ast.parse((PKG / rel).read_text())
-    return {
-        a.name
-        for n in ast.walk(tree)
-        if isinstance(n, ast.ImportFrom) and n.module == module
-        for a in n.names
-    }
+    assert not {"NATIONAL", "parent_code"} & _defs("nowcastutils.snapshots")
+    assert "CD" not in _file("nowcastutils.snapshots").read_text()
 
 
 def test_zone_levels_and_weekly_counts_are_generic() -> None:
-    assert {"is_zone", "province_of"} <= _defs("data/hierarchy.py")
-    assert "weekly_counts" in _defs("data/snapshots.py")
+    assert {"is_zone", "province_of"} <= _defs("nowcastutils.hierarchy")
+    assert "weekly_counts" in _defs("nowcastutils.snapshots")
     moved = {"is_zone", "province_of", "weekly_zone_counts"}
-    assert not moved & _defs("data/zones.py")
-    for path in PKG.rglob("*.py"):
-        rel = path.relative_to(PKG).as_posix()
-        names = _imports_from(rel, "bdbvhubrenewal.data.zones")
-        assert not names & moved, (rel, names & moved)
+    assert not moved & _defs(HUB_ZONES)
+    root = _file("bdbvhubrenewal").parent
+    for path in root.rglob("*.py"):
+        module = ".".join(
+            ("bdbvhubrenewal", *path.relative_to(root).with_suffix("").parts)
+        ).removesuffix(".__init__")
+        names = _imports_from(module, HUB_ZONES)
+        assert not names & moved, (module, names & moved)
 
 
 def test_model_code_imports_no_hub_zone_module() -> None:
-    for rel in (
-        "forecasters/base.py",
-        "forecasters/foundation.py",
-        "forecasters/zones.py",
-        "forecasters/renewal.py",
-        "evaluation/nowcast.py",
+    for module in (
+        "nowcastutils.base",
+        "bdbvhubrenewal.forecasters.foundation",
+        "bdbvhubrenewal.forecasters.zones",
+        "bdbvhubrenewal.forecasters.renewal",
+        "bdbvhubrenewal.evaluation.nowcast",
     ):
-        assert "bdbvhubrenewal.data.zones" not in _imported(rel), rel
+        assert HUB_ZONES not in _imported(module), module
 
 
 def test_renewal_code_reads_no_hub_delay_or_places() -> None:
-    for rel in (
-        "model/inputs.py",
-        "model/zones.py",
-        "forecasters/renewal.py",
-        "forecasters/zonerenewal.py",
+    for module in (
+        "bdbvhubrenewal.model.inputs",
+        "bdbvhubrenewal.model.zones",
+        "bdbvhubrenewal.forecasters.renewal",
+        "bdbvhubrenewal.forecasters.zonerenewal",
     ):
-        own = _imported(rel)
-        assert "bdbvhubrenewal.data.delays" not in own, rel
-        assert "load_locations" not in _imports_from(rel, "bdbvhubrenewal.data")
-    assert "zone_places" in _defs("data/zones.py")
+        assert "bdbvhubrenewal.data.delays" not in _imported(module), module
+        loaders = _imports_from(module, "bdbvhubrenewal.data")
+        assert "load_locations" not in loaders, module
+    assert "zone_places" in _defs(HUB_ZONES)
