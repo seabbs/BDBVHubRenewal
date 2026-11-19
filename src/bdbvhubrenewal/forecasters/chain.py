@@ -55,8 +55,8 @@ of its level combine as independent sources
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass, field, replace
+from typing import Protocol
 
 import jax.numpy as jnp
 import numpy as np
@@ -294,7 +294,7 @@ def delay_sums(
         Settings.
     longer : bool
         With no in-window pair, use the pairs with a longer step, on the
-        onset days of every age at their first release (#365).
+        onset days of every age at their first release.
 
     Returns
     -------
@@ -310,8 +310,8 @@ def delay_sums(
     first = int(snap.cut[r]) - settings.history_delay
     gaps = snap.cut[pairs[:, 1]] - snap.cut[pairs[:, 0]]
     if (gaps > settings.max_delay).all():
-        # A day of every age at a longer pair's first release is final at
-        # its second, so the onset days reach back over all those ages.
+        # Every age is final at the second release, so reach back
+        # `max_delay` days before the first.
         oldest = int(snap.cut[pairs[:, 0]].min()) - settings.max_delay
         first = min(first, oldest)
     window = day > first
@@ -533,8 +533,18 @@ def week_nowcast(
     return np.where(n > 0, fill_row(x, cdf), 0.0)
 
 
-DelayFn = Callable[[SnapshotArrays, int, Settings], DelayFit | None]
-"""Fits the delay at a release, as `fit_delay`."""
+class DelayFn(Protocol):
+    """Fits the delay at a release, as `fit_delay`."""
+
+    def __call__(
+        self,
+        snap: SnapshotArrays,
+        r: int,
+        settings: Settings,
+        longer: bool = False,
+    ) -> DelayFit | None:
+        """Return the fit at release `r`, or `None` with no pair to fit."""
+        ...
 
 
 def retro_errors(
@@ -672,7 +682,7 @@ def _latest_fit(
     """Return the latest release and its delay fit.
 
     With no pair in the delay window, the delay is fitted to the pairs
-    with a longer step (#365). Nowcasts made at earlier releases, whose
+    with a longer step. Nowcasts made at earlier releases, whose
     errors set the observation model, keep the window.
 
     Raises
@@ -683,7 +693,7 @@ def _latest_fit(
     o = len(snap.releases) - 1
     fit = delay(snap, o, settings)
     if fit is None:
-        fit = fit_delay(snap, o, settings, longer=True)
+        fit = delay(snap, o, settings, longer=True)
     if fit is None:
         raise NoDelayPair(
             f"No pair of releases up to {snap.releases[o]} is a day or "
@@ -735,7 +745,7 @@ def start_weeks(
     Raises
     ------
     NoDelayPair
-        If no pair of releases has a step within the delay window.
+        If no two releases are a day or more apart.
     """
     o, fit = _latest_fit(snap, settings, delay)
     return _completeness(snap, o, fit, settings)[2]
@@ -768,7 +778,7 @@ def build_origin(
     Raises
     ------
     NoDelayPair
-        If no pair of releases has a step within the delay window.
+        If no two releases are a day or more apart.
     """
     o, fit = _latest_fit(snap, settings, delay)
     g, complete, start = _completeness(snap, o, fit, settings)

@@ -49,7 +49,8 @@ rule evaluate_checkpoint:
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
         # Its segment's steps, chained back to step 0 (base Chronos-2).
         steps=f"{TRAIN}/evals/n{{n}}.done",
-        # Where a run switched to offload finds base Chronos-2's loss.
+        # Earlier checkpoints' settings: `evaluations.start_loss` reads their
+        # held_out_loss_start when the run evaluated them in the trainer.
         earlier=lambda wc: [
             f"{TRAIN}/n{p}/settings.json" for p in FT["prefixes"] if p < int(wc.n)
         ],

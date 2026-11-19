@@ -30,5 +30,5 @@ def test_every_script_a_rule_runs_exists() -> None:
 def test_the_rules_name_scripts_at_all() -> None:
     # Guards the pattern: the rules run the simulator and the dashboard.
     named = {m for rule in RULES for m in SCRIPT.findall(rule.read_text())}
-    assert "scripts/finetune_simulate.R" in named
+    assert "workflow/scripts/simulate.R" in named
     assert "workflow/scripts/dashboard.py" in named
