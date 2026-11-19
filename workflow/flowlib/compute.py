@@ -10,7 +10,7 @@
   lists them as `name=host:ROOT:CHECKOUT` (`host` as ssh names it, or
   `local`, which may leave out ROOT and CHECKOUT for this machine's).
   `WORKER_GROUPS` maps rule groups to a worker
-  (`train=laptop score=archie`); a group left out, or mapped to `any`,
+  (`train=laptop score=server`); a group left out, or mapped to `any`,
   runs on the first worker with room. The pool is the sum of the
   workers' budgets, each read from the worker itself at launch.
 - any other name: its profile, `workflow/profiles/<name>`, alone (a

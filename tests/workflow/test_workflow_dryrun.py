@@ -453,6 +453,15 @@ def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
     assert "-m bdbvhubrenewal.evaluation.checkpoint zones" in shells
 
 
+def test_units_make_the_rows_folder_a_worker_brings_back(tmp_path):
+    blocks = score_jobs(
+        tmp_path, {"score": {"labels": ["aaa"]}}, target="zones"
+    )
+    shells = "".join(blocks)
+    for study in ("bdbv", "zones", "germany"):
+        assert f"mkdir -p {tmp_path}/scores/{study}/aaa/" in shells
+
+
 def test_zones_are_their_own_target_and_refresh_the_table(tmp_path):
     config = {"score": {"labels": ["slots-aaa", "bbb"]}}
     jobs = dry(tmp_path, "zones", config=config)
