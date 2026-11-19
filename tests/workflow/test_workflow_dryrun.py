@@ -371,9 +371,11 @@ def test_zone_units_run_on_the_cpu_with_their_own_memory(tmp_path):
 
 
 def test_a_checkpoint_released_after_the_tables_is_scored(tmp_path):
-    # Snakemake 9.27 dropped a new label's units when the tables were
-    # already built from the release list: every tick then did nothing
-    # (r5 n4000, 2026-11-19).
+    # With mtime triggers alone, a new label's units under tables already
+    # built were "missing, no update": every tick did nothing (r5 n4000,
+    # 2026-11-19).
+    data = tmp_path / "target.csv"
+    data.write_text("x\n")
     cache = tmp_path / "scores"
     for unit, labels in (
         ("bdbv", ["reference", "slots-aaa"]),
@@ -383,8 +385,6 @@ def test_a_checkpoint_released_after_the_tables_is_scored(tmp_path):
         (cache / unit).mkdir(parents=True)
         for label in labels:
             (cache / unit / f"{label}.done").write_text("")
-    data = tmp_path / "target.csv"
-    data.write_text("x\n")
     at = "2026-11-17T12:00:00Z"
     (cache / "releases.json").write_text(
         f'[{{"tagName": "chronos-slots-aaa", "publishedAt": "{at}"}},'
