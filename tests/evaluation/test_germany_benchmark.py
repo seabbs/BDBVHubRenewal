@@ -351,6 +351,99 @@ def test_a_quantile_model_s_german_scores_do_not_depend_on_the_seed(
     pd.testing.assert_frame_equal(*runs)
 
 
+class _Extrapolate:
+    """Chronos-2 stand-in: each step continues the context's last slope."""
+
+    quantiles = (0.01, 0.05, 0.1, 0.5, 0.9, 0.95, 0.99)
+
+    def predict_quantiles(
+        self, groups, prediction_length, quantile_levels, **_kw
+    ):
+        import torch
+
+        out = []
+        for g in groups:
+            t = np.atleast_2d(g["target"]).astype(np.float64)
+            step = np.arange(1, prediction_length + 1)
+            path = t[:, -1:] + step * (t[:, -1:] - t[:, -2:-1])
+            out.append(
+                torch.tensor(path, dtype=torch.float32)[:, :, None].expand(
+                    -1, -1, len(quantile_levels)
+                )
+            )
+        return out, None
+
+
+def test_each_scored_row_is_the_sum_of_its_own_seven_days(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bdbvhubrenewal.forecasters import foundation
+
+    # Counts rise by a known step a day and are reported in full three
+    # days on, so the last three days are forecast and a sum one day out
+    # of place is off by seven steps. The weeks cross ISO 2020's week 53.
+    first, last = pd.Timestamp("2020-10-01"), pd.Timestamp("2021-01-20")
+    days = pd.date_range(first, last)
+    i = np.arange(len(days))
+    places = {
+        ("DE-BE", "00+"): 100 + 3 * i,
+        ("DE-BY", "00+"): 50 + 2 * i,
+        ("DE", "00+"): 150 + 5 * i,
+        ("DE", "00-04"): 20 + i,
+        ("DE", "05-14"): 40 + 4 * i,
+    }
+    report = days + pd.Timedelta(days=3)
+    triangle = pd.concat(
+        pd.DataFrame(
+            {
+                "reference_date": days.strftime("%Y-%m-%d"),
+                "location": loc,
+                "age_group": age,
+                "confirm": counts,
+                "report_date": report.strftime("%Y-%m-%d"),
+            }
+        )
+        for (loc, age), counts in places.items()
+    ).reset_index(drop=True)
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: _Extrapolate())
+    drawn = germany_forecasts(
+        ["fm_chronos_daily_ragged", "fm_chronos_weekly_ragged"],
+        triangle,
+        ["2021-01-06"],
+        n_samples=10,
+        seed=1,
+    )
+    scores = score_germany(with_truth(drawn, triangle, 10), truth_delay=10)
+    count = {
+        name: pd.Series(c, index=days)
+        for name, c in {
+            "DE-BE": places[("DE-BE", "00+")],
+            "DE-BY": places[("DE-BY", "00+")],
+            "DE": places[("DE", "00+")],
+            "00-04": places[("DE", "00-04")],
+            "05-14": places[("DE", "05-14")],
+        }.items()
+    }
+    end = pd.to_datetime(scores["target_end_date"])
+    want = [
+        count[p].loc[e - pd.Timedelta(days=6) : e].sum()
+        for p, e in zip(scores["location"], end, strict=True)
+    ]
+    assert set(scores["model"]) == {
+        "fm_chronos_daily_ragged",
+        "fm_chronos_weekly_ragged",
+    }
+    assert set(scores["horizon"]) == set(HORIZONS)
+    assert (
+        end
+        == pd.Timestamp("2021-01-06")
+        + pd.to_timedelta(scores["horizon"], unit="D")
+    ).all()
+    np.testing.assert_array_equal(scores["truth"], want)
+    np.testing.assert_array_equal(scores["ae_median"], 0)
+    np.testing.assert_array_equal(scores["wis"], 0)
+
+
 def test_a_sample_model_s_german_quantiles_use_the_draws_given(
     triangle: pd.DataFrame,
 ) -> None:

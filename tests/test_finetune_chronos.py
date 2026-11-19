@@ -847,6 +847,33 @@ def test_quiet_cut_offs_are_not_cut_when_set(tmp_path, monkeypatch):
         np.testing.assert_array_equal(a["context"], b["context"])
 
 
+@pytest.mark.parametrize("start", [5, 40])
+def test_padding_puts_each_step_at_its_place_after_the_context(start):
+    # Each cell holds its step, so a step moved by padding or cropping
+    # shows. Context of 16 steps: one block is padded, the other cropped.
+    h = 9
+    steps = np.arange(start + h, dtype=np.float32)
+    block = {
+        "context": np.tile(steps, (3, 1)),
+        "start": start,
+        "horizon": h,
+        "nowcast": 2,
+        "n_targets": 1,
+        "n_covariates": 2,
+        "n_future_covariates": 2,
+    }
+    out = ft._pad(block, 16)
+    x = out["context"]
+    keep = min(start, 16)
+    np.testing.assert_array_equal(
+        x[:, 16 - keep : 16 + h], block["context"][:, start - keep :]
+    )
+    assert np.isnan(x[:, : 16 - keep]).all()
+    assert np.isnan(x[:, 16 + h :]).all()
+    # The first predicted step is the block's first step after its context.
+    assert (out["future_covariates"][:, 0] == start).all()
+
+
 def test_batches_share_one_prediction_length():
     from finetune_chronos import plan_by_length
 
