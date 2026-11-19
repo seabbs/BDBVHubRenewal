@@ -43,7 +43,7 @@ def test_baselines_have_their_own_colours() -> None:
 
 
 def test_fine_tuned_and_zero_shot_differ_in_colour_and_dash() -> None:
-    # Bars show no dashes, so the main models differ in colour (Sam 00:15).
+    # Bars show no dashes, so the main models differ in colour.
     ft = model_style("fm_chronos_daily_ragged_ft", [])
     zs = model_style("fm_chronos_daily_ragged", [])
     assert ft[0] != zs[0]
@@ -134,9 +134,9 @@ def test_chronos_variants_have_distinct_styles(family) -> None:
     # The daily models are the main figures' and differ in colour; the
     # weekly ones (SI only) share one.
     assert len({c for c, _ in styles}) == (3 if family == "daily" else 1)
-    # Complete data dashed, with delays dotted, fine-tuned solid (Sam 11:55).
+    # Complete data dashed, with delays dotted, fine-tuned solid.
     assert [d for _, d in styles] == ["dashed", "dotted", "solid"]
-    # Bars are filled with the model's colour, never hatched (Sam, #367).
+    # Bars are filled with the model's colour, never hatched.
     bars = [bar_style(n, []) for n in names]
     assert all("hatch" not in b for b in bars)
     assert [b["color"] for b in bars] == [c for c, _ in styles]
