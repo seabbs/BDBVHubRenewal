@@ -507,7 +507,7 @@ def test_verify_alone_never_releases(tmp_path):
 
 
 def test_score_computes_nothing_on_bdbv_held_out_for_the_paper(tmp_path):
-    # BDBV is held out entirely (Sam, 2026-11-19 11:20): no BDBV unit,
+    # BDBV is held out entirely: no BDBV unit,
     # zone unit or data refresh is a scoring job, and `zones` is gone.
     config = {"score": {"labels": ["slots-aaa", "bbb"]}}
     jobs = dry(tmp_path, "score", config=config)

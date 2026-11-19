@@ -3,7 +3,7 @@
 # Each checkpoint label gets the units of bdbvhubrenewal.evaluation
 # .checkpoint: `germany` (WIS on the German development half) and
 # `release` (the release's settings, with the trainer's held-out loss).
-# BDBV is held out for the paper (Sam, 2026-11-19), so no BDBV unit runs
+# BDBV is held out for the paper, so no BDBV unit runs
 # here; BDBV rows already in the tables stay.
 # A unit caches one file per date or origin in <SCORE_CACHE>/<study>/
 # <label>/ and resumes from it; its done stamp is written when it exits
