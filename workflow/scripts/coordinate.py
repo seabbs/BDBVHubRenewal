@@ -14,6 +14,7 @@ the running pass, or by its pid. Standard library only.
 
 import sys
 import time
+import traceback
 from collections.abc import Callable
 from pathlib import Path
 
@@ -35,7 +36,12 @@ def run(
 ) -> int:
     """Run `tick` until `stop` exists; remove it and return 0."""
     while not stop.exists():
-        rc = tick()
+        try:
+            rc = tick()
+        except Exception:
+            # A failed pass, such as a worker going away mid-plan.
+            traceback.print_exc()
+            rc = 1
         if stop.exists():
             break
         sleep(backoff if rc else pause)
