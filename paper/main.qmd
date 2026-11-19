@@ -305,6 +305,9 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - We did not compare with epinowcast, or, for the synthetic study, with the model that generated the data.
   - We did not compare directly with a custom neural network trained for this task.
     The Chromantis hub submission is one such model, and appears in the Ebola case study only as one of the hub teams' forecasts [@bdbv_modeling_hub_2026].
+  - The Ebola case study is held out from model development but not blind.
+    We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.
+    A few Ebola checkpoint scores were produced in error during development and were not used to choose models or settings.
   - We evaluated on a retrospective and a real-time case study, with synthetic data that can be tuned to a setting.
   - Fine-tuning ran on a laptop, so it needs no shared compute.
   - The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
