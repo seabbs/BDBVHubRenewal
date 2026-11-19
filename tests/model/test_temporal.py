@@ -111,3 +111,6 @@ def test_centred_with_no_free_step_holds_the_start():
     assert "w_x" not in tr
     np.testing.assert_allclose(x[:3], 1.0)
     assert x.shape == (5, 2)
+    # The forecast walks on from the held start.
+    z = tr["w_z_future"]["value"]
+    np.testing.assert_allclose(x[3:], 1.0 + jnp.cumsum(0.5 * z, axis=0))
