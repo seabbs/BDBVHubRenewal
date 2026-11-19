@@ -24,7 +24,7 @@ from bdbvhubrenewal.forecasters.chain import (
 )
 from bdbvhubrenewal.forecasters.obs import MAX_SIZE, PRIOR_SIZE
 from bdbvhubrenewal.forecasters.pooling import pool_matrix, source_index
-from nowcastutils.snapshots import snapshot_arrays, weekly_sums
+from nowcastutils.snapshots import SnapshotArrays, snapshot_arrays, weekly_sums
 
 PLACES = ("CD-HU", "CD-IT", "CD-NK", "CD-TO")
 
@@ -400,21 +400,10 @@ def test_start_weeks_are_the_origin_start(snap24, origin24) -> None:
     assert np.array_equal(start_weeks(snap24, Settings()), origin24.start)
 
 
-def test_a_gap_past_the_window_recovers_the_daily_delay() -> None:
-    # A day of age a at the first release is final at the second, so the
-    # pair gives the growth to final at every age, which identifies g.
-    d, gap = 42, 50
-    g = np.linspace(0.3, 0.0, d)
-    to_final = np.exp(np.cumsum(g[::-1])[::-1])
-    den = np.full((1, 1, d), 200.0)
-    num = den * to_final
-    np.testing.assert_allclose(log_factors(num, den, [gap])[0], g, atol=1e-8)
-
-
 def test_with_no_pair_in_window_the_delay_uses_the_longer_pairs(
     daily: pd.DataFrame,
 ) -> None:
-    # At 10-09 the only pair is 08-18 to 10-09, 50 days apart (#365).
+    # At 10-09 the only pair is 08-18 to 10-09, 50 days apart.
     provinces = tuple(sorted(set(daily["location"]) - {"CD"}))
     snap = snapshot_arrays(daily, "2026-10-09", provinces)
     assert np.diff(snap.cut).tolist() == [50]
@@ -434,7 +423,7 @@ def test_a_pair_in_window_is_used_alone(snap24) -> None:
 
 def test_the_longer_pair_recovers_a_known_delay() -> None:
     # Two releases 50 days apart, reported with a known daily delay: the
-    # fit at the second recovers it at every age (#365).
+    # fit at the second recovers it at every age.
     d = 42
     g = np.linspace(0.25, 0.0, d)
     to_final = np.exp(np.cumsum(g[::-1])[::-1])
@@ -455,3 +444,31 @@ def test_the_longer_pair_recovers_a_known_delay() -> None:
     _, fit = chain._latest_fit(snap, Settings(), fit_delay)
     loc = snap.locations.index("CD-IT")
     np.testing.assert_allclose(fit.g[loc], g, atol=2e-3)
+
+
+def test_earlier_releases_keep_the_delay_window(daily: pd.DataFrame) -> None:
+    # The nowcasts made at earlier releases, whose errors set the
+    # observation model, do not fall back to the longer pairs.
+    provinces = tuple(sorted(set(daily["location"]) - {"CD"}))
+    snap = snapshot_arrays(daily, "2026-10-09", provinces)
+    assert fit_delay(snap, 1, Settings()) is None
+    assert fit_delay(snap, 1, Settings(), longer=True) is not None
+
+
+def test_the_fallback_fits_through_the_given_delay(daily: pd.DataFrame) -> None:
+    # A delay function given to the chain also makes the longer-pair fit.
+    provinces = tuple(sorted(set(daily["location"]) - {"CD"}))
+    snap = snapshot_arrays(daily, "2026-10-09", provinces)
+    calls: list[bool] = []
+
+    def delay(
+        snap: SnapshotArrays,
+        r: int,
+        settings: Settings,
+        longer: bool = False,
+    ) -> chain.DelayFit | None:
+        calls.append(longer)
+        return fit_delay(snap, r, settings, longer=longer)
+
+    chain._latest_fit(snap, Settings(), delay)
+    assert calls == [False, True]

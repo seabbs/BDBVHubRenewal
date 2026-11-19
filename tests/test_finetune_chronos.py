@@ -1342,3 +1342,81 @@ def test_the_trainer_takes_its_design_from_the_grid():
         )
     finally:
         finetune_chronos.use_design("r6")
+
+
+def test_a_whole_system_block_holds_every_stratum_and_its_totals(monkeypatch):
+    from finetune_chronos import NATIONAL, whole_system
+
+    monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 0.0)
+    rng = np.random.default_rng(0)
+    # Places by ages: the country, each place's and each age's total, and
+    # every leaf.
+    places, mix = whole_system(STRATA, rng)
+    assert mix == "all_levels"
+    assert places == (
+        NATIONAL,
+        *[f"P{p}" for p in range(1, 5)],
+        *[f"A{a}" for a in range(1, 4)],
+        *sorted(STRATA),
+    )
+    # Places nested in regions: the regions' totals and every place.
+    nested = ["R1-P01", "R1-P02", "R2-P03"]
+    assert whole_system(nested, rng) == (
+        (NATIONAL, "R1", "R2", *nested),
+        "all_levels",
+    )
+    # Flat places: the country and every place.
+    flat = ["P01", "P02", "P03"]
+    assert whole_system(flat, rng) == ((NATIONAL, *flat), "leaves_national")
+    # One stratum is the country.
+    assert whole_system(["P01"], rng) == ((NATIONAL,), "national")
+    # At the univariate share, the country alone.
+    monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 1.0)
+    assert whole_system(STRATA, rng) == ((NATIONAL,), "national")
+
+
+def _counts_of(places, days=140):
+    import pandas as pd
+
+    rows = [
+        (p, onset, onset + pd.Timedelta(days=d), 3)
+        for p in places
+        for onset in pd.date_range("2026-01-03", periods=days)
+        for d in (0, 3, 9)
+    ]
+    counts = pd.DataFrame(
+        rows, columns=["location", "reference_date", "report_date", "count"]
+    )
+    for col in ("reference_date", "report_date"):
+        counts[col] = counts[col].dt.date.astype(str)
+    return counts
+
+
+def test_r7_blocks_are_whole_systems_never_cut(monkeypatch):
+    from finetune_chronos import NATIONAL, outbreak_blocks
+
+    ft.use_design("r7")
+    try:
+        monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 0.2)
+        places = [f"P{p}-A{a}" for p in range(1, 4) for a in range(1, 3)]
+        counts = _counts_of(places)
+        whole = (NATIONAL, "P1", "P2", "P3", "A1", "A2", *places)
+        got = []
+        for seed in range(6):
+            for b in outbreak_blocks(
+                counts, places, np.random.default_rng(seed), 3
+            ):
+                got.append(b["places"])
+        assert got
+        # The whole system, or the country alone; never a subset.
+        assert set(got) == {whole, (NATIONAL,)}
+        # A system over the series cap is skipped and said, not cut.
+        monkeypatch.setattr(ft, "MAX_SERIES", 10)
+        empty: list[str] = []
+        blocks = outbreak_blocks(
+            counts, places, np.random.default_rng(0), 3, empty=empty
+        )
+        assert all(b["places"] == (NATIONAL,) for b in blocks)
+        assert any("over the series cap" in e for e in empty)
+    finally:
+        ft.use_design("r6")
