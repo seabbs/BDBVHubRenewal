@@ -28,6 +28,22 @@ def test_every_target_uses_the_default_profile():
     assert all("workflow/profiles/default" in cmd for _, cmd, _ in got)
 
 
+def test_with_workers_a_tick_coordinates_them(tmp_path, monkeypatch):
+    monkeypatch.setenv("REMOTE_STATE", str(tmp_path))
+    cfg = {
+        "SCHEDULE_TARGETS": "simulate",
+        "COMPUTE": "ssh",
+        "WORKERS": "archie=local",
+        "ROOT": str(tmp_path),
+        "CORES": "4",
+        "MEM_MB": "8192",
+    }
+    (_, cmd, _), *_ = schedule.plan(cfg)
+    assert "workflow/profiles/ssh" in cmd
+    assert cmd[cmd.index("--jobs") + 1] == "4"
+    assert (tmp_path / "budgets.json").is_file()
+
+
 def snakemake_targets(cmd):
     """The targets of a planned Snakemake command."""
     start = cmd.index("snakemake") + 1
@@ -174,14 +190,15 @@ def test_the_listings_are_refreshed_in_a_run_of_their_own():
     )
     (name, refresh, _), (_, pool, _) = got[:2]
     assert name == "refresh"
-    lists = {"release_list", "available_batches"}
+    lists = {"release_list"}
     assert set(snakemake_targets(refresh)) == lists
     assert set(refresh[refresh.index("--forcerun") + 1 :]) == lists
     assert "--forcerun" not in pool
 
 
-def test_a_machine_with_the_rounds_refreshes_no_batch_list():
-    got = schedule.plan({"SCHEDULE_TARGETS": "finetune"})
+def test_finetune_needs_no_refresh_step():
+    # It lists its batches as it plans, wherever they come from.
+    got = schedule.plan({"SCHEDULE_TARGETS": "finetune", "SIMS_FROM": "remote"})
     assert [t for t, _, _ in got] == ["finetune"]
     assert "--forcerun" not in got[0][1]
 

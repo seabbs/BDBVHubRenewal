@@ -16,7 +16,7 @@
 #   CV 0.6 (renewal only);
 # - trajectory of r(t): steady growth, steady decline, flat, rise then
 #   fall (sharp or gradual), fall then rise, oscillating, or two to three
-#   waves of uneven size, with small weekly noise, within -0.1 to 0.1 a
+#   waves of uneven size, with small weekly noise, within -0.2 to 0.2 a
 #   day;
 # - delay family: lognormal, gamma or exponential;
 # - delay form: parametric, non-parametric (a smooth walk over delays and
@@ -45,10 +45,11 @@
 # - seeding: every place at the outset, or some imported mid-outbreak;
 # - mixing between places: none, symmetric, asymmetric (one way, in a
 #   drawn order), by distance, or by distance switching on or off, with
-#   a share of pressure from other places log-uniform on 0.01 to 0.5;
+#   a share of pressure from other places (`setting_distributions`);
 # - imports into strata with cases: none, constant or pulses;
-# - reporting shocks: none, backlogs or outages, one to three in each of
-#   one to three places with cases;
+# - reporting shocks: none in half the simulations, backlogs or outages
+#   in a quarter each, one to three in each of one to three places with
+#   cases;
 # - delays across places: shared, shifted from a shared delay, or each
 #   place's own (crossed with shocks: a shared delay with local backlogs);
 #
@@ -57,10 +58,10 @@
 # rate is set to their daily change in log (`latent_expectation`).
 #
 # Outbreaks run 16 to 52 weeks. The seed is scaled so the expected size
-# is a drawn target, and the longest delay is the shortest of 3, 4, 6, 8 and 12 weeks at or above the
+# is a drawn target (`setting_distributions`), and the longest delay is the shortest of 3, 4, 6, 8 and 12 weeks at or above the
 # delay's 99th centile. The NB1 dispersion is on the NB2 scale
 # (epinowcast #937): sqrt_phi * sqrt(lambda_hat * sum(p_d^2)), with
-# sqrt_phi log-uniform on 0.02 to 1 and lambda_hat the median
+# sqrt_phi half-normal with scale 0.25 and lambda_hat the median
 # stratum-day with at least one expected onset.
 # A draw that fails or is out of size is drawn again in the same cell, up
 # to five times; then the cell is logged and skipped.
@@ -80,10 +81,13 @@
 #   Rscript scripts/finetune_simulate.R <n> <seed> <out_dir>
 
 epinowcast_sha <- "e084b080"
-# r5: NB1 and Poisson only (4:1), NB1 sqrt_phi from 0.02, 16 to 52
-# weeks for every strata structure, uneven waves, and bunching and
-# slowdowns among the delay's changes over time.
-grid_name <- "r5"
+# r6: as r5 (NB1 and Poisson only (4:1), 16 to 52 weeks for every strata
+# structure, uneven waves, and bunching and slowdowns among the delay's
+# changes over time), with no reporting shocks in half the simulations
+# rather than a third, and every continuous setting drawn from a named
+# sampling distribution (`setting_distributions`; NB1 sqrt_phi
+# half-normal with scale 0.25).
+grid_name <- "r6"
 args <- commandArgs(trailingOnly = TRUE)
 n_outbreaks <- as.integer(args[[1]])
 # The rounds' first seed (scripts/sim_rounds.sh, workflow/config.yaml).
@@ -142,8 +146,9 @@ factors <- list(
   # Reporting shocks, on top of `delay_change`, in one to three places
   # with cases, one to three in each, each with its own timing, length
   # (1-4 weeks) and size: none, backlogs (mean delay x2-5) or outages (no
-  # reports, then the held cases at once).
-  shocks = c("none", "backlog", "outage"),
+  # reports, then the held cases at once). None twice as often as each
+  # shock, so half the simulations have none and no level is a majority.
+  shocks = c("none", "none", "backlog", "outage"),
   # How places' delays relate: one delay everywhere; each place's mean
   # shifted from a shared delay; or each place's mean and spread its own.
   # Crossed with `shocks`, a shared delay with backlogs or outages in a
@@ -226,7 +231,7 @@ log_r_from_growth <- function(r, gt) {
 }
 
 # Daily growth r(t) of a trajectory over `n` days, with weekly AR(1)
-# noise, within -0.1 to 0.1.
+# noise, within -0.2 to 0.2.
 trajectory_path <- function(n, kind, v) {
   t <- seq_len(n) / n
   tilt <- (v$peak - t) / max(v$peak, 1 - v$peak)
@@ -245,7 +250,7 @@ trajectory_path <- function(n, kind, v) {
       v$amplitude * v$wave_scale[wave] * sin(2 * pi * v$waves * t + v$phase)
     }
   )
-  pmin(pmax(r + weekly_noise(n, v$noise_sd), -0.1), 0.1)
+  pmin(pmax(r + weekly_noise(n, v$noise_sd), -0.2), 0.2)
 }
 
 # The growth rate of each stratum on `n` days: its place's path, as
@@ -272,7 +277,7 @@ place_growth <- function(n, strata, design, v) {
   )
   path <- paths[match(strata$place, places)]
   growth <- vapply(seq_len(nrow(strata)), function(i) {
-    pmin(pmax(path[[i]] + (1 - v$coupling) * weekly_noise(n, 0.01), -0.1), 0.1)
+    pmin(pmax(path[[i]] + (1 - v$coupling) * weekly_noise(n, 0.01), -0.2), 0.2)
   }, numeric(n))
   matrix(growth, nrow = n)
 }
@@ -477,9 +482,155 @@ draw_design <- function(g) {
   )
 }
 
+# Sampling distributions of the continuous simulation settings: what we
+# believe likely outbreaks look like. Each is a named distribution with
+# its parameters, an optional truncation (`lower`, `upper`) and the reason
+# for it. `lognormal` takes its median and sdlog, `halfnormal` its scale,
+# `normal` its mean and sd, `beta` its shapes on `lower` to `upper`, and
+# `uniform` its range, for timings and phases with no favoured value.
+# Their parameters were checked by comparing simulated summaries with real
+# data (scripts/sim_settings_check.R, the SI's grid tables).
+setting_distributions <- list(
+  quiet = list("beta", a = 1, b = 2, lower = 0, upper = 0.9,
+    why = "even outbreaks reach most places; a few leave many quiet"),
+  coupling = list("beta", a = 2, b = 2, lower = 0.5, upper = 1,
+    why = "strata follow the shared trajectory more than their own"),
+  place_rho = list("beta", a = 2, b = 2, lower = 0.3, upper = 0.9,
+    why = "correlated places share most but not all of their deviations"),
+  place_sd = list("lognormal", median = 0.017, sdlog = 0.35,
+    why = "daily growth deviations of 0.01 to 0.03 between places"),
+  late_at = list("uniform", lower = 0.2, upper = 0.6,
+    why = "an import can come at any time in the outbreak's first half"),
+  mixing_eps = list("lognormal", median = 0.07, sdlog = 1.2,
+    upper = 0.8, why = "1% to 50% of pressure from other places"),
+  mixing_xy = list("uniform", lower = 0, upper = 1,
+    why = "places' positions on a unit square"),
+  mixing_range = list("lognormal", median = 0.16, sdlog = 0.7,
+    why = "kernel range of a twentieth to half the square"),
+  mixing_switch_at = list("uniform", lower = 0.2, upper = 0.8,
+    why = "mixing can switch at any time away from the ends"),
+  import_rate = list("lognormal", median = 0.022, sdlog = 0.9,
+    why = "a daily trickle of 0.5% to 10% of a stratum's seed"),
+  import_at = list("uniform", lower = 0, upper = 1,
+    why = "pulses at any time"),
+  import_size = list("lognormal", median = 1.2, sdlog = 0.55,
+    why = "pulses of half to three times a stratum's seed"),
+  stratum_sd_concentrated = list("lognormal", median = 3.2, sdlog = 0.15,
+    why = "a few strata hold nearly all cases, as BDBV's provinces"),
+  stratum_sd_even = list("lognormal", median = 1, sdlog = 0.42,
+    why = "strata sizes within about a factor of 10 to 50"),
+  gt_jitter = list("lognormal", median = 1, sdlog = 0.12,
+    why = "the generation time's mean within about 20% of its level"),
+  rate = list("lognormal", median = 0.05, sdlog = 0.55, upper = 0.2,
+    why = "doubling in 1 to 4 weeks, as fast as 3.5 days (BDBV's start)"),
+  flat = list("normal", mean = 0, sd = 0.005,
+    why = "a flat outbreak drifts by at most about 1% a day"),
+  peak = list("beta", a = 6, b = 6, lower = 0, upper = 1,
+    why = "a single wave peaks away from the ends of the series"),
+  amplitude = list("lognormal", median = 0.04, sdlog = 0.42,
+    why = "oscillations of 2% to 8% daily growth"),
+  period = list("lognormal", median = 58, sdlog = 0.45,
+    why = "cycles of 4 to 17 weeks"),
+  phase = list("uniform", lower = 0, upper = 2 * pi,
+    why = "no favoured phase"),
+  wave_scale = list("lognormal", median = 0.45, sdlog = 0.5, upper = 1,
+    why = "later waves a fifth to the full size of the largest"),
+  noise_sd = list("lognormal", median = 0.0045, sdlog = 0.5,
+    why = "weekly growth noise of 0.2% to 1% a day"),
+  size_per_stratum = list("lognormal", median = 3000, sdlog = 2.1,
+    lower = 10, upper = 5e5,
+    why = "BDBV's provinces (a few cases) to Germany's national series"),
+  delay_median = list("lognormal", median = 3.2, sdlog = 0.7,
+    lower = 1, upper = 10,
+    why = "lognormal delays with medians of 1 to 10 days"),
+  delay_sdlog = list("lognormal", median = 1.1, sdlog = 0.48,
+    upper = 2, why = "right-skewed delays, no longer-tailed than real ones"),
+  delay_mean = list("lognormal", median = 6.5, sdlog = 0.7,
+    lower = 1, upper = 21, why = "mean delays of 1 day to 3 weeks"),
+  delay_cv = list("lognormal", median = 1.13, sdlog = 0.2,
+    lower = 0.75, upper = 1.6,
+    why = "gamma shape below 2, which the simulator needs"),
+  delay_place_sd = list("lognormal", median = 0.28, sdlog = 0.63,
+    upper = 1, why = "places' delays differ by up to about x2"),
+  delay_age_sd = list("halfnormal", scale = 0.13,
+    why = "ages' delays differ little"),
+  hazard_walk_sd = list("lognormal", median = 0.12, sdlog = 0.55,
+    why = "a random-walk hazard that moves within weeks"),
+  hazard_sd = list("halfnormal", scale = 0.075,
+    why = "small day-to-day hazard noise"),
+  drift = list("lognormal", median = 0.2, sdlog = 0.42,
+    why = "a drift of 10% to 40% in the delay over the outbreak"),
+  step = list("lognormal", median = 0.32, sdlog = 0.28,
+    why = "a step of 20% to 50% in the delay"),
+  step_at = list("uniform", lower = 0.2, upper = 0.8,
+    why = "a step at any time away from the ends"),
+  periodic = list("lognormal", median = 0.2, sdlog = 0.42,
+    why = "a periodic delay change of 10% to 40%"),
+  periodic_weeks = list("lognormal", median = 7, sdlog = 0.33,
+    why = "a period of 4 to 12 weeks"),
+  walk_sd = list("lognormal", median = 0.055, sdlog = 0.37,
+    why = "a weekly delay walk of 3% to 10%"),
+  reference_dow_sd = list("lognormal", median = 0.3, sdlog = 0.45,
+    upper = 0.6, why = "day-of-week effects on onsets of about x1.5 to x6"),
+  dow_sd = list("lognormal", median = 0.25, sdlog = 0.55, upper = 0.6,
+    why = "day-of-week effects on reports of about x1.2 to x6"),
+  sqrt_phi = list("halfnormal", scale = 0.25,
+    why = "NB1 dispersion with 95% of mass below 0.5"),
+  bunch_every = list("lognormal", median = 7.2, sdlog = 0.36,
+    why = "a reporting bunch every 4 to 13 weeks"),
+  bunch_at = list("uniform", lower = 0.05, upper = 0.95,
+    why = "bunches at any time"),
+  slow_at = list("uniform", lower = 0.2, upper = 0.8,
+    why = "a slowdown at any time away from the ends"),
+  slow_mult = list("lognormal", median = 2.1, sdlog = 0.21,
+    why = "a slowdown of x1.5 to x3 on the mean delay"),
+  shock_at = list("uniform", lower = 0.1, upper = 0.9,
+    why = "shocks at any time away from the ends"),
+  shock_mult = list("lognormal", median = 3.1, sdlog = 0.28,
+    why = "a backlog of x2 to x5 on the mean delay"),
+  obs_phi_sd = list("lognormal", median = 0.55, sdlog = 0.37,
+    why = "strata's dispersion within about x2 to x3 of the outbreak's")
+)
+
+# `n` draws of setting `name` from its sampling distribution
+# (`setting_distributions`), truncated by its inverse cdf.
+draw_setting <- function(name, n = 1L) {
+  d <- setting_distributions[[name]]
+  if (is.null(d)) stop("no sampling distribution for ", name)
+  p <- switch(d[[1]],
+    lognormal = list(
+      q = function(u) qlnorm(u, log(d$median), d$sdlog),
+      p = function(x) plnorm(x, log(d$median), d$sdlog)
+    ),
+    halfnormal = list(
+      q = function(u) qnorm((1 + u) / 2, 0, d$scale),
+      p = function(x) 2 * pnorm(pmax(x, 0), 0, d$scale) - 1
+    ),
+    normal = list(
+      q = function(u) qnorm(u, d$mean, d$sd),
+      p = function(x) pnorm(x, d$mean, d$sd)
+    ),
+    beta = list(
+      q = function(u) d$lower + (d$upper - d$lower) * qbeta(u, d$a, d$b),
+      p = function(x) pbeta((x - d$lower) / (d$upper - d$lower), d$a, d$b)
+    ),
+    uniform = list(
+      q = function(u) qunif(u, d$lower, d$upper),
+      p = function(x) punif(x, d$lower, d$upper)
+    ),
+    stop("unknown distribution ", d[[1]])
+  )
+  lo <- if (is.null(d$lower) || d[[1]] %in% c("beta", "uniform")) 0 else {
+    p$p(d$lower)
+  }
+  hi <- if (is.null(d$upper) || d[[1]] %in% c("beta", "uniform")) 1 else {
+    p$p(d$upper)
+  }
+  p$q(runif(n, lo, hi))
+}
+
 # The continuous settings of a simulation, drawn again when a draw fails.
 draw_values <- function(design) {
-  log_uniform <- function(lo, hi) exp(runif(1, log(lo), log(hi)))
   places_ages <- design$strata == "places_ages"
   renewal <- design$process != "growth"
   # Places with cases in a concentrated outbreak.
@@ -492,88 +643,87 @@ draw_values <- function(design) {
     quiet = if (design$spread == "concentrated") {
       1 - active / design$n_places
     } else {
-      runif(1, 0, 0.9)
+      draw_setting("quiet")
     },
-    coupling = runif(1, 0.5, 1),
+    coupling = draw_setting("coupling"),
     # Places' Rt: correlation and scale of correlated deviations, and each
     # place's delay in days behind the first when lagged.
-    place_rho = runif(1, 0.3, 0.9),
-    place_sd = runif(1, 0.01, 0.03),
+    place_rho = draw_setting("place_rho"),
+    place_sd = draw_setting("place_sd"),
     place_lags = c(0L, sample(1:28, design$n_places - 1L, replace = TRUE)),
-    late_at = runif(1, 0.2, 0.6),
+    late_at = draw_setting("late_at"),
     late_days = sample(7:14, 1),
     # Mixing: the share of pressure from other places, the asymmetric
     # order, places' positions and the kernel's range, and the
     # time-varying switch.
-    mixing_eps = log_uniform(0.01, 0.5),
+    mixing_eps = draw_setting("mixing_eps"),
     mixing_order = sample.int(design$n_places),
-    mixing_x = runif(design$n_places),
-    mixing_y = runif(design$n_places),
-    mixing_range = log_uniform(0.05, 0.5),
+    mixing_x = draw_setting("mixing_xy", design$n_places),
+    mixing_y = draw_setting("mixing_xy", design$n_places),
+    mixing_range = draw_setting("mixing_range"),
     mixing_switch = sample(c("on", "off"), 1),
-    mixing_switch_at = runif(1, 0.2, 0.8),
+    mixing_switch_at = draw_setting("mixing_switch_at"),
     mixing_switch_days = sample(7:21, 1),
     # Imports, in units of a stratum's seed: a daily rate, or one to four
     # pulses at shares of the way through.
-    import_rate = log_uniform(0.005, 0.1),
-    import_at = sort(runif(sample(1:4, 1))),
-    import_size = runif(1, 0.5, 3),
+    import_rate = draw_setting("import_rate"),
+    import_at = sort(draw_setting("import_at", sample(1:4, 1))),
+    import_size = draw_setting("import_size"),
     stratum_sd = if (design$spread == "concentrated") {
-      runif(1, 2.5, 4)
+      draw_setting("stratum_sd_concentrated")
     } else {
-      runif(1, 0.5, 2)
+      draw_setting("stratum_sd_even")
     },
     gt_mean = if (renewal) {
-      as.numeric(sub("renewal_", "", design$process)) * exp(runif(1, -0.2, 0.2))
+      as.numeric(sub("renewal_", "", design$process)) *
+        draw_setting("gt_jitter")
     } else {
       NA_real_
     },
     # Trajectory: steady rates double or halve in 1 to 4 weeks.
-    rate = runif(1, log(2) / 28, log(2) / 7),
-    flat = rnorm(1, 0, 0.005),
-    peak = runif(1, 0.3, 0.7),
-    amplitude = runif(1, 0.02, 0.08),
-    period = runif(1, 28, 120),
-    phase = runif(1, 0, 2 * pi),
+    rate = draw_setting("rate"),
+    flat = draw_setting("flat"),
+    peak = draw_setting("peak"),
+    amplitude = draw_setting("amplitude"),
+    period = draw_setting("period"),
+    phase = draw_setting("phase"),
     waves = waves <- sample(2:3, 1),
-    # Each cycle's scale on the amplitude, log-uniform on 0.2 to 1.
-    wave_scale = exp(runif(waves + 1L, log(0.2), 0)),
-    noise_sd = runif(1, 0.002, 0.01),
-    # Cases per stratum with cases, log-uniform from 30 to 30,000, so
-    # outbreaks span small clusters to national epidemics (Germany's
-    # 2021/22 hospitalisations, cholera); the target is this times the
-    # strata with cases, set once the quiet places are drawn.
-    size_per_stratum = log_uniform(30, 3e4),
-    delay_median = log_uniform(1, 10),
-    delay_sdlog = runif(1, 0.5, 2.5),
-    delay_mean = log_uniform(2, 21),
+    # Each cycle's scale on the amplitude.
+    wave_scale = draw_setting("wave_scale", waves + 1L),
+    noise_sd = draw_setting("noise_sd"),
+    # Cases per stratum with cases; the target is this times the strata
+    # with cases, set once the quiet places are drawn.
+    size_per_stratum = draw_setting("size_per_stratum"),
+    delay_median = draw_setting("delay_median"),
+    delay_sdlog = draw_setting("delay_sdlog"),
+    delay_mean = draw_setting("delay_mean"),
     # Gamma delays with shape above 2 fail in the simulate branch.
-    delay_cv = runif(1, 0.8, 1.6),
+    delay_cv = draw_setting("delay_cv"),
     # Delays differ by place, up to about x2 on the location.
-    delay_place_sd = runif(1, 0.1, 0.8),
-    delay_age_sd = runif(1, 0.05, 0.25),
-    hazard_walk_sd = runif(1, 0.05, 0.3),
-    hazard_sd = runif(1, 0, 0.15),
+    delay_place_sd = draw_setting("delay_place_sd"),
+    delay_age_sd = draw_setting("delay_age_sd"),
+    hazard_walk_sd = draw_setting("hazard_walk_sd"),
+    hazard_sd = draw_setting("hazard_sd"),
     # Delay over time, as log changes of its location or logit hazard.
-    drift = sample(c(-1, 1), 1) * runif(1, 0.1, 0.4),
-    step = sample(c(-1, 1), 1) * runif(1, 0.2, 0.5),
-    step_at = runif(1, 0.2, 0.8),
-    periodic = runif(1, 0.1, 0.4),
-    periodic_weeks = runif(1, 4, 12),
-    walk_sd = runif(1, 0.03, 0.1),
-    reference_dow_sd = runif(1, 0.1, 0.5),
-    dow_sd = runif(1, 0.1, 0.6),
-    sqrt_phi = log_uniform(0.02, 1),
+    drift = sample(c(-1, 1), 1) * draw_setting("drift"),
+    step = sample(c(-1, 1), 1) * draw_setting("step"),
+    step_at = draw_setting("step_at"),
+    periodic = draw_setting("periodic"),
+    periodic_weeks = draw_setting("periodic_weeks"),
+    walk_sd = draw_setting("walk_sd"),
+    reference_dow_sd = draw_setting("reference_dow_sd"),
+    dow_sd = draw_setting("dow_sd"),
+    sqrt_phi = draw_setting("sqrt_phi"),
     # Bunching: one episode every 4 to 13 weeks, each one to three report
     # days with no reports, at shares of the way through.
-    bunch_every = runif(1, 4, 13),
+    bunch_every = draw_setting("bunch_every"),
     # A slowdown: when, how long and how large.
-    slow_at = runif(1, 0.2, 0.8),
+    slow_at = draw_setting("slow_at"),
     slow_weeks = sample(2:6, 1),
-    slow_mult = runif(1, 1.5, 3)
+    slow_mult = draw_setting("slow_mult")
   )
   n_bunch <- max(1L, round(v$weeks / v$bunch_every))
-  v$bunch_at <- sort(runif(n_bunch, 0.05, 0.95))
+  v$bunch_at <- sort(draw_setting("bunch_at", n_bunch))
   v$bunch_len <- sample(1:3, n_bunch, replace = TRUE)
   family <- if (design$delay_form == "non_parametric") {
     "none"
@@ -605,13 +755,13 @@ draw_values <- function(design) {
   }
   v$shock_places <- rep(places, sample(1:3, length(places), replace = TRUE))
   n_shocks <- length(v$shock_places)
-  v$shock_at <- runif(n_shocks, 0.1, 0.9)
+  v$shock_at <- draw_setting("shock_at", n_shocks)
   v$shock_weeks <- sample(1:4, n_shocks, replace = TRUE)
-  v$shock_mult <- runif(n_shocks, 2, 5)
+  v$shock_mult <- draw_setting("shock_mult", n_shocks)
   # Observation family and dispersion per stratum (`.group` order: places
   # then ages within each).
   n_s <- design$n_places * design$n_ages
-  v$obs_phi_sd <- runif(1, 0.3, 1)
+  v$obs_phi_sd <- draw_setting("obs_phi_sd")
   v$obs_sqrt_phi <- if (design$obs_strata == "shared") {
     rep(v$sqrt_phi, n_s)
   } else {
@@ -1255,7 +1405,7 @@ simulate_outbreak <- function(design, v) {
 min_size <- 10
 max_independent <- 8L
 max_size <- function(design) {
-  1e5 * design$n_places * design$n_ages
+  1e6 * design$n_places * design$n_ages
 }
 
 # The software a batch ran on, recorded with each simulation: the same

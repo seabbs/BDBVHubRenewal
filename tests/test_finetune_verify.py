@@ -65,3 +65,13 @@ def test_real_validation_results_are_outside_the_hash(checkpoint):
     settings["real_validation_sha256"] = "abc"
     (where / "settings.json").write_text(json.dumps(settings))
     assert problems(where, lambda _, path: files[path]) == []
+
+
+def test_loss_parts_are_outside_the_hash(checkpoint):
+    where, files = checkpoint
+    settings = json.loads((where / "settings.json").read_text())
+    for name in ("held_out_loss", "real_validation_loss"):
+        settings[f"{name}_nowcast"] = 0.04
+        settings[f"{name}_forecast"] = 0.06
+    (where / "settings.json").write_text(json.dumps(settings))
+    assert problems(where, lambda _, path: files[path]) == []

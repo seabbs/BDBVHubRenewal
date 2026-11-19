@@ -1,8 +1,9 @@
 """Colours from the paper figures, for the dashboard.
 
-A reference configured with `paper_model` takes that model's colour in
-the paper figures (`paperfigs.style`), so randomwalknowcast is drawn in
-the same colour on the dashboard and in the paper; the WIS bars shade
+A reference configured with `paper_model` takes that model's name and
+colour from the shared map (`bdbvhubrenewal.evaluation.labels`, through
+`paperfigs.style`), so a model is named and drawn alike on the dashboard
+and in the paper; the WIS bars shade
 the model's colour by part as the paper's do. `paper/` is put on
 the path here, as the paper's workflow does. The nowcast panels keep the
 laptop dashboard's own drawing (ribbons, medians, truth line).
@@ -17,12 +18,19 @@ PAPER = Path(__file__).parents[3] / "paper"
 if str(PAPER) not in sys.path:
     sys.path.insert(0, str(PAPER))
 
-from paperfigs import plots, scores, style  # noqa: E402
+from paperfigs import scores, style  # noqa: E402
+
+from bdbvhubrenewal.evaluation import labels  # noqa: E402
 
 
 def model_colour(model: str) -> str:
     """Return a model's colour in the paper figures."""
     return style.model_style(model, [model])[0]
+
+
+def model_label(model: str) -> str:
+    """Return a model's display name (`labels.model_label`)."""
+    return labels.model_label(model)
 
 
 WIS_PARTS: tuple[str, ...] = tuple(scores.WIS_PARTS)
@@ -32,15 +40,20 @@ INK_TEXT: str = style.INK["text"]
 """The paper's text ink, whose shades key the parts in a legend."""
 
 
+def part_share(part: str) -> float:
+    """Return the share of its model's colour a WIS part's segment takes."""
+    return float(labels.WIS_PART_SHADES[part])
+
+
 def part_colour(colour: str, part: str) -> str:
     """Return a WIS part's bar colour: its model's colour, shaded.
 
     The share of the colour each part takes, the rest white, is the
-    paper's (`paperfigs.plots.PART_SHADES`).
+    paper's (`labels.WIS_PART_SHADES`).
     """
     from matplotlib.colors import to_hex, to_rgb
 
-    share = plots.PART_SHADES[part]
+    share = part_share(part)
     try:
         rgb = to_rgb(colour)
     except ValueError:

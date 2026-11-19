@@ -292,7 +292,7 @@ def _function(text: str, name: str) -> str:
     return body[: body.index("\n}\n")]
 
 
-DRAW: Final = r"\b(runif|rnorm|sample|log_uniform)\("
+DRAW: Final = r"\b(runif|rnorm|sample|log_uniform|draw_setting)\("
 """R calls that make an expression a random draw."""
 
 
@@ -521,13 +521,22 @@ SUMMARIES: Final = {
         ("if (is.null(design$weeks)) sample(16:52, 1) else design$weeks"),
         "{16, ..., 52}",
     ),
-    "quiet": (
+    "quiet": [
         (
-            'if (design$spread == "concentrated") { 1 - active / design$n'
-            "_places } else { runif(1, 0, 0.9) }"
+            (
+                'if (design$spread == "concentrated") { 1 - active / design$n'
+                "_places } else { runif(1, 0, 0.9) }"
+            ),
+            "all but the active places if concentrated; U(0, 0.9) if even",
         ),
-        "all but the active places if concentrated; U(0, 0.9) if even",
-    ),
+        (
+            (
+                'if (design$spread == "concentrated") { 1 - active / design$n'
+                '_places } else { draw_setting("quiet") }'
+            ),
+            "all but the active places if concentrated; <quiet> if even",
+        ),
+    ],
     "place_lags": (
         "c(0L, sample(1:28, design$n_places - 1L, replace = TRUE))",
         "0 for the first place, {1, ..., 28} for the others",
@@ -548,24 +557,52 @@ SUMMARIES: Final = {
         'sample(c("on", "off"), 1)',
         "on or off",
     ),
-    "import_at": (
-        "sort(runif(sample(1:4, 1)))",
-        "{1, ..., 4} times, U(0, 1) each",
-    ),
-    "stratum_sd": (
+    "import_at": [
         (
-            'if (design$spread == "concentrated") { runif(1, 2.5, 4) } el'
-            "se { runif(1, 0.5, 2) }"
+            "sort(runif(sample(1:4, 1)))",
+            "{1, ..., 4} times, U(0, 1) each",
         ),
-        "U(2.5, 4) if concentrated; U(0.5, 2) if even",
-    ),
-    "gt_mean": (
         (
-            'if (renewal) { as.numeric(sub("renewal_", "", design$process'
-            ")) * exp(runif(1, -0.2, 0.2)) } else { NA_real_ }"
+            'sort(draw_setting("import_at", sample(1:4, 1)))',
+            "{1, ..., 4} times, <import_at> each",
         ),
-        "the process's mean (3, 7 or 15) times exp(U(-0.2, 0.2))",
-    ),
+    ],
+    "stratum_sd": [
+        (
+            (
+                'if (design$spread == "concentrated") { runif(1, 2.5, 4) } el'
+                "se { runif(1, 0.5, 2) }"
+            ),
+            "U(2.5, 4) if concentrated; U(0.5, 2) if even",
+        ),
+        (
+            (
+                'if (design$spread == "concentrated") { draw_setting("strat'
+                'um_sd_concentrated") } else { draw_setting("stratum_sd_eve'
+                'n") }'
+            ),
+            (
+                "<stratum_sd_concentrated> if concentrated; "
+                "<stratum_sd_even> if even"
+            ),
+        ),
+    ],
+    "gt_mean": [
+        (
+            (
+                'if (renewal) { as.numeric(sub("renewal_", "", design$process'
+                ")) * exp(runif(1, -0.2, 0.2)) } else { NA_real_ }"
+            ),
+            "the process's mean (3, 7 or 15) times exp(U(-0.2, 0.2))",
+        ),
+        (
+            (
+                'if (renewal) { as.numeric(sub("renewal_", "", design$process'
+                ')) * draw_setting("gt_jitter") } else { NA_real_ }'
+            ),
+            "the process's mean (3, 7 or 15) times <gt_jitter>",
+        ),
+    ],
     "waves": (
         "waves <- sample(2:3, 1)",
         "{2, 3}",
@@ -574,22 +611,28 @@ SUMMARIES: Final = {
         "exp(runif(waves + 1L, log(0.2), 0))",
         "exp(U(log 0.2, 0)) each",
     ),
-    "drift": (
-        "sample(c(-1, 1), 1) * runif(1, 0.1, 0.4)",
-        "±U(0.1, 0.4)",
-    ),
-    "step": (
-        "sample(c(-1, 1), 1) * runif(1, 0.2, 0.5)",
-        "±U(0.2, 0.5)",
-    ),
+    "drift": [
+        ("sample(c(-1, 1), 1) * runif(1, 0.1, 0.4)", "±U(0.1, 0.4)"),
+        ('sample(c(-1, 1), 1) * draw_setting("drift")', "±<drift>"),
+    ],
+    "step": [
+        ("sample(c(-1, 1), 1) * runif(1, 0.2, 0.5)", "±U(0.2, 0.5)"),
+        ('sample(c(-1, 1), 1) * draw_setting("step")', "±<step>"),
+    ],
     "max_delay": (
         "max_delay_for(delay_parameters(family, v)$q99)",
         "the delay's 99th centile",
     ),
-    "bunch_at": (
-        "sort(runif(n_bunch, 0.05, 0.95))",
-        "U(0.05, 0.95) each, one per bunch",
-    ),
+    "bunch_at": [
+        (
+            "sort(runif(n_bunch, 0.05, 0.95))",
+            "U(0.05, 0.95) each, one per bunch",
+        ),
+        (
+            'sort(draw_setting("bunch_at", n_bunch))',
+            "<bunch_at> each, one per bunch",
+        ),
+    ],
     "shock_places": (
         "rep(places, sample(1:3, length(places), replace = TRUE))",
         "{1, ..., 3} places with cases, {1, ..., 3} shocks each",
@@ -598,10 +641,10 @@ SUMMARIES: Final = {
         "10",
         "10",
     ),
-    "max_size": (
-        "1e5 * design$n_places * design$n_ages",
-        "10^5 per stratum",
-    ),
+    "max_size": [
+        ("1e5 * design$n_places * design$n_ages", "10^5 per stratum"),
+        ("1e6 * design$n_places * design$n_ages", "10^6 per stratum"),
+    ],
     "max_independent": (
         "8L",
         "8",
@@ -612,7 +655,91 @@ exact expression it summarises, so a changed draw fails until its summary
 is updated."""
 
 
-def describe(name: str, expr: str) -> str:
+DISTRIBUTION: Final = {
+    "lognormal": "LogNormal(median {median}, sdlog {sdlog})",
+    "halfnormal": "HalfNormal({scale})",
+    "normal": "N({mean}, {sd})",
+    "beta": "Beta({a}, {b})",
+    "uniform": "U({lower}, {upper})",
+}
+"""Short notation of each sampling distribution the simulator names."""
+
+
+def parse_distributions(text: str) -> dict[str, dict[str, str]]:
+    """Return the simulator's sampling distributions of its settings.
+
+    Each entry of `setting_distributions`: its distribution and
+    parameters, as written, and the reason for it (`why`). Empty for a
+    simulator without the table (grids before r6).
+    """
+    if "setting_distributions <- list(" not in text:
+        return {}
+    body = text[text.index("setting_distributions <- list(") :]
+    body = body[: body.index("\n)\n")]
+    out = {}
+    for m in re.finditer(r"(\w+) = list\(", body):
+        depth, k = 1, m.end()
+        while depth:
+            depth += {"(": 1, ")": -1}.get(body[k], 0)
+            k += 1
+        inner = " ".join(body[m.end() : k - 1].split())
+        dist = re.match(r'"(\w+)"', inner)
+        if not dist:
+            continue
+        entry = {"dist": dist.group(1)}
+        for key, val in re.findall(r'(\w+) = ("[^"]*"|[^,]+)', inner):
+            entry[key] = val.strip().strip('"')
+        out[m.group(1)] = entry
+    return out
+
+
+def _value(x: str) -> str:
+    """Return a parameter as written, with large numbers grouped."""
+    try:
+        v = float(x)
+    except ValueError:
+        return x.replace(" * pi", "π").replace("2π", "2π")
+    return _number(v)
+
+
+def distribution(entry: dict[str, str]) -> str:
+    """Return a sampling distribution in short notation, truncated."""
+    params = {
+        k: _value(v) for k, v in entry.items() if k not in ("dist", "why")
+    }
+    out = DISTRIBUTION[entry["dist"]].format(**params)
+    if entry["dist"] == "beta":
+        out += f" on [{params['lower']}, {params['upper']}]"
+    elif entry["dist"] != "uniform" and {"lower", "upper"} & set(params):
+        lower, upper = params.get("lower", "0"), params.get("upper", "∞")
+        out += f" on [{lower}, {upper}]"
+    return out
+
+
+def distribution_table(text: str) -> pd.DataFrame:
+    """Return each setting's sampling distribution and the reason for it."""
+    return pd.DataFrame(
+        [
+            {
+                "setting": name,
+                "distribution": distribution(entry),
+                "why": entry.get("why", ""),
+            }
+            for name, entry in parse_distributions(text).items()
+        ],
+        columns=["setting", "distribution", "why"],
+    )
+
+
+DISTRIBUTION_HEADERS: Final = {
+    "setting": "Setting",
+    "distribution": "Sampling distribution",
+    "why": "Reason",
+}
+"""Headers of the SI table of sampling distributions."""
+
+
+def describe(name: str, expr: str, text: str = "") -> str:
     """Return a draw in short notation, or its plain summary.
 
     Raises
@@ -620,12 +747,30 @@ def describe(name: str, expr: str) -> str:
     ValueError
         If the simulator's expression differs from the one summarised.
     """
+    m = re.match(r'^draw_setting\("(\w+)"(, .+)?\)$', expr)
+    if m:
+        entry = parse_distributions(text).get(m.group(1))
+        if entry is None:
+            raise ValueError(
+                f"{name} draws {m.group(1)}, which has no distribution"
+            )
+        return distribution(entry) + (" each" if m.group(2) else "")
     if name not in SUMMARIES:
         return compact(expr)
-    expected, text = SUMMARIES[name]
-    if " ".join(expr.split()) != expected:
-        raise ValueError(f"{name}'s draw changed; update SUMMARIES")
-    return text
+    flat = " ".join(expr.split())
+    dists = parse_distributions(text)
+    for expected, summary in _alternatives(SUMMARIES[name]):
+        if flat == expected:
+            # `<name>` stands for that setting's sampling distribution.
+            return re.sub(
+                r"<(\w+)>", lambda m: distribution(dists[m.group(1)]), summary
+            )
+    raise ValueError(f"{name}'s draw changed; update SUMMARIES")
+
+
+def _alternatives(entry: tuple | list) -> list[tuple[str, str]]:
+    """Return a summary's (expression, text) pairs, one per grid version."""
+    return list(entry) if isinstance(entry, list) else [entry]
 
 
 def compact(expr: str) -> str:
@@ -670,7 +815,7 @@ def layer_tables(text: str) -> dict[str, pd.DataFrame]:
         if name not in FACTOR_OF:
             raise KeyError(f"{name} has no factor in FACTOR_OF")
         draws.setdefault(FACTOR_OF[name], []).append(
-            f"{LABELS[name][0]}: {describe(name, expr)}"
+            f"{LABELS[name][0]}: {describe(name, expr, text)}"
         )
     tables: dict[str, list[dict]] = {"epidemic": [], "reporting": []}
     for name, shares in parse_shares(text).items():
@@ -846,6 +991,9 @@ def main() -> None:
         (args.si_dir / f"grid-{layer}.md").write_text(
             to_markdown(table, HEADERS)
         )
+    (args.si_dir / "grid-distributions.md").write_text(
+        to_markdown(distribution_table(text), DISTRIBUTION_HEADERS)
+    )
     (args.si_dir / "epinowcast-model.md").write_text(model_note(text))
     config = json.loads(args.config)
     (args.si_dir / "heldout-set.md").write_text(heldout_note(config))

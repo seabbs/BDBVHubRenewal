@@ -30,11 +30,15 @@ NOT_HASHED = (
     "device",
     "held_out_loss_start",
     "held_out_loss",
+    "held_out_loss_nowcast",
+    "held_out_loss_forecast",
     "held_out_loss_by_level",
     "held_out_loss_by_source",
     "seconds",
     "real_validation_sha256",
     "real_validation_loss",
+    "real_validation_loss_nowcast",
+    "real_validation_loss_forecast",
 )
 """Settings written after the hash is taken."""
 

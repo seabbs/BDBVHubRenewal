@@ -2,6 +2,7 @@
 var D=JSON.parse(document.getElementById("ldata").textContent);
 var $=function(i){return document.getElementById(i)};
 var STY=["","6 3","8 3 2 3","2 3"],SPAL=["#16a34a","#ea580c","#9333ea","#0891b2","#2563eb","#ca8a04","#db2777"];
+var PARTS=[["nowcast","nowcast steps","6 3"],["forecast","forecast steps","2 3"]];
 var SRCS=[];D.runs.forEach(function(r){Object.keys(r.bysrc).concat(Object.keys(r.src0||{})).forEach(function(k){if(SRCS.indexOf(k)<0)SRCS.push(k)})});SRCS.sort();
 var SRC={};SRCS.forEach(function(k,i){SRC[k]=SPAL[i%SPAL.length]});
 function sw(c,d){return '<svg width=22 height=8 viewBox="0 0 22 8"><line x1=0 x2=22 y1=4 y2=4 stroke="'+c+'" stroke-width=2'+(d?' stroke-dasharray="'+d+'"':"")+' /></svg>'}
@@ -43,14 +44,20 @@ function draw(){
   else tr.push({label:r.label+" rolling mean",color:r.color,pts:roll(p,20),kind:"faint"});
   if(!rel)held.push({label:r.label,color:r.color,pts:r.held,kind:"pts"});
   else{var den=mode=="start"?r.full0:r.bfull;if(den&&r.full0)held.push({label:r.label,color:r.color,pts:[[0,r.full0/den]].concat(r.ck.map(function(q){return [q[0],q[1]/den]})),kind:"pts"})}
+  // Its parts over the steps to each block's cut-off and after it.
+  PARTS.forEach(function(p){var hp=r.held_parts||{},cp=r.ck_parts||{},z=(r.parts0||{})[p[0]],pts;
+   if(!rel)pts=hp[p[0]]||[];
+   else{var d=(mode=="start"?r.parts0:r.bparts0||{})[p[0]];if(!d||!z)return;pts=[[0,z/d]].concat((cp[p[0]]||[]).map(function(q){return [q[0],q[1]/d]}))}
+   if(pts.length)held.push({part:p[0],label:r.label+" "+p[1],color:r.color,pts:pts,kind:"pts",dash:p[2]})});
   SRCS.forEach(function(s){var pts=(r.bysrc[s]||[]);if(!pts.length)return;var z=(r.src0||{})[s];pts=(z?[[0,z]]:[]).concat(pts);
    if(rel){var d=(mode=="start"?r.src0:r.bsrc)[s];if(!d)return;pts=pts.map(function(q){return [q[0],q[1]/d]})}
    if(byRuns.indexOf(r)<0)byRuns.push(r);
    by.push({src:s,label:s+" ("+r.label+")",color:SRC[s],pts:pts,kind:"pts",dash:STY[i%4]})})});
  var used=SRCS.filter(function(s){return by.some(function(b){return b.src==s})});
  var byLeg=used.map(function(s){return '<span><i style="background:'+SRC[s]+'"></i>'+s+'</span>'}).join("")+byRuns.map(function(r){return '<span>'+sw("var(--fg)",STY[D.runs.indexOf(r)%4])+' '+r.label+'</span>'}).join("");
+ var heldLeg=held.some(function(h){return h.part})?held.filter(function(h){return !h.part}).map(function(h){return '<span><i style="background:'+h.color+'"></i>'+h.label+'</span>'}).join("")+'<span>'+sw("var(--fg)","")+' all steps</span>'+PARTS.filter(function(p){return held.some(function(h){return h.part==p[0]})}).map(function(p){return '<span>'+sw("var(--fg)",p[2])+' '+p[1]+'</span>'}).join(""):null;
  var ttl=mode=="raw"?"Held-out pooled loss (first 100 blocks)":"Held-out pooled loss (checkpoints, full set)";
- $("lossplots").innerHTML=chart({title:"Training loss (rolling mean of 20)"+suf,info:"train",series:tr,xmax:xmax,hl:hl})+chart({title:ttl+suf,info:"held",series:held,xmax:xmax,hl:hl})+chart({title:"Held-out loss by source (colour source, style run)"+suf,info:"bysrc",series:by,xmax:xmax,hl:hl,leg:byLeg});
+ $("lossplots").innerHTML=chart({title:"Training loss (rolling mean of 20)"+suf,info:"train",series:tr,xmax:xmax,hl:hl})+chart({title:ttl+suf,info:"held",series:held,xmax:xmax,hl:hl,leg:heldLeg})+chart({title:"Held-out loss by source (colour source, style run)"+suf,info:"bysrc",series:by,xmax:xmax,hl:hl,leg:byLeg});
  var refs=ftSel.refsOn();
  $("lossrefs").innerHTML=refs.map(function(r){return '<span class="tog dis" title="'+r.label+' is a reference with no training or held-out loss">'+r.label+'</span>'}).join("");
 }

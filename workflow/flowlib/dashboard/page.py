@@ -431,7 +431,9 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
     out = []
     for r in ctx.runs:
         base = own.get(r.base or "") if r.base else None
-        refs = {"full0": base["full0"], "src0": base["src0"]} if base else None
+        refs = (
+            {k: base[k] for k in ("full0", "src0", "parts0")} if base else None
+        )
         out.append(
             training.loss_run(r, ctx.log(r), cks[r.key], st.spo, refs, r.colour)
         )
@@ -623,6 +625,8 @@ def nowcasts_section(
                 for r in ctx.runs
             ],
             "defaults": defaults,
+            # WIS parts in the paper's order, each its share of the colour.
+            "parts": [[p, wis.part_share(p)] for p in wis.PARTS],
         }
     )
     first = defaults.get("source")
