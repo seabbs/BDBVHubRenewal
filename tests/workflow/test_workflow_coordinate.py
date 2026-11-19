@@ -61,3 +61,21 @@ def test_an_installed_timer_is_refused():
 def test_the_taskfile_runs_the_coordinator():
     text = (ROOT / "Taskfile.yml").read_text()
     assert "workflow/scripts/coordinate.py" in text
+
+
+def test_a_tick_that_raises_backs_off_and_goes_on(tmp_path):
+    stop = tmp_path / "coordinator.stop"
+    slept = []
+    calls = []
+
+    def tick():
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("a worker went away")
+        stop.write_text("")
+        return 0
+
+    rc = coordinate.run(tick, stop, pause=5, backoff=60, sleep=slept.append)
+    assert rc == 0
+    assert len(calls) == 2
+    assert slept == [60]
