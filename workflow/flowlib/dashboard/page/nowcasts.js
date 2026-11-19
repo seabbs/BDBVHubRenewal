@@ -5,9 +5,10 @@ var $=function(i){return document.getElementById(i)};
 var DASH=["","6 3","8 3 2 3","2 3"],MK=["circle","square","triangle","diamond"];
 var DEF=D.defaults||{};
 var FIRST=(DSS.find(function(d){return !d.empty})||DSS[0]).key;
-var S={ds:FIRST,locs:[],src:DEF.source||"",target:null,oi:null,latest:true,nd:1,step:2,on:null,chk:{},yfit:0,ylog:false,bands:0};
+var S={ds:FIRST,locs:[],src:DEF.source||"",target:null,oi:null,latest:true,nd:4,step:2,mode:0,model:null,on:null,chk:{},yfit:0,ylog:false,bands:0};
 var KEY="ftg5";
 try{var sv=JSON.parse(sessionStorage.getItem(KEY)||"null");if(sv)Object.keys(sv).forEach(function(k){S[k]=sv[k]})}catch(e){}
+if(!(S.nd>=2))S.nd=4;
 function cur(){return DSS.find(function(d){return d.key==S.ds})||DSS[0]}
 // A dataset with no nowcasts yet (held-out simulations until they are scored) shows why.
 function empty(){$("gdate").textContent="";$("gck").innerHTML="";$("glocs").innerHTML="";$("gsum").textContent="Locations";
@@ -23,18 +24,26 @@ if(S.latest||ORI().indexOf(S.origin)<0){S.oi=ORI().length-1;S.latest=true}else S
 // Series ids are the configured reference keys and checkpoint hashes.
 function onKey(id){return id}
 function isOn(k){return ftSel.get().indexOf(k)>=0}
-function save(){try{sessionStorage.setItem(KEY,JSON.stringify({ds:S.ds,locs:S.locs,src:S.src,target:S.target,latest:S.latest,origin:ORI()[S.oi],nd:S.nd,step:S.step,chk:S.chk}))}catch(e){}}
+function save(){try{sessionStorage.setItem(KEY,JSON.stringify({ds:S.ds,locs:S.locs,src:S.src,target:S.target,latest:S.latest,origin:ORI()[S.oi],nd:S.nd,step:S.step,chk:S.chk,mode:S.mode,model:S.model}))}catch(e){}}
 // A run's chosen checkpoints, smallest first, so lines, legend and scores share one order.
 function chosen(k){var all=ofRun(k),ids=all.map(function(m){return m.id}).filter(function(i){return (S.chk[k]||[]).indexOf(i)>=0});
  if(!ids.length&&all.length)ids=[all[all.length-1].id];return ids}
-function effective(){var o=[];
+function ticked(){var o=[];
  RUNS.forEach(function(r){if(isOn(r.key)){var ids=chosen(r.key);
   ids.forEach(function(id,i){o.push({id:id,run:r.key,rank:ids.length-1-i})})}});
  refs().forEach(function(m){if(isOn(onKey(m.id)))o.push({id:m.id,run:"ref",rank:0})});
  return o}
+// Nowcasts over time (S.mode 1) draw one model's nowcasts from several
+// origins, as the paper's nowcasts-over-time panel; one date draws every
+// ticked model.
+function model(){var all=ticked();if(!all.length)return null;
+ return all.find(function(e){return e.id==S.model})||all[0]}
+function effective(){if(S.mode!=1)return ticked();var m=model();return m?[{id:m.id,run:m.run,rank:0}]:[]}
+function modelLab(e){if(e.run=="ref")return id2lab(e.id);var r=RUNS.find(function(x){return x.key==e.run}),m=C.meta.find(function(x){return x.id==e.id});
+ return (r?r.label:e.run)+(m?" n"+m.n:"")}
 function ms(s){return Date.parse(s+"T00:00:00Z")}
-function dates(){var O=ORI(),out=[];
- for(var k=0;k<S.nd;k++){var tg=ms(O[S.oi])-k*S.step*7*864e5,j=-1;
+function dates(){var O=ORI(),out=[],n=S.mode==1?S.nd:1;
+ for(var k=0;k<n;k++){var tg=ms(O[S.oi])-k*S.step*7*864e5,j=-1;
   for(var i=0;i<O.length;i++){if(ms(O[i])<=tg)j=i}
   if(j>=0&&out.indexOf(O[j])<0)out.unshift(O[j])}
  return out}
@@ -60,6 +69,9 @@ function panel(d,loc,ds,eff,small,W,FH){
  var t0=ms(ds[0])-70*864e5,t1=ms(ds[ds.length-1])+35*864e5;
  function within(l){var o=[];l=l||{t:[],y:[]};for(i=0;i<l.t.length;i++){var x=ms(l.t[i]);if(x>=t0&&x<=t1){o.push([x,l.y[i]]);ymax=Math.max(ymax,l.y[i])}}return o}
  var pts=within(d.truth[TGT()]),lat=within((d.latest||{})[TGT()]);
+ // Over time, each origin is drawn against the final truth: the latest
+ // release where the data have one, else the truth as scored.
+ if(S.mode==1&&lat.length){pts=lat;lat=[]}
  var fs=[];
  eff.forEach(function(e){ds.forEach(function(o,di){var s=((d.series[e.id]||{})[TGT()]||{})[S.src],f=s&&s[o];
   if(f){fs.push({e:e,f:f,di:di,o:o});f.q.forEach(function(q){ymax=Math.max(ymax,q[HI])})}})});
@@ -100,8 +112,8 @@ function panel(d,loc,ds,eff,small,W,FH){
 }
 function legend(eff,ds){
  function sw(c,rank){return '<svg width=26 height=8 viewBox="0 0 26 8"><line x1=0 x2=26 y1=4 y2=4 stroke="'+c+'" stroke-width=2'+dashAttr(rank)+' /></svg>'}
- var leg='<div class=lg><b>truth</b> '+sw("var(--fg)",0)+'</div>';
- if(S.locs.some(function(l){var c=cache[C.key+"/"+l]||(C.preload||{})[l];return c&&c.latest&&c.latest[TGT()]}))leg+='<div class=lg><b>latest release</b> <svg width=26 height=8 viewBox="0 0 26 8"><line x1=0 x2=26 y1=4 y2=4 stroke="var(--fg)" stroke-width=1 stroke-dasharray="3 3" /></svg></div>';
+ var leg='<div class=lg><b>'+(S.mode==1?'final truth':'truth')+'</b> '+sw("var(--fg)",0)+'</div>';
+ if(S.mode!=1&&S.locs.some(function(l){var c=cache[C.key+"/"+l]||(C.preload||{})[l];return c&&c.latest&&c.latest[TGT()]}))leg+='<div class=lg><b>latest release</b> <svg width=26 height=8 viewBox="0 0 26 8"><line x1=0 x2=26 y1=4 y2=4 stroke="var(--fg)" stroke-width=1 stroke-dasharray="3 3" /></svg></div>';
  RUNS.forEach(function(r){var g=eff.filter(function(e){return e.run==r.key});if(!g.length)return;
   leg+='<div class=lg><b>'+r.label+'</b> '+g.map(function(e){return sw(colour(e.id),e.rank)+"n"+C.meta.find(function(x){return x.id==e.id}).n}).join(" ")+'</div>'});
  var rf=eff.filter(function(e){return e.run=="ref"});
@@ -125,7 +137,8 @@ function plots(){
    var p=panel(all[i],S.locs[i],ds,eff,small,Math.max(240,el.clientWidth),FH);p.miss.forEach(function(m){miss[m]=1});el.innerHTML=p.svg});
   var ms_=Object.keys(miss);
   if(ms_.length)$("gplot").insertAdjacentHTML("beforeend",'<p class=mut>No forecast for some nowcast dates: '+ms_.join(", ")+'</p>');
-  wisChart(all[0],eff)}).catch(function(){$("gplot").innerHTML='<p class=mut>Could not load data.</p>'})}
+  // The score card compares every ticked model, in either view.
+  wisChart(all[0],ticked())}).catch(function(){$("gplot").innerHTML='<p class=mut>Could not load data.</p>'})}
 function wisChart(d,eff){
  var W_=function(id){return ((d.score[id]||{})[TGT()]||{})[S.src]};
  var X_=function(id){return (((d.stats||{})[id]||{})[TGT()]||{})[S.src]};
@@ -188,7 +201,9 @@ function locBtns(){
 function draw(){
  if(C.empty)return empty();
  $("gdate").textContent=ORI()[S.oi]+(S.latest?" (latest)":"");
- $("gsl").value=S.oi;$("gnd").value=S.nd;$("gstep").value=S.step;$("gsrc").value=S.src;$("gyfit").value=S.yfit;$("gylog").checked=S.ylog;$("gbands").value=S.bands;
+ $("gsl").value=S.oi;$("gnd").value=S.nd;$("gmode").value=S.mode;
+ ["gmodl","gndl","gstepl"].forEach(function(k){$(k).hidden=S.mode!=1});
+ var tk=ticked(),cm=model();$("gmod").innerHTML=tk.map(function(e){return '<option value="'+e.id+'"'+(cm&&e.id==cm.id?' selected':'')+'>'+modelLab(e)+'</option>'}).join("");$("gstep").value=S.step;$("gsrc").value=S.src;$("gyfit").value=S.yfit;$("gylog").checked=S.ylog;$("gbands").value=S.bands;
  $("gtgtl").hidden=(C.targets||[]).length<2;
  $("gtgt").innerHTML=(C.targets||[]).map(function(v){return '<option value="'+v+'"'+(v==TGT()?' selected':'')+'>'+tlab(v)+'</option>'}).join("");
  chips();locBtns();plots();save()}
@@ -199,6 +214,8 @@ function build(){
  $("gsrc").onchange=function(){S.src=this.value;draw()};
  $("gtgt").onchange=function(){S.target=this.value;draw()};
  $("gnd").onchange=function(){S.nd=+this.value;draw()};
+ $("gmode").onchange=function(){S.mode=+this.value;draw()};
+ $("gmod").onchange=function(){S.model=this.value;draw()};
  $("gstep").onchange=function(){S.step=+this.value;draw()};
  $("gyfit").onchange=function(){S.yfit=+this.value;draw()};
  $("gylog").onchange=function(){S.ylog=this.checked;draw()};
