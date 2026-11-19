@@ -27,6 +27,8 @@ rule verify_checkpoint:
 rule publish_checkpoint:
     input:
         rules.verify_checkpoint.output,
+        # An offloaded checkpoint is released with its held-out losses.
+        lambda wc: offloaded(wc.n),
     output:
         f"{TRAIN}/n{{n}}/published.json",
     log:

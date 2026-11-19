@@ -33,6 +33,7 @@ from bdbvhubrenewal.forecasters.base import (
     check_samples,
 )
 from bdbvhubrenewal.forecasters.forecast import Forecast
+from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
 from bdbvhubrenewal.submission.hub import HUB_COLUMNS, own_national
 
 __all__ = [
@@ -157,6 +158,12 @@ def store_task(
     )[0]
 
 
+def _unpack(files: Mapping[str, str], fit_dir: Path) -> None:
+    """Write a stored fit's files (base64) into `fit_dir`."""
+    for name, body in files.items():
+        (fit_dir / name).write_bytes(base64.b64decode(body))
+
+
 def _stored_forecast(
     rows: pd.DataFrame, task: ForecastTask, own: bool = False
 ) -> Forecast:
@@ -210,12 +217,17 @@ def _stored(
     if config and fit.files:
         # As `store.unpack` writes it.
         with tempfile.TemporaryDirectory() as fit_dir:
-            for name, body in fit.files.items():
-                (Path(fit_dir) / name).write_bytes(base64.b64decode(body))
+            _unpack(fit.files, Path(fit_dir))
             table = hub(model, config=config, fit_dir=Path(fit_dir))
     else:
         forecast = _stored_forecast(fit.forecasts, task, own_national(model))
-        table = hub(model, forecast=forecast)
+        if ZONES_FILE in (fit.files or {}):
+            # A zone fit's own zones, as it submits them (#366).
+            with tempfile.TemporaryDirectory() as fit_dir:
+                _unpack({ZONES_FILE: fit.files[ZONES_FILE]}, Path(fit_dir))
+                table = hub(model, forecast=forecast, fit_dir=Path(fit_dir))
+        else:
+            table = hub(model, forecast=forecast)
     meta = fit.meta
     return table.assign(
         key=meta["key"],

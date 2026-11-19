@@ -26,13 +26,17 @@ rule all:
 rule a:
     output: f"{ROOT}/a.txt"
     localrule: True
-    shell: "echo from-coordinator > {output}"
+    shell:
+        "echo from-coordinator > {output}; "
+        "mkdir -p {ROOT}/side; echo side > {ROOT}/side/s.txt"
 
 rule b:
     input: f"{ROOT}/a.txt"
     output: f"{ROOT}/b.txt"
     log: f"{ROOT}/logs/b.log"
-    params: copy_back=[f"{ROOT}/extra.txt", f"{ROOT}/rows/"]
+    params:
+        copy_back=[f"{ROOT}/extra.txt", f"{ROOT}/rows/"],
+        copy_in=[f"{ROOT}/side/", f"{ROOT}/absent.txt"],
     threads: 1
     resources: mem_mb=10
     shell:
@@ -132,6 +136,10 @@ def test_a_job_runs_on_the_worker_and_comes_back(setup):
     # A folder to copy back lands at its own path, not inside itself.
     assert (croot / "rows" / "r.csv").read_text() == "r\n"
     assert not (croot / "rows" / "rows").exists()
+    # Files no rule declares but the job reads go over too (copy_in);
+    # one that does not exist is left out.
+    assert (wroot / "side" / "s.txt").read_text() == "side\n"
+    assert not (wroot / "side" / "side").exists()
 
 
 def test_a_worker_on_another_commit_fails_the_job(setup):

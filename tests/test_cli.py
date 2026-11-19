@@ -319,7 +319,7 @@ def test_backtest_of_fitted_models_only_points_to_the_fit_store(
     args = ["backtest", "--data", str(DATA), "--models", "renewal"]
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
     assert main([*args, *out]) == 1
-    assert "task fit-store" in capsys.readouterr().err
+    assert "task hub:fit-store" in capsys.readouterr().err
 
 
 @pytest.mark.usefixtures("in_root")
@@ -1106,3 +1106,44 @@ def test_cli_nowcast_records_a_walk_models_copula(tmp_path: Path) -> None:
     assert set(record) == {
         "model", "origin", "n_scores", "rho_provinces", "n_pairs", "fallback"
     }  # fmt: skip
+
+
+def test_a_stored_forecast_takes_the_zones_of_its_fit_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The candidate archive passes a stored zone fit's samples with its
+    # zones file. The table takes those zones, as the submission does from
+    # the fit directory (#366).
+    from bdbvhubrenewal import cli
+    from bdbvhubrenewal.forecasters.forecast import Forecast
+    from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
+
+    zones = pd.DataFrame(
+        {
+            "location": ["CD-IT-01"],
+            "target_end_date": ["2026-10-24"],
+            "sample": [1],
+            "value": [3],
+        }
+    )
+    zones.to_csv(tmp_path / ZONES_FILE, index=False)
+    seen: dict[str, object] = {}
+
+    class StopError(Exception):
+        pass
+
+    def record(*args: object) -> None:
+        seen["own"] = args[-1]
+        raise StopError
+
+    monkeypatch.setattr(cli, "_zones", record)
+    samples = zones.assign(location="CD-IT")
+    with pytest.raises(StopError):
+        cli._hub_forecast(
+            None,  # type: ignore[arg-type]
+            data=str(tmp_path),
+            model="renewal",
+            forecast=Forecast(samples),
+            fit=tmp_path,
+        )
+    pd.testing.assert_frame_equal(seen["own"], zones)  # type: ignore[arg-type]

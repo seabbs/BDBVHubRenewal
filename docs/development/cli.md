@@ -38,18 +38,18 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 ## Evaluation
 
 ```bash
-task backtest           # development backtest, real releases and recovery check
-task backtest-lopo      # leave one province out
-task backtest-scenarios # simulated scenarios calibrated to the real data
-task backtest-zones     # random walk models at health-zone level
-task results            # every derived file in results/, as the Pages build makes them
-task docs               # build the site into _site/ (runs task results, about 25 min)
-task serve              # serve the site (run task results once first)
+task nowcast-eval:backtest           # development backtest, real releases and recovery check
+task nowcast-eval:backtest-lopo      # leave one province out
+task nowcast-eval:backtest-scenarios # simulated scenarios calibrated to the real data
+task nowcast-eval:backtest-zones     # random walk models at health-zone level
+task nowcast-eval:results            # every derived file in results/, as the Pages build makes them
+task docs                            # build the site into _site/ (runs task nowcast-eval:results, about 25 min)
+task serve                           # serve the site (run task nowcast-eval:results once first)
 ```
 
 `--models` runs some models and keeps the others' rows in `results/`.
 The files in `results/` are not committed, apart from `development-log.csv`, `ladder.csv` and `model-choice.yml`.
-The Pages build makes the rest with the steps of `task results`, from the code, the data and the fit store.
+The Pages build makes the rest with the steps of `task nowcast-eval:results`, from the code, the data and the fit store.
 
 ## Fit store
 
@@ -86,11 +86,11 @@ To test a branch, dispatch the workflow on it with `store_branch` set to a name 
 When fits are stored, the workflow rebuilds the docs.
 
 ```bash
-task fit-store-plan  # the fits the store lacks for this code and data
-task fit-store       # load the stored fits into results/
+task bdbv-hub:fit-store-plan  # the fits the store lacks for this code and data
+task bdbv-hub:fit-store       # load the stored fits into results/
 ```
 
-`task backtest` loads the store first.
+`task nowcast-eval:backtest` loads the store first.
 Where the store has no fit for the current key, `load` uses the newest stored fit of that model and origin.
 Pages with fitted-model results list the commits of their fits and the fits not yet made.
 A full refit is 20 fits (4 models at 5 origins): 43 minutes and 5.3 runner-hours, with the slowest fit 39 minutes (`renewalbvd`).
@@ -125,7 +125,7 @@ When the reference date is an open round in `tasks.json`, it checks the file wit
 It skips the submission window and the model metadata, which `bdbvhubrenewal metadata` checks.
 For any other reference date it prints a note and skips the checks.
 
-`task validate-hub` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
+`task bdbv-hub:validate` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
 
 `bdbvhubrenewal metadata` writes `hub/model-metadata/<model id>.yml` and checks it against the hub's schema.
 

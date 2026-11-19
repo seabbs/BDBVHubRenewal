@@ -6,6 +6,8 @@ import pandas as pd
 import pytest
 from numpyro.infer import init_to_median
 
+from bdbvhubrenewal.data.delays import hub_delay_pmf
+from bdbvhubrenewal.data.zones import zone_places
 from bdbvhubrenewal.model import MAIN, build_model, model_args
 from bdbvhubrenewal.model.inputs import vintage_from_tables
 from bdbvhubrenewal.model.zones import (
@@ -13,7 +15,6 @@ from bdbvhubrenewal.model.zones import (
     build_zone_model,
     nested_basis,
     single_patch,
-    zone_table,
     zone_vintage_from_tables,
 )
 
@@ -125,7 +126,12 @@ def test_one_zone_per_province_is_the_province_model(
     target, delays = sim_tables[day]
     vintage = vintage_date(outbreak, day)
     province = vintage_from_tables(
-        target, delays, vintage, SIM_LOCATIONS, table
+        target,
+        delays,
+        vintage,
+        SIM_LOCATIONS,
+        table,
+        imputation_delay=hub_delay_pmf(vintage),
     )
     zoned = zone_vintage_from_tables(
         target,
@@ -134,6 +140,7 @@ def test_one_zone_per_province_is_the_province_model(
         SIM_LOCATIONS,
         table,
         parents={p: p for p in SIM_LOCATIONS},
+        imputation_delay=hub_delay_pmf(vintage),
     )
     assert zoned.parent_names == list(SIM_LOCATIONS)
     p_model = build_model(province)
@@ -153,7 +160,12 @@ def test_the_province_model_is_the_zone_model_one_place_a_patch(
     day = VINTAGE_DAYS[-1]
     target, delays = sim_tables[day]
     province = vintage_from_tables(
-        target, delays, vintage_date(outbreak, day), places, table
+        target,
+        delays,
+        vintage_date(outbreak, day),
+        places,
+        table,
+        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
     )
     patched = single_patch(province)
     assert patched.parents.tolist() == list(range(len(places)))
@@ -178,8 +190,9 @@ def zone_vintage(outbreak, sim_tables):
         delays,
         vintage_date(outbreak, day),
         zones,
-        zone_table(),
+        zone_places(),
         parents={z: z[:5] for z in zones},
+        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
     )
 
 
@@ -191,7 +204,7 @@ def test_zone_vintage_scores_delays_by_province(zone_vintage):
     assert v.delay_counts.shape == (v.n_weeks, 6, 61)
     assert v.kernel.shape == (12, 12)
     np.testing.assert_allclose(v.kernel.sum(axis=1), 1.0)
-    pops = zone_table().set_index("location")["population"]
+    pops = zone_places().set_index("location")["population"]
     np.testing.assert_allclose(v.populations, pops[v.names].to_numpy())
 
 

@@ -237,9 +237,16 @@ def levels(snap: SnapshotArrays, r: int, settings: Settings) -> np.ndarray:
     return np.mean(vals, axis=0)
 
 
-def _pairs_at(snap: SnapshotArrays, r: int, max_delay: int) -> np.ndarray:
-    """Return the in-window pairs among releases up to `r`."""
+def _pairs_at(
+    snap: SnapshotArrays, r: int, max_delay: int, longer: bool = False
+) -> np.ndarray:
+    """Return the in-window pairs among releases up to `r`.
+
+    With `longer` and no in-window pair, every pair with a longer step.
+    """
     keep, _ = window_pairs(snap.cut[: r + 1], max_delay)
+    if longer and keep.size == 0:
+        keep = np.flatnonzero(np.diff(np.asarray(snap.cut[: r + 1])) >= 1)
     return np.stack([keep, keep + 1], axis=1).astype(np.int64)
 
 
@@ -273,7 +280,7 @@ def _delay_counts(snap: SnapshotArrays, r: int) -> np.ndarray:
 
 
 def delay_sums(
-    snap: SnapshotArrays, r: int, settings: Settings
+    snap: SnapshotArrays, r: int, settings: Settings, longer: bool = False
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
     """Return the pair sums the delay is fitted to at release `r`.
 
@@ -285,22 +292,30 @@ def delay_sums(
         Release index. Pairs of later releases are not used.
     settings : Settings
         Settings.
+    longer : bool
+        With no in-window pair, use the pairs with a longer step, on the
+        onset days of every age at their first release (#365).
 
     Returns
     -------
     tuple of numpy.ndarray or None
-        The in-window pairs `[P, 2]`, `num` and `den` from `pair_sums`
-        `[L, P, D]`, and each pair's gap `[P]`, or None with no
-        in-window pair.
+        The pairs `[P, 2]`, `num` and `den` from `pair_sums` `[L, P, D]`,
+        and each pair's gap `[P]`, or None with no pair.
     """
-    pairs = _pairs_at(snap, r, settings.max_delay)
+    pairs = _pairs_at(snap, r, settings.max_delay, longer)
     if pairs.size == 0:
         return None
     counts = _delay_counts(snap, r)
     day = np.arange(snap.week.size)
-    window = day > int(snap.cut[r]) - settings.history_delay
-    observed = snap.observed & window[None, :]
+    first = int(snap.cut[r]) - settings.history_delay
     gaps = snap.cut[pairs[:, 1]] - snap.cut[pairs[:, 0]]
+    if (gaps > settings.max_delay).all():
+        # A day of every age at a longer pair's first release is final at
+        # its second, so the onset days reach back over all those ages.
+        oldest = int(snap.cut[pairs[:, 0]].min()) - settings.max_delay
+        first = min(first, oldest)
+    window = day > first
+    observed = snap.observed & window[None, :]
     num, den = pair_sums(
         jnp.asarray(counts),
         jnp.asarray(observed),
@@ -340,7 +355,7 @@ def own_ages(
 
 
 def fit_delay(
-    snap: SnapshotArrays, r: int, settings: Settings
+    snap: SnapshotArrays, r: int, settings: Settings, longer: bool = False
 ) -> DelayFit | None:
     """Estimate the delay factors from the pairs up to release `r`.
 
@@ -352,13 +367,16 @@ def fit_delay(
         Release index. Pairs of later releases are not used.
     settings : Settings
         Settings.
+    longer : bool
+        With no in-window pair, fit the pairs with a longer step
+        (`delay_sums`).
 
     Returns
     -------
     DelayFit or None
-        The factors, or None with no in-window pair.
+        The factors, or None with no pair to fit.
     """
-    sums = delay_sums(snap, r, settings)
+    sums = delay_sums(snap, r, settings, longer)
     if sums is None:
         return None
     pairs, num, den, gaps = sums
@@ -653,17 +671,23 @@ def _latest_fit(
 ) -> tuple[int, DelayFit]:
     """Return the latest release and its delay fit.
 
+    With no pair in the delay window, the delay is fitted to the pairs
+    with a longer step (#365). Nowcasts made at earlier releases, whose
+    errors set the observation model, keep the window.
+
     Raises
     ------
     NoDelayPair
-        If no pair of releases has a step within the delay window.
+        If no two releases are a day or more apart.
     """
     o = len(snap.releases) - 1
     fit = delay(snap, o, settings)
     if fit is None:
+        fit = fit_delay(snap, o, settings, longer=True)
+    if fit is None:
         raise NoDelayPair(
-            f"No pair of releases up to {snap.releases[o]} has a step of at "
-            f"most {settings.max_delay} days."
+            f"No pair of releases up to {snap.releases[o]} is a day or "
+            "more apart."
         )
     return o, fit
 

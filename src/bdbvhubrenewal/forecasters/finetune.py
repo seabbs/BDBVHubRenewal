@@ -479,10 +479,12 @@ def training_block(
     dict
         Chronos-2's prepared input: `context` `[V, S + H]`, the targets
         first and then the lag series, `future_covariates` `[V, H]`,
-        `n_targets`, `n_covariates` and `n_future_covariates`, and the
-        `start` $S$ and `horizon` $H$. None if no release up to the cut
-        has a row for any of `places`, as for strata with no cases, or, for a
-        binned source, if no whole bin ends at the cut-off.
+        `n_targets`, `n_covariates` and `n_future_covariates`, the
+        `start` $S$ and `horizon` $H$, and `nowcast`, the steps of the
+        horizon up to and including the cut-off's. None if no release up
+        to the cut has a row for any of `places`, as for strata with no
+        cases, or, for a binned source, if no whole bin ends at the
+        cut-off.
     """
     cut = cutoffs[-1]
     end = epiweek_end(cut) + dt.timedelta(weeks=ahead_weeks)
@@ -560,6 +562,7 @@ def training_block(
         "n_future_covariates": len(names),
         "start": start,
         "horizon": horizon,
+        "nowcast": tri.last - start + 1,
         "places": tuple(places),
         "target_places": target_places,
     }

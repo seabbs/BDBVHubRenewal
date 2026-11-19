@@ -67,7 +67,12 @@ from bdbvhubrenewal.data.hierarchy import is_zone
 from bdbvhubrenewal.data.releases import cutoff_lags
 from bdbvhubrenewal.data.simulate import SCENARIO_RT_SCALE
 from bdbvhubrenewal.data.snapshots import weekly_counts
-from bdbvhubrenewal.data.zones import ZoneData, hub_zones, load_zone_data
+from bdbvhubrenewal.data.zones import (
+    ZoneData,
+    hub_places,
+    hub_zones,
+    load_zone_data,
+)
 from bdbvhubrenewal.devices import host_devices
 from bdbvhubrenewal.evaluation import backtest as bt
 from bdbvhubrenewal.evaluation import store, store_archive
@@ -745,6 +750,7 @@ def _task(args: argparse.Namespace) -> tuple[ForecastTask, list[str]]:
         args.vintage,
         args.reference_date,
         zones=_zone_data(args.data),
+        places=hub_places(args.data),
     )
 
 
@@ -756,15 +762,17 @@ def _round_task(
     vintage: str | None,
     reference_date: str | None,
     zones: ZoneData | None = None,
+    places: pd.DataFrame | None = None,
 ) -> tuple[ForecastTask, list[str]]:
     """Build a round's task, moved to `reference_date` if one is given.
 
-    `zones` puts the health zones in the task, for models that read them.
+    `zones` puts the health zones in the task, for models that read them,
+    and `places` its places (`ForecastTask.places`).
     """
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], vintage)
     task, note = bt.vintage_task(
-        target, delays, config, vintage, daily, zones=zones
+        target, delays, config, vintage, daily, zones=zones, places=places
     )
     notes = [note] if note else []
     if reference_date and as_date(reference_date) != task.reference_date:
@@ -830,7 +838,7 @@ def _backtest(args: argparse.Namespace) -> int:
         if not names:
             print(
                 "ERROR: fitted models come from the fit store: run "
-                "`task fit-store`.",
+                "`task hub:fit-store`.",
                 file=sys.stderr,
             )
             return 1
@@ -1456,10 +1464,6 @@ def _hub_forecast(
         result = forecast
     elif config:
         result = run_forecast(get_config(config), task, fit)
-        if fit is not None and (Path(fit) / ZONES_FILE).exists():
-            own = pd.read_csv(
-                Path(fit) / ZONES_FILE, dtype={"target_end_date": str}
-            )
     else:
         loaded = get_model(str(model))
         checkpoint = getattr(loaded, "checkpoint", None)
@@ -1468,6 +1472,11 @@ def _hub_forecast(
         check_samples(samples, task)
         result = Forecast(samples)
         own = getattr(loaded, "zone_samples", None)
+    if fit is not None and (Path(fit) / ZONES_FILE).exists():
+        # A zone fit's own zones, given a fit directory or stored samples.
+        own = pd.read_csv(
+            Path(fit) / ZONES_FILE, dtype={"target_end_date": str}
+        )
     name = get_config(config).model if config else model
     zones, zone_note = _zones(data, name, task, result.samples, own)
     # A model that forecasts zones itself gives them through `zones`.

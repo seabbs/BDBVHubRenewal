@@ -253,3 +253,12 @@ def test_only_the_profiles_this_setup_uses_ship():
         "default",
         "ssh",
     ]
+
+
+def test_evaluation_is_a_group_a_host_can_place():
+    # WP10: held-out evaluation runs off the trainer's machine, wherever
+    # WORKER_GROUPS puts `evaluate`.
+    assert "evaluate" in compute.GROUPS
+    for rule in ("evaluate_steps", "evaluate_checkpoint"):
+        assert compute.RULE_GROUPS[rule] == "evaluate"
+        assert rule in compute.GPU_RULES

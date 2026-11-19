@@ -94,6 +94,10 @@ finetune:
   bias_lr: 1.0e-3
   sources: null
   univariate_share: 0.2
+  # Days after the cut-off a training block's horizon, and so the loss,
+  # runs to (null: the whole horizon, to four weeks ahead). Checkpoint
+  # scoring covers every horizon either way.
+  loss_horizon_days: null
   chunk: 250
   # Steps between the trainer's held-out evaluations: the monitor on the
   # first 100 held-out blocks, and by source (100 blocks a source) on a
@@ -101,8 +105,10 @@ finetune:
   eval_every: 200
   by_source_every: 200
   # Where the trainer's held-out evaluation runs: `local` (in the trainer)
-  # or `offload` (adapter snapshots for scripts/finetune_evaluate.py; no
-  # rule runs it yet, so offloaded checkpoints have no held-out losses).
+  # or `offload` (the trainer saves adapter snapshots and the `evaluate`
+  # rules score them after each segment, on whichever machine
+  # WORKER_GROUPS gives `evaluate`; rules/evaluate.smk). Training is the
+  # same either way.
   eval: local
   series_bias: true
   # The live r6 run's checkpoints carry this note, and the note is part of
@@ -162,7 +168,7 @@ agg:
   mem_mb: 6144
 
 dashboard:
-  # The fine-tuning dashboard (task dashboard; workflow/flowlib/dashboard).
+  # The fine-tuning dashboard (task nowcast-foundation:dashboard; workflow/flowlib/dashboard).
   # Runs on every machine: release-prefix runs need no paths. Runs with a
   # local folder go in DASHBOARD_RUNS in config/local.env or --run, as
   # name=<folder|prefix>[,label=..][,colour=..][,live][,base=..]

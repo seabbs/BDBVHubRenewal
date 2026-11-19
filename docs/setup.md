@@ -21,7 +21,7 @@ uv sync
 
 Run every command below from the `bdbv-hub-modelling` folder.
 The hub data are not committed.
-`task data` (or `uv run bdbvhubrenewal data`) fetches the latest hub data into `data/`, and `task data-bvd` caches the BVDOutbreakSize releases that renewalbvd reads.
+`task nowcast-utils:data` (or `uv run bdbvhubrenewal data`) fetches the latest hub data into `data/`, and `task nowcast-utils:data-bvd` caches the BVDOutbreakSize releases that renewalbvd reads.
 The tests read a frozen copy in `tests/fixtures/data/`, so they need no download.
 
 ## Work interactively

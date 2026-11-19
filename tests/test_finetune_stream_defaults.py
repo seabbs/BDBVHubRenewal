@@ -18,3 +18,22 @@ def test_the_cli_rates_match_the_workflow_config():
     assert args.learning_rate == 1e-5
     assert args.learning_rate == config["finetune"]["learning_rate"]
     assert args.bias_lr == config["finetune"]["bias_lr"]
+
+
+def test_the_loss_horizon_enters_the_settings():
+    # Unset, the settings are as before the setting existed.
+    full = fs.horizon_settings(None)
+    assert "loss_horizon_days" not in full
+    assert full["prediction_length"] == (
+        f"each block's horizon in whole patches of {fs.ft.OUTPUT_PATCH} steps"
+    )
+    week = fs.horizon_settings(7)
+    assert week["loss_horizon_days"] == 7
+    assert "7 days after the cut-off" in week["prediction_length"]
+
+
+def test_the_loss_horizon_defaults_to_the_full_horizon():
+    argv = ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r6"]
+    assert fs.build_parser().parse_args(argv).loss_horizon_days is None
+    args = fs.build_parser().parse_args([*argv, "--loss-horizon-days", "7"])
+    assert args.loss_horizon_days == 7

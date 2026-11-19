@@ -116,6 +116,7 @@ def _part_style(colour: str, part: str) -> dict:
         "linewidth": 0.6,
     }
 
+
 _RATIO_TICKS: Final = (0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5, 10)
 
 _STEP_UNIT: Final = {1: "days", 7: "weeks"}

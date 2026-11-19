@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""The held-out synthetic evaluation of the paper (issue #206).
+r"""The held-out synthetic evaluation of the paper.
 
 The held-out outbreaks come from `scripts/finetune_simulate.R` with seeds
 the fine-tune never saw. Each outbreak is released weekly, on one weekday

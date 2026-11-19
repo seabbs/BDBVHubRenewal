@@ -271,7 +271,6 @@ Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor 
 A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations.
 At 4,000 outbreaks their median loss is {{< meta evidence.scale_floor.sims.n4000.small.median_loss.none >}} without it and {{< meta evidence.scale_floor.sims.n4000.small.median_loss.floor >}} with it, and the share of 99% quantiles over 100 times the truth is {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.none >}}% and {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.floor >}}%.
 Large series are unchanged, with median loss {{< meta evidence.scale_floor.sims.n4000.large.median_loss.none >}} and {{< meta evidence.scale_floor.sims.n4000.large.median_loss.floor >}}.
-On the BDBV release backtest the floor gives a lower relative WIS at every fine-tuned checkpoint, {{< meta evidence.scale_floor.bdbv.provinces.weekly.n4000.floor >}} against {{< meta evidence.scale_floor.bdbv.provinces.weekly.n4000.none >}} for the weekly model at 4,000 outbreaks on provinces.
 Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.
 
 The ragged layout's lag series run to 4 weeks or 28 days.
@@ -391,7 +390,6 @@ The simulated outbreaks' ranges against published values for several diseases, t
 {{< include build/tables/si/heldout-set.md >}}
 
 We cut the held-out simulations into blocks as in training, with the same layouts and non-summing parents (@tbl-block-layouts), using a fixed seed.
-A manifest records each held-out block's layout and options.
 We keep two sets of simulations out of training, each one whole block of 840 separate from the ten training blocks.
 The validation set is the round on which the trainer monitors its loss, on the first 90 of its simulations by seed.
 The test set is a further round simulated with fresh seeds, and no model is scored on it until the final model is fixed.
@@ -462,12 +460,13 @@ Relative WIS compares each model with the baseline on the forecasts both made, w
 
 ### Choices tuned on development data
 
-@tbl-tuned-choices lists each choice we tuned and the data it was set on, none of which is in a scored set.
+@tbl-tuned-choices lists each choice we tuned and the data it was set on.
+The copula weight of the walk baselines was set on the Ebola release backtest before BDBV was held out from development.
 
 ::: {#tbl-tuned-choices}
 | Choice | Value | Set on |
 |---|---|---|
-| Floor on Chronos-2's scale at inference | None | Held-out simulations and the BDBV release backtest |
+| Floor on Chronos-2's scale at inference | None, Chronos-2's default | Held-out simulations |
 | Lag cap of the ragged layout | 4 weeks or 28 days | German first half and the BDBV release backtest |
 | Copula shrinkage weight $w$ | 10, the weakest of 0, 10, 30 and 100, which scored within 1% of one another | Ebola release backtest |
 | Realism checks of the simulation grid | Grid ranges | BDBV releases and German data reported by 2022-02-09 |
@@ -494,7 +493,7 @@ Choices tuned on development data, with their values and the data they were set 
 
 ### Impact of correlated trajectories
 
-- @fig-copula-impact compares the rolling $\rho_p$ with no pairing on the German first half, the BDBV release backtest and the held-out simulations, at the national level and for provinces.
+- @fig-copula-impact compares the rolling $\rho_p$ with no pairing on the German first half and the held-out simulations, at the national level and for provinces.
 - The per-province CRPS and coverage are unchanged by construction, so only the national sum and the energy score move.
 - The median rolling $\rho_p$ over origins is {{< meta evidence.rho.randomwalknowcast.rho_p >}} for `randomwalknowcast` and {{< meta evidence.rho.randomwalk.rho_p >}} for `randomwalk`, with {{< meta evidence.rho.randomwalknowcast.fallback >}} and {{< meta evidence.rho.randomwalk.fallback >}} origins falling back to the prior.
 
@@ -503,50 +502,48 @@ Choices tuned on development data, with their values and the data they were set 
 ### Joint block or aggregation
 
 Our Chronos-2 models use the joint block.
-On BDBV it is best or tied at provinces, zones and the national level for the zero-shot models.
 On the German development half, level by level is competitive for the daily zero-shot model ({{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.level >}} against {{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.joint >}} at the national level) and for age groups.
-Summing the lowest level loses at every level above it, with or without the copula: at BDBV's national level the daily zero-shot model scores {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.zones_summed >}} summed and {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.zones_copula >}} summed after pairing, against {{< meta evidence.aggregation.ebola.national.fm_chronos_daily_ragged.joint >}} for the joint block.
 @fig-aggregation gives every option by study and level, with WIS relative to `randomwalknowcast` on the same targets.
 
-![WIS of each aggregation option relative to `randomwalknowcast` on the same targets, by study and level, one marker per model: (a) joint block, (b) level by level, (c) lowest level summed at random, (d) lowest level summed after pairing, and (e) the daily model's weekly row against its days summed after pairing and at random. Ebola release backtest and German development half.](build/figures/si/aggregation.png){#fig-aggregation}
+![WIS of each aggregation option relative to `randomwalknowcast` on the same targets, by study and level, one marker per model: (a) joint block, (b) level by level, (c) lowest level summed at random, (d) lowest level summed after pairing, and (e) the daily model's weekly row against its days summed after pairing and at random. German development half.](build/figures/si/aggregation.png){#fig-aggregation}
 
 ### Checkpoint curve
 
 - We compare the final run's checkpoints, fine-tuned on 250, 500, 750, 1,000, 2,000, 4,000 and 8,400 simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
 - @fig-finetune-heldout gives the trainer's held-out loss by level, for transparency, not to select a checkpoint.
-- @fig-checkpoint-curve gives German first-half and BDBV relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
+- @fig-checkpoint-curve gives German first-half relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
 - @tbl-checkpoints gives the headline scores of each checkpoint.
 - A later checkpoint has also trained for more steps.
 - The learning rate falls linearly to zero over the 8,400 simulations, so the earlier checkpoints are taken at 97% (250) to 52% (4,000) of the starting rate, and only the 8,400 checkpoint is annealed.
 
 ![The trainer's held-out loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
 
-![WIS (Germany and BDBV, on each model's own quantiles) relative to `randomwalknowcast` of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source's colour, and `randomwalknowcast` at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. {{< meta evidence.live.label >}} Development data only.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
+![WIS (Germany, on each model's own quantiles) relative to `randomwalknowcast` of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source's colour, and `randomwalknowcast` at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. {{< meta evidence.live.label >}} Development data only.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
 
 ::: {#tbl-checkpoints}
 {{< include build/tables/si/checkpoint-table.md >}}
 
-Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German first half and WIS and log WIS on the BDBV release backtest, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss. Blank cells are not yet scored. {{< meta evidence.live.label >}} Development data only.
+Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss. Blank cells are not yet scored. {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Attention biases for place and parent against none
 
 - We compare the run with attention biases with a run without them.
 - Both runs share the grid, the data order, the LoRA recipe and the checkpoints.
-- @fig-compare-slots shows the trainer's held-out loss and German first-half and BDBV relative scores of both runs by checkpoint and level.
+- @fig-compare-slots shows the trainer's held-out loss and German first-half relative scores of both runs by checkpoint and level.
 - @tbl-slots-summary gives each run's newest checkpoint.
 - The lag-swap test moves whole lag series to another place.
 - A ratio above 1 means the model's forecast depends on which place's lags sit with a target.
 - Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.
 - The lag-swap test is not yet scored for this run.
 
-![Attention biases against none: the trainer's held-out loss and German first-half and BDBV relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
+![Attention biases against none: the trainer's held-out loss and German first-half relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
 
 ::: {#tbl-slots-summary}
 {{< include build/tables/si/slots-summary.md >}}
 
-Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half and WIS and log WIS on the BDBV release backtest, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss, with each cell's simulations in brackets. {{< meta evidence.live.label >}} Development data only.
+Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss, with each cell's simulations in brackets. {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Delays against no delays
@@ -556,7 +553,7 @@ Zero-shot Chronos-2 and the newest checkpoint of the runs with and without atten
 - @fig-compare-delays shows both runs by checkpoint.
 - Without lag series the no-delay model has no counts after the last complete step, so its context ends there.
 
-![Delays against no delays: held-out loss by source and German first-half and BDBV relative scores, by checkpoint.](build/figures/si/compare-delays.png){#fig-compare-delays}
+![Delays against no delays: held-out loss by source and German first-half relative scores, by checkpoint.](build/figures/si/compare-delays.png){#fig-compare-delays}
 
 ### Real-data fine-tune against synthetic
 
@@ -572,7 +569,7 @@ Zero-shot Chronos-2 and the newest checkpoint of the runs with and without atten
 ::: {#tbl-real-finetune}
 {{< include build/tables/si/real-finetune.md >}}
 
-Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), by level: WIS on the German held-out half and on BDBV rounds from 21 November 2026, relative to `randomwalknowcast`. Blank cells have no scores yet.
+Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), by level: WIS on the German held-out half and on held-out Ebola rounds after the real-data model's last training release, relative to `randomwalknowcast`. Blank cells have no scores yet.
 :::
 
 ### Daily nowcasts
@@ -583,7 +580,7 @@ Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tune
 - @fig-compare-daily shows both.
 - @fig-germany-si-results-daily repeats the German results figure for daily counts.
 
-![Daily nowcasts: German and BDBV relative scores on daily counts and on the hub targets, by checkpoint.](build/figures/si/compare-daily.png){#fig-compare-daily}
+![Daily nowcasts: German relative scores on daily counts and on the hub targets, by checkpoint.](build/figures/si/compare-daily.png){#fig-compare-daily}
 
 ::: {#fig-germany-si-results-daily}
 ![](build/figures/si/germany-si-results-daily.png)

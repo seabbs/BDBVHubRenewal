@@ -3,7 +3,7 @@
 #
 #   snakemake --workflow-profile workflow/profiles/<role> <target>
 #
-# or the Taskfile entry points (`task simulate`, `task finetune`, ...).
+# or the Taskfile entry points (`task nowcast-foundation:simulate`, `task nowcast-foundation:finetune`, ...).
 # Machine settings come from config/local.env (flowlib.localconfig),
 # the rest from workflow/config.yaml.
 
@@ -25,6 +25,7 @@ include: "rules/common.smk"
 include: "rules/simulate.smk"
 include: "rules/topup.smk"
 include: "rules/finetune.smk"
+include: "rules/evaluate.smk"
 include: "rules/publish.smk"
 include: "rules/score.smk"
 include: "rules/followups.smk"

@@ -6,6 +6,7 @@ import functools
 import json
 
 from flowlib import (
+    evaluations,
     grids,
     hosts,
     localconfig,
@@ -16,6 +17,8 @@ from flowlib import (
     simulator,
     topup,
 )
+
+from bdbvhubrenewal.evaluation.sidecar import HELD_OUT_BLOCKS, SIDECAR
 
 LOCAL = localconfig.read()
 HOST = LOCAL["HOST_NAME"]
@@ -119,6 +122,45 @@ TRAIN = f"{RUN}/train"
 
 segments.check_chunks(FT["prefixes"], FT["chunk"], FT["outbreaks"])
 segments.check_eval(FT["eval"])
+
+
+# From evaluate.smk.
+
+EVALUATE_PY = "uv run --group chronos python workflow/scripts/evaluate_offloaded.py"
+EVALUATE_PRIORITY = 15
+
+
+def evaluate_real(wc=None):
+    """The trainer's real validation blocks, if the run has them."""
+    real = FT["real_validation"]
+    return f"--real-validation {real}" if real else ""
+
+
+def evaluate_prev(n):
+    """The settings of the checkpoint before segment n, if any."""
+    prev = PREV[int(n)]
+    return f"{TRAIN}/n{prev}/settings.json" if prev else []
+
+
+def evaluate_inputs_from(n):
+    """Files a checkpoint's evaluation reads that no rule declares."""
+    return [
+        f"{TRAIN}/n{n}/finetuned-ckpt/",
+        f"{TRAIN}/{HELD_OUT_BLOCKS}",
+        f"{TRAIN}/evals/step-0000000.json",
+        *(f"{TRAIN}/n{p}/settings.json" for p in FT["prefixes"]),
+        *(f"{TRAIN}/n{p}/{SIDECAR}" for p in FT["prefixes"] if p < int(n)),
+        *([FT["real_validation"]] if FT["real_validation"] else []),
+    ]
+
+
+def offloaded(n):
+    """Checkpoint n's held-out sidecar when the run offloads evaluation."""
+    if FT["eval"] != "offload":
+        return []
+    return f"{TRAIN}/n{n}/{SIDECAR}"
+
+
 PREV = dict((n, p) for p, n in segments.segments(FT["prefixes"]))
 
 
@@ -514,7 +556,7 @@ def check_report(input, output, params, wildcards):
 
     On the held-out simulations only: BDBV is held out for the paper.
     """
-    s = json.loads(Path(input[0]).read_text())
+    s = evaluations.checkpoint_settings(Path(input[0]).parent)
     ok = s["held_out_loss"] < s["held_out_loss_start"]
     text = (
         f"n{CHECK} {'beats' if ok else 'does NOT beat'} zero-shot: "
