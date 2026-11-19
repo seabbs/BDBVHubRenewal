@@ -6,13 +6,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.backtest import (
+from bdbvhubrenewal.forecasters import get_model
+from bdbvhubrenewal.forecasters.chain import delay_summary
+from bdbvhubrenewal.forecasters.randomwalk import RandomWalkNowcast
+from nowcasteval.backtest import (
     BacktestConfig,
     check_distinct,
     make_tasks,
     run_forecasts,
 )
-from bdbvhubrenewal.evaluation.nowcast import (
+from nowcasteval.nowcast import (
     complete_weeks,
     delay_curves,
     draw_reported,
@@ -24,9 +27,6 @@ from bdbvhubrenewal.evaluation.nowcast import (
     week_shares,
     weeks_back_from_cutoff,
 )
-from bdbvhubrenewal.forecasters import get_model
-from bdbvhubrenewal.forecasters.chain import delay_summary
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalkNowcast
 from nowcastutils.base import MissingSnapshots
 
 
@@ -396,7 +396,7 @@ def test_release_forecasts_made_apart_by_model_score_as_one_run(
     tmp_path,  # type: ignore[no-untyped-def]
     result,  # type: ignore[no-untyped-def]
 ) -> None:
-    from bdbvhubrenewal.evaluation.nowcast import (
+    from nowcasteval.nowcast import (
         ReleaseForecasts,
         forecast_releases,
         score_releases,
@@ -528,7 +528,7 @@ def test_complete_target_has_no_week_before_a_release_d_days_on(
 
 
 def test_relative_crps_scores_crps_and_log_crps() -> None:
-    from bdbvhubrenewal.evaluation.nowcast import relative_crps
+    from nowcasteval.nowcast import relative_crps
 
     def row(model: str, week: str, crps: float) -> dict[str, object]:
         return {

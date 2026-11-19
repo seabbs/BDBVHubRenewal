@@ -5,7 +5,7 @@ Each vintage becomes a `ForecastTask`: the data as of that vintage, the
 reference date it serves (`reference_date_for_vintage`) and the weeks
 from `min_horizon` to `max_horizon`.
 Every registered model forecasts every task.
-Real forecasts are scored by `bdbvhubrenewal.evaluation.nowcast` on the
+Real forecasts are scored by `nowcasteval.nowcast` on the
 count each later release reported.
 
 There are two kinds of vintage:
@@ -46,8 +46,8 @@ from bdbvhubrenewal.data.simulate import (
 )
 from bdbvhubrenewal.data.tidy import delays_for_vintage
 from bdbvhubrenewal.data.zones import ZoneData, hub_places
-from bdbvhubrenewal.evaluation.nowcast import TRUTH_LEVEL
-from bdbvhubrenewal.evaluation.scoring import energy_scores, score_forecasts
+from nowcasteval.nowcast import TRUTH_LEVEL
+from nowcasteval.scoring import energy_scores, score_forecasts
 from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -149,7 +149,7 @@ class BacktestConfig:
         $D$, in days: the release backtest scores each week's complete
         target on the first release whose cut-off is at least $D$ days
         after it. None estimates $D$ from the releases
-        (`bdbvhubrenewal.evaluation.nowcast.resolve_truth_delay`).
+        (`nowcasteval.nowcast.resolve_truth_delay`).
     truth_level : float
         The share of the national count reported by an estimated $D$.
     """
@@ -615,7 +615,7 @@ def run_forecasts(
 
     Examples
     --------
-    >>> from bdbvhubrenewal.evaluation.backtest import run_forecasts
+    >>> from nowcasteval.backtest import run_forecasts
     >>> from bdbvhubrenewal.forecasters import get_model
     >>> models = [get_model("randomwalk"), get_model("randomwalknowcast")]
     >>> forecasts = run_forecasts(models, [task])  # tasks from `make_tasks`
@@ -754,7 +754,7 @@ def score_tasks(
     Returns
     -------
     pandas.DataFrame
-        Output of `bdbvhubrenewal.evaluation.scoring.score_forecasts`, with
+        Output of `nowcasteval.scoring.score_forecasts`, with
         `truth_vintage`, `scoring` and `complete` columns.
     """
     keep = forecasts["vintage"] < truth_date
@@ -807,7 +807,7 @@ def energy_tasks(
     Returns
     -------
     pandas.DataFrame
-        `bdbvhubrenewal.evaluation.scoring.energy_scores` by `kind`,
+        `nowcasteval.scoring.energy_scores` by `kind`,
         `vintage` and `reference_date`, with `truth_vintage`.
     """
     keep = forecasts["vintage"] < truth_date
@@ -968,7 +968,7 @@ def run_development(
     """Forecast from every real vintage before the latest.
 
     The forecasts are scored by
-    `bdbvhubrenewal.evaluation.nowcast.release_backtest`.
+    `nowcasteval.nowcast.release_backtest`.
 
     Parameters
     ----------

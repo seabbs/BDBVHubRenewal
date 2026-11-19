@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
-from bdbvhubrenewal.evaluation.marginals import forecast_quantiles
 from bdbvhubrenewal.forecasters import ForecastTask, foundation, get_model
+from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcasteval.marginals import forecast_quantiles
 
 LEVELS = (0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)
 
@@ -117,7 +117,7 @@ def test_daily_sums_come_from_draws_seeded_by_the_seed(
 def test_a_sample_model_gives_the_quantiles_of_its_draws(
     task: ForecastTask,
 ) -> None:
-    from bdbvhubrenewal.evaluation.backtest import run_forecasts
+    from nowcasteval.backtest import run_forecasts
 
     model = get_model("randomwalk")
     out = forecast_quantiles(model, task, LEVELS, n_draws=300, seed=7)

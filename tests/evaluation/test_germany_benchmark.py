@@ -27,8 +27,8 @@ from bdbvhubrenewal.evaluation.germany import (
     team_forecasts,
     with_truth,
 )
-from bdbvhubrenewal.evaluation.nowcast import rolling_truth
 from bdbvhubrenewal.forecasters import list_models
+from nowcasteval.nowcast import rolling_truth
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = (

@@ -14,13 +14,13 @@ import pytest
 
 from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
 from bdbvhubrenewal.evaluation import store
-from bdbvhubrenewal.evaluation.backtest import (
+from bdbvhubrenewal.forecasters import ForecastTask, get_model
+from nowcasteval.backtest import (
     BacktestConfig,
     make_tasks,
     real_vintages,
     vintage_task,
 )
-from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from nowcastutils.base import NATIONAL, SAMPLE_COLUMNS
 from nowcastutils.forecast import Forecast
 
@@ -304,7 +304,7 @@ def test_fit_code_is_the_models_code_not_the_store() -> None:
     # functions of theirs a fit runs are keyed by source (`FIT_FUNCTIONS`).
     for files in (renewal, walk):
         assert "src/bdbvhubrenewal/evaluation/store.py" not in files
-        assert "src/bdbvhubrenewal/evaluation/backtest.py" not in files
+        assert "packages/nowcasteval/src/nowcasteval/backtest.py" not in files
 
 
 def test_stacked_forecasts_keep_their_values_in_less_memory() -> None:
@@ -416,7 +416,7 @@ def test_fit_store_runs_on_every_file_in_a_key(
     required = {
         "pyproject.toml",
         "uv.lock",
-        "src/bdbvhubrenewal/evaluation/backtest.py",
+        "packages/nowcasteval/src/nowcasteval/backtest.py",
     }
     assert required <= files
     missed = sorted(
@@ -555,7 +555,7 @@ def test_the_stored_task_covers_the_submissions_rounds(
     import datetime as dt
 
     from bdbvhubrenewal import cli
-    from bdbvhubrenewal.evaluation.backtest import load_config
+    from nowcasteval.backtest import load_config
 
     config = load_config("config/backtest.toml")
     # With the zone data, as the store's fits read it (`cli._zone_data`).

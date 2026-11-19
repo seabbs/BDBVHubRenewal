@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
-from bdbvhubrenewal.evaluation.labels import model_label
+from nowcasteval.labels import model_label
 
 from paperfigs.dummy import DUMMY_CELLS, dummy_factors, dummy_study
 from paperfigs.periods import PERIODS
@@ -461,7 +461,7 @@ def test_wis_parts_stack_and_fill_as_the_shared_map() -> None:
     # The paper draws WIS parts as the dashboard does: stacked in
     # labels.WIS_PART_STACK order, dispersion solid and the other two
     # hatched opposite ways.
-    from bdbvhubrenewal.evaluation.labels import WIS_PART_FILLS, WIS_PART_STACK
+    from nowcasteval.labels import WIS_PART_FILLS, WIS_PART_STACK
 
     from paperfigs import plots
 

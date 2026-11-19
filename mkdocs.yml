@@ -186,7 +186,7 @@ plugins:
       default_handler: python
       handlers:
         python:
-          paths: [src, packages/nowcastutils/src]
+          paths: [src, packages/nowcastutils/src, packages/nowcasteval/src]
           options:
             docstring_style: numpy
             docstring_section_style: table

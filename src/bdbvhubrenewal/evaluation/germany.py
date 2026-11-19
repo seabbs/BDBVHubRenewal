@@ -17,7 +17,7 @@ held out for the paper (`nowcast_dates`).
 every day from 0 to 28 days back (`HORIZONS`, one task pair per weekday
 offset), and keeps their quantiles at
 `QUANTILE_LEVELS`: a model's own where it gives them, else those of its
-samples (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
+samples (`nowcasteval.marginals.forecast_quantiles`).
 `team_forecasts` takes the hub teams' submitted quantiles at the same
 horizons.
 `with_truth` adds each sum's truth, its count in the data $D$ days after
@@ -56,11 +56,11 @@ from bdbvhubrenewal.data.germany import (
     level,
     nowcast_tasks,
 )
-from bdbvhubrenewal.evaluation.marginals import forecast_quantiles
-from bdbvhubrenewal.evaluation.nowcast import rolling_truth
-from bdbvhubrenewal.evaluation.scoring import relative_skill, score_quantiles
 from bdbvhubrenewal.forecasters import ForecastTask, get_model, list_models
 from bdbvhubrenewal.forecasters.foundation import FoundationModel, prefetch
+from nowcasteval.marginals import forecast_quantiles
+from nowcasteval.nowcast import rolling_truth
+from nowcasteval.scoring import relative_skill, score_quantiles
 
 log = logging.getLogger(__name__)
 
@@ -431,7 +431,7 @@ def germany_forecasts(
         One row per quantile: `model`, `origin` (the nowcast date),
         `location` (the place), `target_end_date`, `horizon` (days),
         `quantile` and `value`, at `QUANTILE_LEVELS`
-        (`bdbvhubrenewal.evaluation.marginals.forecast_quantiles`).
+        (`nowcasteval.marginals.forecast_quantiles`).
     """
     tasks = {d: _tasks(triangle, d, n_samples, seed, tasks_dir) for d in dates}
     every = [t for ts in tasks.values() for t in ts]

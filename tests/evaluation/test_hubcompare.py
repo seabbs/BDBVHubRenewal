@@ -10,7 +10,6 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.zones import hub_zones, load_zone_data
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.evaluation.hubcompare import (
     ATTRIBUTION,
     OPEN_LICENCES,
@@ -26,7 +25,8 @@ from bdbvhubrenewal.evaluation.hubcompare import (
     submission_dir,
     summarise_comparison,
 )
-from bdbvhubrenewal.reporting.plots import comparison_colours, plot_hub_round
+from nowcasteval.backtest import BacktestConfig
+from nowcasteval.plots import comparison_colours, plot_hub_round
 from nowcastutils.dates import reference_date_for_vintage
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -560,7 +560,7 @@ def test_with_submissions_keeps_main_builds_beside_submissions() -> None:
 
 
 def test_comparison_label_names_our_hub_models() -> None:
-    from bdbvhubrenewal.reporting.plots import comparison_label
+    from nowcasteval.plots import comparison_label
 
     assert (
         comparison_label("seabbs-rwnowcast", "submitted")
@@ -584,7 +584,7 @@ def test_own_hub_ids() -> None:
 
 
 def test_comparison_colours_are_fixed_per_model() -> None:
-    from bdbvhubrenewal.reporting.plots import (
+    from nowcasteval.plots import (
         DASHES,
         HUB_GREYS,
         MODEL_COLOURS,

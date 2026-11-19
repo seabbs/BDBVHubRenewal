@@ -123,8 +123,8 @@ def _digest(base: Path, names: Sequence[str], text: str) -> str:
 
 
 FORECAST_ENTRIES: Final = (
-    "src/bdbvhubrenewal/evaluation/backtest.py",
-    "src/bdbvhubrenewal/evaluation/nowcast.py",
+    "packages/nowcasteval/src/nowcasteval/backtest.py",
+    "packages/nowcasteval/src/nowcasteval/nowcast.py",
     "src/bdbvhubrenewal/evaluation/zones.py",
 )
 """The modules whose forecasting halves a forecast-only run calls."""

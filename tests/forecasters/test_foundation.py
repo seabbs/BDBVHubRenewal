@@ -14,7 +14,6 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data.zones import ZoneData, hub_zones
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import (
     NATIONAL,
     ForecastTask,
@@ -41,6 +40,7 @@ from bdbvhubrenewal.forecasters.zones import (
     check_zone_coherence,
     zones_for_model,
 )
+from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastutils import base
 from nowcastutils.dates import as_date
 from nowcastutils.hierarchy import is_zone, province_of

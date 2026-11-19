@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 import scoringrules as sr
 
-from bdbvhubrenewal.evaluation.scoring import (
+from nowcasteval.scoring import (
     QUANTILE_LEVELS,
     bias_sample,
     coverage_sample,
@@ -281,7 +281,7 @@ def test_relative_skill_is_mean_over_mean_on_the_matched_set() -> None:
 def test_log_crps_is_the_crps_of_log1p_counts() -> None:
     # As the paper scores Ebola: sample CRPS of log(1 + y) against
     # log(1 + x), with scoringrules' fair estimator.
-    from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS, score_sample
+    from nowcasteval.scoring import SCORE_COLUMNS, score_sample
 
     assert "log_crps" in SCORE_COLUMNS
     samples = np.random.default_rng(5).poisson(25, 1000).astype(float)

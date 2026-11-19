@@ -57,11 +57,7 @@ from typing import Final
 
 import numpy as np
 import pandas as pd
-from bdbvhubrenewal.evaluation.scoring import (
-    QUANTILE_LEVELS,
-    crps_ensemble,
-    wis_quantile,
-)
+from nowcasteval.scoring import QUANTILE_LEVELS, crps_ensemble, wis_quantile
 
 from paperfigs.schema import DEFAULT_STRATUM, FORECAST_KEYS
 

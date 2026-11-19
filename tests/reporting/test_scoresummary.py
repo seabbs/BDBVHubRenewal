@@ -8,9 +8,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.nowcast import relative_crps, relative_energy
-from bdbvhubrenewal.evaluation.scoring import relative_skill
-from bdbvhubrenewal.reporting.scoresummary import summary_html, summary_rows
+from nowcasteval.nowcast import relative_crps, relative_energy
+from nowcasteval.scoresummary import summary_html, summary_rows
+from nowcasteval.scoring import relative_skill
 
 SUMMARISE = Path(__file__).parents[2] / "docs" / "javascripts" / "summarise.js"
 MODELS = ["randomwalk", "a", "b"]
@@ -423,10 +423,10 @@ def test_browser_summary_puts_a_model_lacking_cells_apart(
 
 
 def test_bdbv_summaries_and_labels_say_crps() -> None:
-    from bdbvhubrenewal.evaluation.checks import _METRICS
-    from bdbvhubrenewal.reporting.plots import _METRIC_LABELS
-    from bdbvhubrenewal.reporting.scorechart import OVERALL_METRICS
-    from bdbvhubrenewal.reporting.scoresummary import SUMMARY_METRICS
+    from nowcasteval.checks import _METRICS
+    from nowcasteval.plots import _METRIC_LABELS
+    from nowcasteval.scorechart import OVERALL_METRICS
+    from nowcasteval.scoresummary import SUMMARY_METRICS
 
     keys = {m[0]: m[1] for m in SUMMARY_METRICS}
     assert keys["crps"] == "CRPS"

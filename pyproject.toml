@@ -17,6 +17,7 @@ dependencies = [
   "tzdata>=2024.1",
   "jax>=0.12.0",
   "nowcastutils",
+  "nowcasteval",
 ]
 keywords = [
   "epidemiology",
@@ -100,6 +101,7 @@ explicit = true
 [tool.uv.sources]
 torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
 nowcastutils = { workspace = true }
+nowcasteval = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -194,8 +196,8 @@ files = ["src"]
 [[tool.mypy.overrides]]
 # matplotlib's date locators and formatters are untyped.
 module = [
-  "bdbvhubrenewal.reporting.plots",
-  "bdbvhubrenewal.reporting.nowcast_plots",
+  "nowcasteval.plots",
+  "nowcasteval.nowcast_plots",
 ]
 disallow_untyped_calls = false
 

@@ -34,7 +34,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from bdbvhubrenewal.evaluation import labels
+from nowcasteval import labels
 
 PALETTE = labels.RUN_SHADES
 """Colours of runs that name none, in order (`labels.RUN_SHADES`; the

@@ -8,8 +8,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig
 from bdbvhubrenewal.evaluation.digest import REPORT_ONLY, backtest_digest
+from nowcasteval.backtest import BacktestConfig
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -111,11 +111,11 @@ def test_model_code_covers_what_its_forecasts_run(
 ) -> None:
     from bdbvhubrenewal.data import load_daily_zones, load_health_zones
     from bdbvhubrenewal.data.zones import hub_zones
-    from bdbvhubrenewal.evaluation import backtest as bt
     from bdbvhubrenewal.evaluation.digest import model_code
-    from bdbvhubrenewal.evaluation.nowcast import forecast_releases
     from bdbvhubrenewal.evaluation.zones import zone_forecasts
     from bdbvhubrenewal.forecasters import get_model
+    from nowcasteval import backtest as bt
+    from nowcasteval.nowcast import forecast_releases
 
     data = ROOT / "tests" / "fixtures" / "data"
     real = target.loc[target["kind"] == "real"]

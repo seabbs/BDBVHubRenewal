@@ -163,8 +163,8 @@ jobs:
           - cell: pairing-bdbv
             model: randomwalknowcast
             with: >-
-              src/bdbvhubrenewal/evaluation/pairing.py
-              src/bdbvhubrenewal/evaluation/scoring.py
+              packages/nowcasteval/src/nowcasteval/pairing.py
+              packages/nowcasteval/src/nowcasteval/scoring.py
               src/bdbvhubrenewal/evaluation/store.py
             run: >-
               uv run bdbvhubrenewal pairing-sensitivity --study bdbv
@@ -173,7 +173,7 @@ jobs:
             model: randomwalknowcast
             germany: true
             with: >-
-              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py src/bdbvhubrenewal/evaluation/scoring.py src/bdbvhubrenewal/evaluation/pairing.py
+              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
             run: >-
               uv run bdbvhubrenewal pairing-sensitivity --study germany
               --chunk 0/4 --out output/parts/pairing
@@ -181,7 +181,7 @@ jobs:
             model: randomwalknowcast
             germany: true
             with: >-
-              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py src/bdbvhubrenewal/evaluation/scoring.py src/bdbvhubrenewal/evaluation/pairing.py
+              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
             run: >-
               uv run bdbvhubrenewal pairing-sensitivity --study germany
               --chunk 1/4 --out output/parts/pairing
@@ -189,7 +189,7 @@ jobs:
             model: randomwalknowcast
             germany: true
             with: >-
-              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py src/bdbvhubrenewal/evaluation/scoring.py src/bdbvhubrenewal/evaluation/pairing.py
+              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
             run: >-
               uv run bdbvhubrenewal pairing-sensitivity --study germany
               --chunk 2/4 --out output/parts/pairing
@@ -197,7 +197,7 @@ jobs:
             model: randomwalknowcast
             germany: true
             with: >-
-              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py src/bdbvhubrenewal/evaluation/scoring.py src/bdbvhubrenewal/evaluation/pairing.py
+              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
             run: >-
               uv run bdbvhubrenewal pairing-sensitivity --study germany
               --chunk 3/4 --out output/parts/pairing
@@ -420,9 +420,9 @@ jobs:
           WITH: >-
             ${{ matrix.with || matrix.germany && 'src/bdbvhubrenewal/data/germany.py
             src/bdbvhubrenewal/evaluation/germany.py
-            src/bdbvhubrenewal/evaluation/backtest.py
-            src/bdbvhubrenewal/evaluation/nowcast.py
-            src/bdbvhubrenewal/evaluation/scoring.py
+            packages/nowcasteval/src/nowcasteval/backtest.py
+            packages/nowcasteval/src/nowcasteval/nowcast.py
+            packages/nowcasteval/src/nowcasteval/scoring.py
             src/bdbvhubrenewal/reporting/hubtables.py' || '' }}
         run: |
           set -euo pipefail

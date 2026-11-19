@@ -5,15 +5,15 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
-from bdbvhubrenewal.evaluation.nowcast import rolling_truth
-from bdbvhubrenewal.evaluation.pairing import (
+from bdbvhubrenewal.forecasters import NATIONAL
+from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcasteval.nowcast import rolling_truth
+from nowcasteval.pairing import (
     VARIANTS,
     summarise_pairing,
     variant_forecasts,
     variant_scores,
 )
-from bdbvhubrenewal.forecasters import NATIONAL
 
 
 @pytest.fixture(scope="module")

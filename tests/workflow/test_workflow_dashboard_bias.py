@@ -113,7 +113,7 @@ def test_the_page_payload_lists_each_run_with_bias(tmp_path):
     # Only the relations a run holds are listed; colours from the shared
     # map.
     assert [p["key"] for p in got["pairs"]] == ["down"]
-    from bdbvhubrenewal.evaluation import labels
+    from nowcasteval import labels
 
     assert got["col"] == {"down": labels.RELATION_COLOURS["down"]}
     assert got["runs"][0]["pts"]["down"] == [[250, 1.0, 1.0, 1.0]]

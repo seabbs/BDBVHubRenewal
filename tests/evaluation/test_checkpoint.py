@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.evaluation import checkpoint as ck
-from bdbvhubrenewal.evaluation.scoring import coverage_sample, crps_sample
+from nowcasteval.scoring import coverage_sample, crps_sample
 
 
 def test_german_dates_forecast_together_come_from_the_environment(

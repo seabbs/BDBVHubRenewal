@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.checks import check_summary, flags, place_types
-from bdbvhubrenewal.evaluation.scoring import SCORE_COLUMNS
+from nowcasteval.checks import check_summary, flags, place_types
+from nowcasteval.scoring import SCORE_COLUMNS
 
 ORIGIN = "2026-11-01"  # a Sunday, so the last week ends 2026-10-31
 WEEKS = ["2026-10-03", "2026-10-10", "2026-10-17", "2026-10-24", "2026-10-31"]

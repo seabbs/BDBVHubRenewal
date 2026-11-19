@@ -758,7 +758,7 @@ def ppc_rows(
     fits (`observed` and `imputed`, or `total`), plus national rows as
     the sum of the province draws within each draw. These are the
     `observed` and `draws` arguments of
-    `bdbvhubrenewal.evaluation.ppc.summarise_draws`.
+    `nowcasteval.ppc.summarise_draws`.
 
     Parameters
     ----------
@@ -1573,7 +1573,7 @@ def write_fit_dir(
         `bvd`, the BVDOutbreakSize release used, for a variant with the
         BVD term).
     """
-    from bdbvhubrenewal.evaluation.ppc import summarise_draws, write_ppc
+    from nowcasteval.ppc import summarise_draws, write_ppc
 
     out = Path(fit_dir)
     out.mkdir(parents=True, exist_ok=True)

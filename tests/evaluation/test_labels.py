@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from bdbvhubrenewal.evaluation.labels import (
+from nowcasteval.labels import (
     MODEL_LABELS,
     MODEL_STYLES,
     WIS_PART_FILLS,
@@ -230,7 +230,7 @@ def test_dashboard_colour_maps_are_shared_and_distinct() -> None:
     import sys
     from pathlib import Path
 
-    from bdbvhubrenewal.evaluation import labels
+    from nowcasteval import labels
 
     # Every relation a run may train; layouts as the trainer's r6 design.
     assert list(labels.RELATION_COLOURS) == ["self", "same", "up", "down"]

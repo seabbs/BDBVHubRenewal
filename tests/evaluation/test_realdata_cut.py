@@ -5,7 +5,7 @@ import datetime as dt
 import tomllib
 from pathlib import Path
 
-from bdbvhubrenewal.evaluation.backtest import load_config
+from nowcasteval.backtest import load_config
 from nowcastutils.dates import epiweek_end
 
 ROOT = Path(__file__).parents[2]

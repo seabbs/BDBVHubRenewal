@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-from bdbvhubrenewal.evaluation.scoring import wis_sample
+from nowcasteval.scoring import wis_sample
 
 from paperfigs.scores import (
     STUDY_BASELINES,

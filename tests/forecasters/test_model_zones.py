@@ -10,10 +10,10 @@ import pytest
 
 from bdbvhubrenewal.data import load_daily_zones
 from bdbvhubrenewal.data.zones import hub_zones, load_zone_data
-from bdbvhubrenewal.evaluation.backtest import BacktestConfig, make_tasks
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from bdbvhubrenewal.forecasters import renewal as rn
 from bdbvhubrenewal.forecasters.zones import ZoneAllocator, with_zones
+from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastutils.hierarchy import is_zone, province_of
 from nowcastutils.snapshots import weekly_counts
 

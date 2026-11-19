@@ -36,8 +36,8 @@ from typing import Final
 import numpy as np
 import pandas as pd
 from bdbvhubrenewal.data import load_target
-from bdbvhubrenewal.evaluation.backtest import load_config
-from bdbvhubrenewal.evaluation.nowcast import resolve_truth_delay
+from nowcasteval.backtest import load_config
+from nowcasteval.nowcast import resolve_truth_delay
 
 __all__ = [
     "COLUMNS",

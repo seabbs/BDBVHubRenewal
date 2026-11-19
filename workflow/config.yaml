@@ -184,7 +184,7 @@ dashboard:
   # run's curve starts from it, dashed) or other (dotted, the default).
   references:
     # Each takes its paper model's display name and colour
-    # (bdbvhubrenewal.evaluation.labels: MODEL_LABELS, MODEL_STYLES).
+    # (nowcasteval.labels: MODEL_LABELS, MODEL_STYLES).
     - key: zero
       paper_model: fm_chronos_daily_ragged
       model: "^(?!randomwalknowcast$)(?!.*_complete$)"

@@ -22,7 +22,7 @@ from typing import Any, Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.backtest import run_forecasts
+from nowcasteval.backtest import run_forecasts
 from nowcastutils.base import ForecastModel, ForecastTask, ModelUnavailableError
 
 __all__ = ["COMMON_STREAM", "N_DRAWS", "forecast_quantiles"]

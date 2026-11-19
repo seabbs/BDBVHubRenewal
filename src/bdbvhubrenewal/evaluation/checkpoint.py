@@ -54,8 +54,8 @@ from typing import Any, Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.scoring import scale_of, score_cells
 from bdbvhubrenewal.evaluation.sidecar import SIDECAR, with_sidecar
+from nowcasteval.scoring import scale_of, score_cells
 
 RULE: Final = "own-quantile-wis_crps-1000-common"
 """The scoring rule of 2026-11-16."""
@@ -321,7 +321,7 @@ def zone_truth(
     pandas.DataFrame
         As `rolling_truth`.
     """
-    from bdbvhubrenewal.evaluation.nowcast import rolling_truth
+    from nowcasteval.nowcast import rolling_truth
     from nowcastutils.snapshots import weekly_counts
 
     counts = {v: weekly_counts(daily_zones, v) for v in cutoffs}
@@ -471,7 +471,7 @@ def _write(frame: pd.DataFrame, path: Path) -> None:
 
 def _common(model: Any) -> Any:
     """Return the model drawing from the stream every Chronos-2 shares."""
-    from bdbvhubrenewal.evaluation.marginals import COMMON_STREAM
+    from nowcasteval.marginals import COMMON_STREAM
 
     if hasattr(model, "stream"):
         return dataclasses.replace(model, stream=COMMON_STREAM)
@@ -480,7 +480,7 @@ def _common(model: Any) -> Any:
 
 def bdbv_origins(data: Path = Path("data")) -> list[str]:
     """Return the release backtest's development origins."""
-    from bdbvhubrenewal.evaluation import backtest as bt
+    from nowcasteval import backtest as bt
 
     config = bt.load_config()
     target = pd.read_csv(data / "target.csv", dtype={"kind": str})
@@ -498,10 +498,10 @@ def bdbv_unit(
     """
     from bdbvhubrenewal.data import load_daily
     from bdbvhubrenewal.data.zones import load_zone_data
-    from bdbvhubrenewal.evaluation import backtest as bt
     from bdbvhubrenewal.evaluation import store
     from bdbvhubrenewal.forecasters import get_model
     from bdbvhubrenewal.forecasters.foundation import FoundationModel, prefetch
+    from nowcasteval import backtest as bt
     from nowcastutils.base import ModelUnavailableError, add_national
 
     _pin(label)
@@ -726,11 +726,8 @@ def bdbv_rows(
     labels whose zone unit has finished.
     """
     from bdbvhubrenewal.data.tidy import load_daily_zones
-    from bdbvhubrenewal.evaluation import backtest as bt
-    from bdbvhubrenewal.evaluation.nowcast import (
-        resolve_truth_delay,
-        rolling_truth,
-    )
+    from nowcasteval import backtest as bt
+    from nowcasteval.nowcast import resolve_truth_delay, rolling_truth
 
     config = bt.load_config()
     target = pd.read_csv(data / "target.csv", dtype={"kind": str})

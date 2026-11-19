@@ -7,7 +7,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.backtest import (
+from bdbvhubrenewal.forecasters import get_model
+from nowcasteval.backtest import (
     BacktestConfig,
     development_tasks,
     energy_tasks,
@@ -24,8 +25,7 @@ from bdbvhubrenewal.evaluation.backtest import (
     score_tasks,
     truth_changes,
 )
-from bdbvhubrenewal.evaluation.nowcast import resolve_truth_delay
-from bdbvhubrenewal.forecasters import get_model
+from nowcasteval.nowcast import resolve_truth_delay
 from nowcastutils.releases import cutoff_lags
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -430,11 +430,11 @@ def test_lopo_scores_only_the_masked_province(
 def test_backtest_sampler_comes_from_the_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bdbvhubrenewal.evaluation.backtest import apply_sampler
     from bdbvhubrenewal.forecasters.renewal import (
         SAMPLER_ENV,
         sampler_settings,
     )
+    from nowcasteval.backtest import apply_sampler
 
     cfg = load_config(ROOT / "config" / "backtest.toml")
     assert cfg.sampler == {
@@ -459,7 +459,7 @@ def test_scenarios_are_scored_final_and_as_of(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     from bdbvhubrenewal.data import load_health_zones
-    from bdbvhubrenewal.evaluation.backtest import run_scenarios
+    from nowcasteval.backtest import run_scenarios
 
     data = DATA
     zones = load_health_zones(data)
@@ -600,7 +600,7 @@ def test_scenarios_run_by_date_match_one_run(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
     from bdbvhubrenewal.data import load_health_zones
-    from bdbvhubrenewal.evaluation.backtest import run_scenarios
+    from nowcasteval.backtest import run_scenarios
 
     zones = load_health_zones(DATA)
     dates = ("2026-10-10", "2026-10-17")
@@ -631,7 +631,7 @@ def test_scenarios_run_by_date_match_one_run(
 def test_recovery_forecast_apart_by_model_scores_as_one_run(
     config: BacktestConfig, tmp_path: Path
 ) -> None:
-    from bdbvhubrenewal.evaluation.backtest import (
+    from nowcasteval.backtest import (
         joint_order,
         recovery_forecasts,
         score_recovery,
@@ -660,7 +660,7 @@ def test_scenarios_forecast_apart_by_model_score_as_one_run(
     tmp_path: Path,
 ) -> None:
     from bdbvhubrenewal.data import load_health_zones
-    from bdbvhubrenewal.evaluation.backtest import (
+    from nowcasteval.backtest import (
         run_scenarios,
         scenario_forecasts,
         score_scenarios,
@@ -701,10 +701,7 @@ def test_sample_counts_come_from_the_config(
     # submission keep `[forecast] n_samples`, so their fit keys do not
     # move with it.
     from bdbvhubrenewal.evaluation import store
-    from bdbvhubrenewal.evaluation.backtest import (
-        for_scoring,
-        tasks_for_scoring,
-    )
+    from nowcasteval.backtest import for_scoring, tasks_for_scoring
 
     text = (ROOT / "config" / "backtest.toml").read_text()
     assert "[samples]" in text
