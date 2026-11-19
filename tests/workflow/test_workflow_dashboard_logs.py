@@ -236,3 +236,12 @@ def test_the_last_line_is_the_newest_segment_log_s_last_line(tmp_path):
 
 def test_a_run_with_no_logs_has_no_last_line(tmp_path):
     assert logs.RunLog(tmp_path).last_line() is None
+
+
+def test_an_offloaded_checkpoint_lists_its_held_out_losses(tmp_path):
+    d = tmp_path / "train" / "n250"
+    d.mkdir(parents=True)
+    (d / "settings.json").write_text(json.dumps({"hash": "h"}))
+    (d / "held-out.json").write_text(json.dumps({"held_out_loss": 0.2}))
+    ((_name, settings, _t),) = logs.checkpoints(tmp_path)
+    assert settings == {"hash": "h", "held_out_loss": 0.2}

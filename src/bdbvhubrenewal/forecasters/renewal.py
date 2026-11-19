@@ -19,7 +19,7 @@ This module owns everything around it:
   `main` and `bvd` fit configurations
   (`bdbvhubrenewal.submission.fitting`).
 
-This module reads only `ModelConfig`, `MAIN`, `BVD`, `build_model`,
+This module reads only `ModelConfig`, `MAIN`, `BVD`, `zones.build_model`,
 `model_args`, `model.EXTRA_FIELDS`, `forecast_trajectories` and
 `adapter.vintage_from_tables` from the subpackage, so a new model version
 drops in if it keeps those. Sampling is here (`run_nuts`), so the CI's
@@ -60,6 +60,7 @@ from bdbvhubrenewal.forecasters.zones import with_zones
 
 if TYPE_CHECKING:
     from bdbvhubrenewal.data.bvd import BvdRelease
+    from bdbvhubrenewal.model import ModelConfig, Vintage
 
 __all__ = [
     "CENTRED_RT_MIN_CASES",
@@ -266,7 +267,7 @@ FIT_VARIANTS: Final[dict[str, str]] = {
 `renewalsp`, `main`, then the random walks (`ci/policy.toml`)."""
 
 
-def model_config(variant: Variant) -> Any:
+def model_config(variant: Variant) -> ModelConfig:
     """Build the `ModelConfig` of a variant.
 
     Parameters
@@ -279,12 +280,11 @@ def model_config(variant: Variant) -> Any:
     bdbvhubrenewal.model.ModelConfig
         Its base configuration with the overrides applied.
     """
-    return dataclasses.replace(
-        getattr(engine(), variant.base), **dict(variant.overrides)
-    )
+    base: ModelConfig = getattr(engine(), variant.base)
+    return dataclasses.replace(base, **dict(variant.overrides))
 
 
-def fit_config(variant: Variant, data: Any) -> Any:
+def fit_config(variant: Variant, data: Vintage) -> ModelConfig:
     """Build the `ModelConfig` a variant fits to one vintage with.
 
     A centred log Rt walk funnels where few cases inform it, so a
