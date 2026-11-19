@@ -30,6 +30,7 @@ nav:
       - German nowcast benchmark: germany.md
   - Joint-model-informed renewal:
       - renewal/index.md
+      - Methods: renewal/methods.md
       - Renewal models: methods/model.md
       - Model building: model-development/model-building.md
       - Development log: model-development/log.md
