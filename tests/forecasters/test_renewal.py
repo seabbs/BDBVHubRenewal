@@ -66,6 +66,15 @@ def test_variants_are_registered_as_fitted_models() -> None:
         assert len(model_abbr_for(name)) < 16
 
 
+def test_only_renewalsp_centres_its_rt_walk() -> None:
+    # One place's data pin its Rt walk, so its levels are sampled (#330).
+    # Pooled, the walk's step SD mixes badly centred (#320).
+    centred = {
+        name: rn.model_config(v).centred_rt for name, v in rn.VARIANTS.items()
+    }
+    assert centred == {"renewal": False, "renewalsp": True, "renewalbvd": False}
+
+
 @pytest.mark.parametrize("name", ["renewal", "renewalbvd"])
 def test_renewal_model_fits_provinces_only_on_their_own(
     task: ForecastTask, name: str, monkeypatch: pytest.MonkeyPatch
