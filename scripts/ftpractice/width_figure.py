@@ -7,8 +7,9 @@
 count by horizon, daily ragged model. (B) Held-out sims: median nowcast
 90% width over the final count by sqrt_phi quintile. (C) Like for like,
 the 7-day count at the cut-off, from QUANTILES_DIR/../like-for-like.csv:
-80% width on held-out sims (weekly blocks and the daily model's rolling
-7-day rows, last step) against Germany (horizon 0), with Germany's 80%
+80% width on held-out sims (weekly blocks at the last step, and the
+weekly total rows of daily+weekly blocks at the last period end) against
+Germany (horizon 0), with Germany's 80%
 coverage.
 """
 
@@ -128,13 +129,13 @@ def main() -> None:
     table = table[table["checkpoint"].isin(names)].reset_index(drop=True)
     for i, row in table.iterrows():
         colour = COLOURS[row["checkpoint"]]
-        for off, kind in ((-0.17, "weekly"), (0.17, "roll7")):
+        for off, kind in ((-0.17, "weekly"), (0.17, "dw")):
             de = "de_weekly" if kind == "weekly" else "de_daily"
             sw = row[f"sims_{kind}_w80"]
             gw, gc = row[f"{de}_w80"], row[f"{de}_cov80"]
             x = i + off
             ax.plot([x, x], [sw, gw], color=GRID, lw=2, zorder=1)
-            marker = "o" if kind == "weekly" else "s"
+            marker = "o" if kind == "weekly" else "s"  # dw: daily+weekly
             ax.plot(x, sw, marker, ms=8, mfc=SURFACE, mec=colour, mew=2)
             ax.plot(x, gw, marker, ms=8, color=colour, mec="white", mew=1.5)
             ax.annotate(
@@ -148,7 +149,7 @@ def main() -> None:
             )
     for marker, text in (
         ("o", "weekly model"),
-        ("s", "daily model, 7-day rows"),
+        ("s", "daily model, weekly total rows"),
     ):
         ax.plot([], [], marker, color=MUTED, label=text)
     ax.plot(
