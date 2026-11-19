@@ -88,6 +88,8 @@ MACHINE_KEYS = frozenset(
         "SCHEDULE_TARGETS",
         "SCHEDULE_EVERY",
         "SCHEDULE_KIND",
+        "COORDINATE_PAUSE",
+        "COORDINATE_BACKOFF",
         "STATUS_EVERY",
         "MONITOR_HOST",
         "MONITOR_PORT",
