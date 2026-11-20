@@ -16,7 +16,7 @@ from chronos_toy import (  # noqa: E402
     toy_block,
 )
 
-from bdbvhubrenewal.forecasters import series_bias  # noqa: E402
+from nowcastfoundation import series_bias  # noqa: E402
 
 
 def predict(model, block, rows=None):
@@ -147,7 +147,7 @@ def test_the_bias_trains_moves_the_output_and_saves(tmp_path):
 
 
 def test_inference_rows_follow_chronos_order_by_name():
-    from bdbvhubrenewal.forecasters.foundation import _group_rows
+    from nowcastfoundation.forecaster import _group_rows
 
     lags = 11
     names = [f"{p}_lag_{d}" for p in HIER for d in range(lags)]

@@ -320,7 +320,7 @@ def own_national(name: str | None) -> bool:
     import typing
 
     from bdbvhubrenewal.forecasters import list_models
-    from bdbvhubrenewal.forecasters.foundation import FoundationModel
+    from nowcastfoundation.forecaster import FoundationModel
 
     specs = {s.name: s for s in list_models()}
     if name not in specs:

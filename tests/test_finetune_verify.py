@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 
 from finetune_verify import function_source, problems, settings_problems
 
-from bdbvhubrenewal.forecasters import foundation
+from nowcastfoundation import forecaster as foundation
 
 FOUNDATION = Path(foundation.__file__)
 
@@ -116,7 +116,7 @@ def test_the_code_names_are_the_paths_first_hashed():
     assert set(ft.CODE) == {
         *ft.SIMULATOR,
         "scripts/finetune_chronos.py",
-        "src/bdbvhubrenewal/forecasters/finetune.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune.py",
     }
     # Every engine file is hashed.
     engine = Path(__file__).parents[1] / ft.ENGINE / "R"

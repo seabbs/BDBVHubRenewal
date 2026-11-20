@@ -61,7 +61,6 @@ from bdbvhubrenewal.data import (
     load_target,
     tidy,
 )
-from bdbvhubrenewal.data.simulate import SCENARIO_RT_SCALE
 from bdbvhubrenewal.data.zones import (
     ZoneData,
     hub_places,
@@ -107,6 +106,7 @@ from nowcasteval.nowcast import (
     score_releases,
     stored_delays,
 )
+from nowcastfoundation.simulate import SCENARIO_RT_SCALE
 from nowcastutils.base import (
     NATIONAL,
     ForecastModel,
@@ -2119,8 +2119,8 @@ def _germany_paper(args: argparse.Namespace) -> int:
 def _germany_ft_load(args: argparse.Namespace) -> int:
     from bdbvhubrenewal.evaluation import germany as de
     from bdbvhubrenewal.evaluation import germany_store as gs
-    from bdbvhubrenewal.forecasters import foundation
-    from bdbvhubrenewal.reporting import live_checkpoint as lc
+    from nowcastfoundation import forecaster as foundation
+    from nowcastfoundation import live_checkpoint as lc
 
     config = de.load_germany_config(args.config)
     spec = foundation.finetuned_spec(args.finetune)
@@ -2165,8 +2165,8 @@ def _data_root() -> Path:
 
 
 def _live_checkpoint(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.reporting.live_checkpoint import LIVE_RUN
-    from bdbvhubrenewal.reporting.live_checkpoint_page import docs_page
+    from nowcastfoundation.live_checkpoint import LIVE_RUN
+    from nowcastfoundation.live_checkpoint_page import docs_page
 
     path = Path(args.scores)
     # The Pages step leaves an empty file when the branch has no table.
@@ -2289,7 +2289,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "bvd":  # pragma: no cover - network
         return _bvd(args)
     if args.command == "finetuned-checkpoint":
-        from bdbvhubrenewal.forecasters.foundation import (
+        from nowcastfoundation.forecaster import (
             finetuned_spec,
             resolve_checkpoint,
         )

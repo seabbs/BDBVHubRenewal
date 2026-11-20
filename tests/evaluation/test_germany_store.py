@@ -10,7 +10,6 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.checkpoint import GERMANY_UNIT
 from bdbvhubrenewal.evaluation.germany import load_germany_config
 from bdbvhubrenewal.evaluation.germany_store import (
     STORED_MODELS,
@@ -20,6 +19,7 @@ from bdbvhubrenewal.evaluation.germany_store import (
     release_tag,
     write_stored,
 )
+from nowcastfoundation.checkpoint import GERMANY_UNIT
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = load_germany_config(ROOT / "config" / "germany.toml")
@@ -228,7 +228,7 @@ def test_the_load_command_writes_the_chosen_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from bdbvhubrenewal import cli
-    from bdbvhubrenewal.forecasters import foundation
+    from nowcastfoundation import forecaster as foundation
 
     store = tmp_path / "store"
     for tag in ("chronos-ft-aaa", "chronos-ft-bbb"):
@@ -269,7 +269,7 @@ def test_the_load_command_writes_nothing_without_a_stored_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from bdbvhubrenewal import cli
-    from bdbvhubrenewal.forecasters import foundation
+    from nowcastfoundation import forecaster as foundation
 
     monkeypatch.setattr(foundation, "finetuned_releases", lambda: RELEASES)
     monkeypatch.delenv(foundation.FINETUNED_ENV, raising=False)
@@ -320,7 +320,7 @@ def test_the_load_command_shows_the_live_run_with_its_label(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from bdbvhubrenewal import cli
-    from bdbvhubrenewal.forecasters import foundation
+    from nowcastfoundation import forecaster as foundation
 
     releases = [
         *RELEASES,

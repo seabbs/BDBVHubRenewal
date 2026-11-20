@@ -46,7 +46,6 @@ from bdbvhubrenewal.data import (  # noqa: E402
     load_target,
 )
 from bdbvhubrenewal.data.delays import hub_delay_pmf  # noqa: E402
-from bdbvhubrenewal.data.simulate import simulate_outbreak  # noqa: E402
 from bdbvhubrenewal.data.zones import hub_places  # noqa: E402
 from bdbvhubrenewal.forecasters import renewal as adapter  # noqa: E402
 from bdbvhubrenewal.forecasters.renewal import (  # noqa: E402
@@ -64,6 +63,7 @@ from bdbvhubrenewal.model.model import (  # noqa: E402
 from nowcastbaselines.randomwalk import RandomWalk  # noqa: E402
 from nowcasteval.ppc import summarise_draws  # noqa: E402
 from nowcasteval.scoring import crps_sample  # noqa: E402
+from nowcastfoundation.simulate import simulate_outbreak  # noqa: E402
 from nowcastutils.base import ForecastTask, ModelUnavailableError  # noqa: E402
 
 OUT = Path(__file__).parents[1] / "results"

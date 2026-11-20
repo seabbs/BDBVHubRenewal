@@ -21,17 +21,8 @@ from bdbvhubrenewal.forecasters import (
     ModelUnavailableError,
     add_national,
     check_samples,
-    foundation,
     get_model,
     list_models,
-)
-from bdbvhubrenewal.forecasters.foundation import (
-    LAYOUTS,
-    MAX_LAG,
-    SOURCES,
-    chronos_sampler,
-    hub_triangle,
-    quantile_draws,
 )
 from nowcastbaselines.chain import NoWalkSpread
 from nowcastbaselines.randomwalk import RandomWalk
@@ -41,6 +32,15 @@ from nowcastbaselines.zones import (
     zones_for_model,
 )
 from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastfoundation import forecaster as foundation
+from nowcastfoundation.forecaster import (
+    LAYOUTS,
+    MAX_LAG,
+    SOURCES,
+    chronos_sampler,
+    hub_triangle,
+    quantile_draws,
+)
 from nowcastutils import base
 from nowcastutils.dates import as_date
 from nowcastutils.hierarchy import is_zone, province_of
@@ -1173,7 +1173,7 @@ def test_native_quantiles_pass_chronos_only_its_keys(
 
 
 def test_rolling_rows_hold_each_days_seven_day_sum() -> None:
-    from bdbvhubrenewal.forecasters.foundation import (
+    from nowcastfoundation.forecaster import (
         HubTriangle,
         rolling_rows,
         week_rows,

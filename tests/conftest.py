@@ -74,7 +74,7 @@ def _fake_checkpoint_releases(
     No test reaches GitHub. The latest `chronos-ft-*` release is
     `FAKE_CHECKPOINT`, with its `sha256sums.txt` only.
     """
-    from bdbvhubrenewal.forecasters import foundation
+    from nowcastfoundation import forecaster as foundation
 
     root = tmp_path_factory.getbasetemp() / "checkpoint-releases"
     if not root.exists():

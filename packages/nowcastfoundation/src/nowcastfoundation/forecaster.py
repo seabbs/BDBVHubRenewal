@@ -41,9 +41,9 @@ from typing import Any, ClassVar, Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.forecasters import series_bias
 from nowcastbaselines.chain import start_weeks
 from nowcastbaselines.randomwalk import RandomWalk
+from nowcastfoundation import series_bias
 from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,

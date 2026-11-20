@@ -563,14 +563,14 @@ def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
     for block in units:
         assert "scripts/checkpoint_scores.py" not in block
     shells = "".join(units)
-    assert "-m bdbvhubrenewal.evaluation.checkpoint germany" in shells
+    assert "-m nowcastfoundation.checkpoint germany" in shells
 
 
 def test_units_make_the_rows_folder_a_worker_brings_back(tmp_path):
     blocks = score_jobs(tmp_path, {"score": {"labels": ["aaa"]}})
     shells = "".join(blocks)
     # The folder the shared evaluation writes German rows to.
-    from bdbvhubrenewal.evaluation.checkpoint import GERMANY_UNIT
+    from nowcastfoundation.checkpoint import GERMANY_UNIT
 
     assert f"mkdir -p {tmp_path}/scores/{GERMANY_UNIT}/aaa/" in shells
 

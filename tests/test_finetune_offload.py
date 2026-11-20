@@ -17,7 +17,7 @@ import finetune_evaluate as fe  # noqa: E402
 import finetune_stream as fs  # noqa: E402
 from chronos_toy import tiny_model, toy_block  # noqa: E402
 
-from bdbvhubrenewal.forecasters import series_bias  # noqa: E402
+from nowcastfoundation import series_bias  # noqa: E402
 
 
 @pytest.fixture

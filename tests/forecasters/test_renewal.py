@@ -629,7 +629,7 @@ def test_single_patch_fits_each_province_on_its_own(
 def test_a_simulated_release_is_cut_at_its_stored_cut_off() -> None:
     import datetime as dt
 
-    from bdbvhubrenewal.data.simulate import simulate_outbreak
+    from nowcastfoundation.simulate import simulate_outbreak
 
     outbreak = simulate_outbreak()
     # A Sunday release one day after its cut-off, as in the scenarios.

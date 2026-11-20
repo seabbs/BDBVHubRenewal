@@ -15,7 +15,7 @@ from typing import Any, Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.forecasters.foundation import (
+from nowcastfoundation.forecaster import (
     HubTriangle,
     hub_triangle,
     layout_block,

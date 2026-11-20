@@ -22,9 +22,9 @@ keyed by checkpoint hash and run, with the checkpoint's outbreaks and
 grid.
 
 Usage:
-  python -m bdbvhubrenewal.evaluation.checkpoint germany CACHE LABEL
-  python -m bdbvhubrenewal.evaluation.checkpoint release CACHE HASH
-  python -m bdbvhubrenewal.evaluation.checkpoint table CACHE EVIDENCE \\
+  python -m nowcastfoundation.checkpoint germany CACHE LABEL
+  python -m nowcastfoundation.checkpoint release CACHE HASH
+  python -m nowcastfoundation.checkpoint table CACHE EVIDENCE \\
     CHECKPOINTS HASH...
 """
 
@@ -45,7 +45,7 @@ from typing import Any, Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.sidecar import SIDECAR, with_sidecar
+from nowcastfoundation.sidecar import SIDECAR, with_sidecar
 
 RULE: Final = "own-quantile-wis_crps-1000-common"
 """The scoring rule of 2026-11-16."""
@@ -309,10 +309,7 @@ PRECISION_FILE: Final = "precision.txt"
 
 def record_precision(root: Path) -> None:
     """Write the precision a unit forecasts in to its folder."""
-    from bdbvhubrenewal.forecasters.foundation import (
-        inference_precision,
-        torch_device,
-    )
+    from nowcastfoundation.forecaster import inference_precision, torch_device
 
     Path(root).mkdir(parents=True, exist_ok=True)
     precision = inference_precision(torch_device())
@@ -419,7 +416,7 @@ def germany_unit(cache: Path, label: str) -> None:
 
 def release_unit(cache: Path, label: str) -> None:
     """Fetch a release's settings.json and its title and body."""
-    from bdbvhubrenewal.forecasters.foundation import release_tag
+    from nowcastfoundation.forecaster import release_tag
 
     root = cache / "heldout"
     root.mkdir(parents=True, exist_ok=True)

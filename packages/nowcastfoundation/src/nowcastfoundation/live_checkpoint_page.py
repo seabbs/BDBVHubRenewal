@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bdbvhubrenewal.reporting.live_checkpoint import (
+from nowcasteval.tables import markdown_table
+from nowcastfoundation.live_checkpoint import (
     LIVE_RUN,
     label,
     newest,
     summary_table,
 )
-from nowcasteval.tables import markdown_table
 
 __all__ = ["docs_page"]
 

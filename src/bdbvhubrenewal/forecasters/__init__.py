@@ -20,10 +20,10 @@ To add a variant, write a class with `name` and `forecast(task)` and call
 `register_model` in its module, then import that module here.
 """
 
-from bdbvhubrenewal.forecasters.foundation import FoundationModel
 from bdbvhubrenewal.forecasters.renewal import VARIANTS, RenewalModel
 from bdbvhubrenewal.forecasters.zonerenewal import ZoneRenewalModel
 from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
+from nowcastfoundation.forecaster import FoundationModel
 from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,

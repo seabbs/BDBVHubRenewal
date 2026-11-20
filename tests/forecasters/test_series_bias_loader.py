@@ -10,7 +10,7 @@ pytest.importorskip("peft")
 from chronos_toy import LAG, N_PLACES, H, T, tiny_model, toy_block  # noqa: E402
 from test_series_bias import predict, toy_rows  # noqa: E402
 
-from bdbvhubrenewal.forecasters import series_bias  # noqa: E402
+from nowcastfoundation import series_bias  # noqa: E402
 
 
 def trained_bias(steps: int = 5, pairs=series_bias.PAIRS):
@@ -169,7 +169,7 @@ def test_inference_gives_a_bias_model_its_rows_by_name(monkeypatch, tmp_path):
 
     from chronos import Chronos2Pipeline
 
-    from bdbvhubrenewal.forecasters import foundation
+    from nowcastfoundation import forecaster as foundation
 
     model = trained_bias()
     model.save_pretrained(tmp_path / "bias")

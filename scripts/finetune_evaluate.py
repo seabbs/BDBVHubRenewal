@@ -25,8 +25,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 import finetune_chronos as ft
 import finetune_stream as fs
 
-from bdbvhubrenewal.forecasters import series_bias
-from bdbvhubrenewal.forecasters.foundation import torch_device
+from nowcastfoundation import series_bias
+from nowcastfoundation.forecaster import torch_device
 
 KINDS = ("start", "monitor", "by_source", "checkpoint")
 

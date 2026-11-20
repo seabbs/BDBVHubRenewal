@@ -121,7 +121,7 @@ Outputs are in `<RUN>/train/n<N>/`.
 ## 4. Score (`rules/score.smk`, `rules/followups.smk`)
 
 - `release_list`: the repository's releases, the only rule that reads the network; `task nowcast-foundation:score` and each tick rerun it in a run of its own before scoring, as Snakemake 9 ends a run after a forced checkpoint without the jobs it unlocks. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
-- `score_germany`, `score_release`: the units of `bdbvhubrenewal.evaluation.checkpoint` for each checkpoint and the references, newest checkpoint first. Each caches one file per date and resumes from it.
+- `score_germany`, `score_release`: the units of `nowcastfoundation.checkpoint` for each checkpoint and the references, newest checkpoint first. Each caches one file per date and resumes from it.
   Units run torch on the machine's device with `SCORE_THREADS` threads and the `gpu` resource.
   BDBV is held out for the paper, so no BDBV unit runs.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables (BDBV rows already there stay).

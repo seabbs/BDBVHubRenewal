@@ -1,6 +1,6 @@
 """An offloaded checkpoint's held-out sidecar merged into its settings."""
 
-from bdbvhubrenewal.evaluation.sidecar import with_sidecar
+from nowcastfoundation.sidecar import with_sidecar
 
 
 def test_the_sidecar_adds_losses_and_never_overrides_settings():
