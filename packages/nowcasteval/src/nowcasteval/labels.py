@@ -141,14 +141,12 @@ the kinds of attention module), assigned by fixed position, never cycled
 past the end without a legend."""
 
 RELATION_COLOURS: Final[dict[str, str]] = {
-    "self": NEUTRAL,
     "same": _SLOT_BLUE,
     "up": _SLOT_AQUA,
     "down": _SLOT_ORANGE,
 }
-"""Colour of each series-bias relation: a row with itself (self, in runs
-that train it), a place's own series (same), a place to its parent (up)
-and a parent to its places (down)."""
+"""Colour of each series-bias relation: a place's own series (same), a
+place to its parent (up) and a parent to its places (down)."""
 
 LAYOUT_COLOURS: Final[dict[str, str]] = {
     "daily": _SLOT_BLUE,

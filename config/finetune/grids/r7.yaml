@@ -44,11 +44,11 @@ floors:
   min_cases: 10
 # The sim QC's plausibility thresholds: a simulation past one is drawn
 # again in its batch (`qc_reason`), and the round's QC (scripts/sim_qc.py)
-# checks them again. Cases per stratum with cases (draws' median), the
-# largest week-on-week rise in weekly cases by reference date, and the
-# mean reporting delay.
+# checks them again. The largest week-on-week rise in weekly cases by
+# reference date, and the mean reporting delay. Size has no threshold: only
+# more reported cases in a stratum than its population is rejected, as an
+# impossible draw (#408 item 10).
 qc:
-  max_cases_per_stratum: 500000
   max_weekly_jump: 1000
   max_mean_delay_days: 35
 shares:
@@ -111,7 +111,9 @@ factor_layers:
   delay_family: delays
   delay_form: delays
   delay_change: delays
+  delay_dow: delays
   reference_dow: reporting
+  report_dow: reporting
   reporting: reporting
   bunching: reporting
   shocks: reporting
@@ -141,7 +143,16 @@ factors:
     parametric: 1
     non_parametric: 1
     both: 1
+  # Weekday effects are rare and mostly small (lead 13:24): on counts by
+  # reference date in a third, on the delay by reference weekday in a
+  # third, and on reports (daily reporting only) in half.
   reference_dow:
+    'no': 2
+    'yes': 1
+  delay_dow:
+    'no': 2
+    'yes': 1
+  report_dow:
     'no': 1
     'yes': 1
   observation:
@@ -643,16 +654,22 @@ distributions:
     why: a backlog of x2 to x5 on the mean delay
   dow_sd:
     dist: lognormal
-    median: 0.25
-    sdlog: 0.4
+    median: 0.12
+    sdlog: 0.5
     layer: reporting
-    why: day-of-week effects on reports of about x1.2 to x3
+    why: weekday effects on reports mostly a few to 15%, a tail to strong
   reference_dow_sd:
     dist: lognormal
-    median: 0.3
-    sdlog: 0.35
+    median: 0.12
+    sdlog: 0.5
     layer: reporting
-    why: day-of-week effects on onsets of about x1.3 to x3
+    why: weekday effects on counts mostly a few to 15%, a tail to strong
+  delay_dow_sd:
+    dist: lognormal
+    median: 0.08
+    sdlog: 0.5
+    layer: delays
+    why: the mean delay by reference weekday mostly within 10%
   bunch_at:
     dist: beta
     a: 2.0

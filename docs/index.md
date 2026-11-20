@@ -15,16 +15,19 @@ The joint-model-informed renewal project compares renewal models fitted on their
 ## Quick links
 
 <div class="quick-links" markdown>
-[![](assets/logos/fine-tuned-foundation/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/fine-tuned-foundation/logo-mark-dark.svg#only-dark){ width="96" height="96" } Fine-tuned foundation](foundation/index.md){ .quick-link }
-[![](assets/logos/joint-model-informed-renewal/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/joint-model-informed-renewal/logo-mark-dark.svg#only-dark){ width="96" height="96" } Joint-model-informed renewal](renewal/index.md){ .quick-link }
-[![](assets/logos/hub-submission/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/hub-submission/logo-mark-dark.svg#only-dark){ width="96" height="96" } Hub submission](hub/index.md){ .quick-link }
-[![](assets/logos/nowcastutils/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastutils/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastutils](packages/index.md#nowcastutils){ .quick-link }
-[![](assets/logos/nowcasteval/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcasteval/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcasteval](packages/index.md#nowcasteval){ .quick-link }
-[![](assets/logos/nowcastworkflow/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastworkflow/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastworkflow](packages/index.md#nowcastworkflow){ .quick-link }
-[![](assets/logos/nowcastbaselines/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastbaselines/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastbaselines](packages/index.md#nowcastbaselines){ .quick-link }
-[![](assets/logos/nowcastfoundation/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastfoundation/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastfoundation](packages/index.md#nowcastfoundation){ .quick-link }
-[![](assets/logos/nowcastrenewal/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/nowcastrenewal/logo-mark-dark.svg#only-dark){ width="96" height="96" } nowcastrenewal](packages/index.md#nowcastrenewal){ .quick-link }
-[![](assets/logos/bdbvhub/logo-mark.svg#only-light){ width="96" height="96" }![](assets/logos/bdbvhub/logo-mark-dark.svg#only-dark){ width="96" height="96" } bdbvhub](packages/index.md#bdbvhub){ .quick-link }
+[![](assets/logos/fine-tuned-foundation/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/fine-tuned-foundation/logo-mark-dark.svg#only-dark){ width="48" height="48" } Fine-tuned foundation](foundation/index.md){ .quick-link }
+[![](assets/logos/nowcastfoundation/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/nowcastfoundation/logo-mark-dark.svg#only-dark){ width="48" height="48" } nowcastfoundation](packages/index.md#nowcastfoundation){ .quick-link }
+
+[![](assets/logos/joint-model-informed-renewal/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/joint-model-informed-renewal/logo-mark-dark.svg#only-dark){ width="48" height="48" } Joint-model-informed renewal](renewal/index.md){ .quick-link }
+[![](assets/logos/nowcastrenewal/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/nowcastrenewal/logo-mark-dark.svg#only-dark){ width="48" height="48" } nowcastrenewal](packages/index.md#nowcastrenewal){ .quick-link }
+
+[![](assets/logos/hub-submission/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/hub-submission/logo-mark-dark.svg#only-dark){ width="48" height="48" } Hub submission](hub/index.md){ .quick-link }
+[![](assets/logos/bdbvhub/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/bdbvhub/logo-mark-dark.svg#only-dark){ width="48" height="48" } bdbvhub](packages/index.md#bdbvhub){ .quick-link }
+
+[![](assets/logos/nowcastutils/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/nowcastutils/logo-mark-dark.svg#only-dark){ width="48" height="48" } nowcastutils](nowcastutils/){ .quick-link }
+[![](assets/logos/nowcasteval/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/nowcasteval/logo-mark-dark.svg#only-dark){ width="48" height="48" } nowcasteval](nowcasteval/){ .quick-link }
+[![](assets/logos/nowcastbaselines/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/nowcastbaselines/logo-mark-dark.svg#only-dark){ width="48" height="48" } nowcastbaselines](nowcastbaselines/){ .quick-link }
+[![](assets/logos/nowcastworkflow/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/nowcastworkflow/logo-mark-dark.svg#only-dark){ width="48" height="48" } nowcastworkflow](packages/index.md#nowcastworkflow){ .quick-link }
 </div>
 
 <div class="grid cards" markdown>

@@ -112,7 +112,7 @@ test_that("every factor has a layer and aggregates are drawn from the grid", {
 
 test_that("a draw failing the sim QC is redrawn, with the grid's thresholds", {
   grid <- r7()
-  expect_named(grid$qc, c("max_cases_per_stratum", "max_weekly_jump", "max_mean_delay_days"))
+  expect_named(grid$qc, c("max_weekly_jump", "max_mean_delay_days"))
   day <- data.table::as.IDate("2026-01-05")
   counts <- function(ref, delay, n, loc = "P01") {
     data.table::data.table(location = loc, reference_date = day + ref,
@@ -126,9 +126,15 @@ test_that("a draw failing the sim QC is redrawn, with the grid's thresholds", {
   # A mean delay past the limit.
   slow <- counts(0:27, 60L, 20L)
   expect_match(qc_reason(slow, grid), "delay")
-  # Too many cases per stratum with cases.
-  big <- counts(0:27, 2L, 30000L)
-  expect_match(qc_reason(big, grid), "per stratum")
+  # No fixed cap on cases per stratum (#408 item 10): only more cases
+  # than a stratum's population is impossible.
+  big <- rbind(counts(0:27, 2L, 30000L), counts(0:27, 2L, 1L, "P02"))
+  expect_true(is.na(qc_reason(big, grid)))
+  expect_true(is.na(qc_reason(big, grid, c(P01 = 1e7, P02 = 100))))
+  expect_match(
+    qc_reason(big, grid, c(P01 = 1e5, P02 = 100)),
+    "cases in a stratum above its population"
+  )
 })
 
 test_that("strata of one outbreak can share its length and calendar offset", {
@@ -138,4 +144,34 @@ test_that("strata of one outbreak can share its length and calendar offset", {
   expect_equal(d$weeks, 11L)
   d$offset <- 4L
   expect_equal(draw_values(grid, d)$offset, 4L)
+})
+
+test_that("the reporting delay may vary by reference weekday", {
+  grid <- r7()
+  expect_setequal(names(grid$factors$delay_dow), c("no", "yes"))
+  expect_equal(grid$factor_layers$delay_dow, "delays")
+  d <- grid$distributions$delay_dow_sd
+  expect_equal(d$layer, "delays")
+  expect_true(nzchar(d$why))
+  set.seed(3)
+  v <- draw_values(grid, draw_design(grid))
+  expect_gt(v$delay_dow_sd, 0)
+})
+
+test_that("weekday effects are rare and mostly small (lead 13:24)", {
+  grid <- r7()
+  share <- function(f) {
+    w <- unlist(grid$factors[[f]])
+    unname(w["yes"] / sum(w))
+  }
+  expect_equal(share("report_dow"), 1 / 2)
+  expect_equal(share("reference_dow"), 1 / 3)
+  expect_equal(share("delay_dow"), 1 / 3)
+  expect_equal(grid$factor_layers$report_dow, "reporting")
+  for (k in c("dow_sd", "reference_dow_sd")) {
+    d <- grid$distributions[[k]]
+    expect_equal(c(d$dist, d$median, d$sdlog), c("lognormal", 0.12, 0.5))
+  }
+  d <- grid$distributions$delay_dow_sd
+  expect_equal(c(d$dist, d$median, d$sdlog), c("lognormal", 0.08, 0.5))
 })
