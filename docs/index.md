@@ -7,7 +7,7 @@ The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) coll
 This repository holds the models we submit to it, experimental models related to it, their backtests, and their evaluation on other case studies.
 The random walk and the random walk nowcast are the baselines we evaluate every other model against, and give the hub a principled baseline.
 
-The fine-tuned foundation project fine-tunes the Chronos-2 forecasting model on simulated outbreaks so that it can nowcast from reporting triangles ([paper plan](https://github.com/seabbs/bdbv-hub-modelling/issues/206)).
+The fine-tuned foundation project fine-tunes the Chronos-2 forecasting model on simulated outbreaks so that it can nowcast from reporting triangles.
 The [paper](paper/main.html) and its [supporting information](paper/si.html) describe it.
 
 The joint-model-informed renewal project compares renewal models fitted on their own with renewal models informed by a larger joint model, BVDOutbreakSize, through approximate Markov melding.
