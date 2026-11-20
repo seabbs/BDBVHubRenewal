@@ -60,6 +60,7 @@ def chart(
     note: str = "",
     info: str = "",
     legend: str | None = None,
+    xfmt: Callable[[float], str] | None = None,
 ) -> str:
     """Return a card with its legend on top of an SVG line chart.
 
@@ -70,6 +71,7 @@ def chart(
     and `hlines` horizontal ones. Text and colours are escaped; `note`
     and `info` (a marker after the title) are HTML, put in as they are,
     as is `legend`, which replaces the one made from the series.
+    `xfmt` labels the x ticks, `t:g` by default.
     """
     esc = html.escape
     title, xlabel = esc(title) + info, esc(xlabel)
@@ -110,7 +112,11 @@ def chart(
                 f'y2="{yy:.1f}" class=grid /><text x="{left - 6}" '
                 f'y="{yy + 4:.1f}" text-anchor=end class=ax>{lab}</text>'
             )
-    ticks = xticks or [(t, f"{t:g}") for t in nice(x0, x1) if x0 <= t <= x1]
+    ticks = xticks or [
+        (t, esc(xfmt(t)) if xfmt else f"{t:g}")
+        for t in nice(x0, x1)
+        if x0 <= t <= x1
+    ]
     for t, lab in ticks:
         xx = sx(t)
         o.append(
