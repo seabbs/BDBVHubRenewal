@@ -8,6 +8,8 @@ functions in `packages/nowcastfoundation/r/R/infections.R` and
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -169,7 +171,7 @@ def test_imports_match_the_r_engine() -> None:
 def test_the_trickle_reaches_every_stratum_with_cases_but_late_ones() -> None:
     late = np.array([False, True, False])
     imports = Imports("imports", kind="none", late=late, trickle=0.3)
-    out = run(imports.sample, 10, unit=np.array([1.0, 1.0, 0.0]))
+    out = np.asarray(run(imports.sample, 10, unit=np.array([1.0, 1.0, 0.0])))
     np.testing.assert_allclose(out[:, 0], 0.3)
     np.testing.assert_allclose(out[:, 2], 0.0)
     # The late stratum's own import is its unit over the late days.
@@ -236,32 +238,29 @@ def test_the_exhausted_renewal_never_infects_more_than_its_population() -> None:
 def test_exponential_depletion_is_pyrenews_logistic_adjustment() -> None:
     # S (1 - e^{-R F / N}) is PyRenew's logistic susceptibility adjustment
     # with the raw incidence R F, written with expm1.
-    r = jnp.array([1.3, 0.8, 2.0])
-    force = jnp.array([50.0, 3.0, 400.0])
-    s = jnp.array([9000.0, 4000.0, 15000.0])
-    pop = jnp.array([1e4, 5e3, 2e4])
     with jax.enable_x64(True):
+        r = jnp.array([1.3, 0.8, 2.0])
+        force = jnp.array([50.0, 3.0, 400.0])
+        s = jnp.array([9000.0, 4000.0, 15000.0])
+        pop = jnp.array([1e4, 5e3, 2e4])
         new = ExponentialDepletion()(r, force, s, pop, jnp.zeros(3))
         want = logistic_susceptibility_adjustment(r * force, s / pop, pop)
     np.testing.assert_allclose(new, want, rtol=1e-9)
 
 
 def test_exponential_depletion_is_linear_while_few_are_infected() -> None:
-    r = jnp.array([1.5])
-    force = jnp.array([2.0])
-    s = jnp.array([1e6])
-    pop = jnp.array([1e6])
-    im = jnp.array([0.5])
     with jax.enable_x64(True):
+        r, force = jnp.array([1.5]), jnp.array([2.0])
+        s, pop, im = jnp.array([1e6]), jnp.array([1e6]), jnp.array([0.5])
         lin = LinearDepletion()(r, force, s, pop, im)
         exp = ExponentialDepletion()(r, force, s, pop, im)
     np.testing.assert_allclose(exp, lin, rtol=1e-5)
 
 
 def test_both_depletions_stop_at_the_susceptibles() -> None:
-    r, force = jnp.array([5.0]), jnp.array([1e5])
-    s, pop, im = jnp.array([10.0]), jnp.array([1e3]), jnp.array([20.0])
     with jax.enable_x64(True):
+        r, force = jnp.array([5.0]), jnp.array([1e5])
+        s, pop, im = jnp.array([10.0]), jnp.array([1e3]), jnp.array([20.0])
         for depletion in (LinearDepletion(), ExponentialDepletion()):
             assert float(depletion(r, force, s, pop, im)[0]) == 10.0
 
@@ -273,3 +272,20 @@ def test_a_variant_raises_r_and_returns_immune_people_once() -> None:
     assert m[0] == pytest.approx(1.0, abs=1e-4)
     assert m[-1] == pytest.approx(2.0, abs=1e-4)
     assert m[9] == pytest.approx(1.5)
+
+
+def test_the_fitted_models_do_not_import_the_simulator_components() -> None:
+    # The fit keys hash the forecasters' import closure, so the simulator's
+    # components stay out of it and adding them refits nothing.
+    code = (
+        "import sys, nowcastrenewal.forecaster, nowcastrenewal.zones;"
+        "mods = ('imports', 'mixing', 'pmfs', 'reference', 'strata');"
+        "print([m for m in mods if f'nowcastrenewal.model.{m}' in sys.modules])"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert out.stdout.strip() == "[]"
