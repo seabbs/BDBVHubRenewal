@@ -59,9 +59,10 @@ after the nowcast date."""
 DEFINITIONS = [
     (
         "Weekly ragged, zero-shot",
-        "Each place's weekly 7-day sums (the last 4 weeks left out) and "
-        "its weekly lag series 0-3; lag rows of places with no cases "
-        "dropped.",
+        "Each place's weekly counts up to 4 weeks before the nowcast "
+        "date; the recent, still incomplete weeks enter only through its "
+        "lag series (what each release added, lags 0-3). Lag rows of "
+        "places with no cases dropped.",
         "Chronos-2's native quantiles per place and week.",
         "The native quantiles interpolated to the hub's levels: one "
         "week is one step, so no draws and no summing.",
@@ -75,13 +76,14 @@ DEFINITIONS = [
     ),
     (
         "Daily ragged, zero-shot",
-        "Each place's daily counts (the last 28 days left out) and its "
-        "daily lag series 0-27; no weekly row.",
+        "Each place's daily counts up to 28 days before the nowcast "
+        "date; the recent, still incomplete days enter only through its "
+        "lag series (lags 0-27). No weekly row.",
         "Chronos-2's quantiles per place and day.",
         "1,000 draws, an independent uniform per series and day (not "
-        "joint paths), each day floored at its reported count; the 7 "
-        "days summed per draw; quantiles of the 1,000 sums. Independent "
-        "days make the sums too narrow.",
+        "joint paths); the 7 days summed per draw; quantiles of the "
+        "1,000 sums. Independent days make the sums too narrow. Being "
+        "replaced by native quantiles of a 7-day rolling row.",
     ),
     (
         "Daily ragged, fine-tuned (current)",
@@ -89,16 +91,20 @@ DEFINITIONS = [
         "Sunday-Saturday sums on Saturdays only); lag rows kept.",
         "Quantiles per place and day for the count rows and the totals rows.",
         "1,000 independent draws; the 7-day sum is the totals row's "
-        "draw on the week's Saturday (not summed daily draws), floored "
-        "at the reported week; quantiles of the draws.",
+        "draw on the week's Saturday (not summed daily draws); quantiles "
+        "of the draws. Being replaced by native quantiles of a 7-day "
+        "rolling row, the same block as zero-shot.",
     ),
     (
         "Random walk nowcast",
         "The reporting triangle by release.",
         "A negative binomial chain-ladder nowcast of each week, then a "
         "random walk on log(1 + y) from the latest well-reported week.",
-        "1,000 draws per week; the country is the sum of its places by "
-        "draw; quantiles of the draws.",
+        "The same model and settings as the hub submission. Its "
+        "observation model is fitted on past nowcast errors of the same "
+        "7-day sums. 1,000 draws per week (the hub takes 100); the "
+        "country is the sum of its places by draw; quantiles of the "
+        "draws.",
     ),
 ]
 """What each model is given, outputs, and how that becomes the score."""
@@ -107,12 +113,17 @@ TRUTH = (
     "Every row is scored on the hub target: the 7-day sum ending h days "
     "after the nowcast date (h = -28 to 0 the hub's nowcast days; h = 1 "
     "to 28 the forecast days), against that sum as reported 40 days "
-    "after it ends. Dates are relabelled per weekday offset so each sum "
-    "ends on a model step. Quantile WIS at the hub's seven levels, on "
+    "after it ends. A weekly model's steps are Sunday-Saturday weeks, "
+    "so for each target weekday its dates are shifted so that its weeks "
+    "end on that day. In the runs shown, every Chronos-2 forecast is "
+    "raised to at least the count already reported; this floor is not "
+    "part of the model's output and is being dropped. Quantile WIS at "
+    "the hub's seven levels, on "
     "the counts and on log(1 + counts), with its dispersion, "
     "overprediction and underprediction; coverage of the central 50% "
-    "and 95% intervals (the hub's levels stop at 2.5% and 97.5%, so "
-    "there is no 90% interval). Every model is scored on the cells all "
+    "and 95% intervals. These runs kept only the hub's levels, which "
+    "stop at 2.5% and 97.5%; reruns add 5% and 95% for the 90% "
+    "interval. Every model is scored on the cells all "
     "of them have."
 )
 
