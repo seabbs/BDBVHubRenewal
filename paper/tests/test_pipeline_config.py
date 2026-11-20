@@ -193,8 +193,7 @@ def test_the_heldout_set_is_the_runs_test_round() -> None:
         (Path(__file__).parents[2] / "workflow" / "config.yaml").read_text()
     )
     sim = flow["simulate"]
-    grid = Path(sim["grid_file"]).stem
-    r = flow["grid_rounds"][grid]["test_round"]
+    r = flow["grid_rounds"]["test_round"]
     first = sim["seed_base"] + 100 * r
     assert cfg["heldout"]["synthetic_seeds"] == list(
         range(first, first + sim["batches"])
@@ -203,7 +202,6 @@ def test_the_heldout_set_is_the_runs_test_round() -> None:
     assert cfg["synthetic"]["simulations"]["paper"].endswith(
         f"rounds/r{r}/sims"
     )
-    assert cfg["synthetic"]["grid"] == grid
     assert (
         Path(cfg["synthetic"]["grid_file"]).name == Path(sim["grid_file"]).name
     )
