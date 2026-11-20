@@ -385,7 +385,8 @@ def test_each_scored_row_is_the_sum_of_its_own_seven_days(
     # Counts rise by a known step a day and are reported in full three
     # days on, so the last three days are forecast and a sum one day out
     # of place is off by seven steps. The weeks cross ISO 2020's week 53.
-    first, last = pd.Timestamp("2020-10-01"), pd.Timestamp("2021-01-20")
+    # Long enough for the lag rule to read complete steps (`lag_count`).
+    first, last = pd.Timestamp("2020-06-01"), pd.Timestamp("2021-01-20")
     days = pd.date_range(first, last)
     i = np.arange(len(days))
     places = {

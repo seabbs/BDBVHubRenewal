@@ -1023,7 +1023,7 @@ def _weekly_from_totals(
             out.append(np.maximum(drawn[:, n_places:, t - start], reported))
         else:
             total = np.nan_to_num(period.totals[:, t])
-            out.append(np.broadcast_to(total, drawn[:, :n_places, 0].shape))
+            out.append(np.broadcast_to(total, (drawn.shape[0], n_places)))
     return np.stack(out, axis=2)
 
 
@@ -1198,12 +1198,19 @@ class FoundationModel:
             raise ValueError(f"unknown period rows {self.period!r}")
         # Zero-shot and fine-tuned models build the same block, the
         # zero-case places' lag rows included; only the weights differ.
-        group = layout_block(tri, self.layout, places, start, period)
-        sample = self.sample or partial(
-            chronos_sampler, checkpoint=self.checkpoint, known=self.known
-        )
-        draws = sample([group], horizon, task.n_samples, seed)[0]
-        drawn = np.maximum(np.round(draws), 0.0)
+        if horizon <= 0:
+            # Every step of the target weeks is complete at the latest
+            # release (the target ends at least the lag count before the
+            # cut-off): the counts reported, with no forecast.
+            start = len(tri.times)
+            drawn = np.zeros((task.n_samples, len(places), 0))
+        else:
+            group = layout_block(tri, self.layout, places, start, period)
+            sample = self.sample or partial(
+                chronos_sampler, checkpoint=self.checkpoint, known=self.known
+            )
+            draws = sample([group], horizon, task.n_samples, seed)[0]
+            drawn = np.maximum(np.round(draws), 0.0)
         if period is not None:
             values = _weekly_from_totals(drawn, period, tri, start, weeks)
         else:
