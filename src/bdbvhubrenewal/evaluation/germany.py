@@ -437,7 +437,9 @@ def germany_forecasts(
     every = [t for ts in tasks.values() for t in ts]
     # Chronos-2 is predicted for every date's tasks in a few batched passes.
     built = [
-        prefetch(m, every) if isinstance(m, FoundationModel) else m
+        prefetch(m, every, QUANTILE_LEVELS)
+        if isinstance(m, FoundationModel)
+        else m
         for m in (get_model(m) for m in models)
     ]
     keys = ["model", "origin", "location", "target_end_date", "horizon"]

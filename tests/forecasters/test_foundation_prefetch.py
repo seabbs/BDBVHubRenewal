@@ -195,7 +195,9 @@ def test_prefetch_serves_native_quantiles(
     alone = [model.quantiles(t, levels) for t in tasks]
     pipe.calls.clear()
     ready = foundation.prefetch(
-        model, [dataclasses.replace(t, n_samples=len(levels)) for t in tasks]
+        model,
+        [dataclasses.replace(t, n_samples=len(levels)) for t in tasks],
+        levels,
     )
     passes = len(pipe.calls)
     for t, want in zip(tasks, alone, strict=True):

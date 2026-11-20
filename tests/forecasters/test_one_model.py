@@ -8,6 +8,7 @@ the two sources are never mixed.
 """
 
 import dataclasses
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -213,12 +214,8 @@ def test_one_forecast_gives_daily_draws_from_the_count_rows_too(
     late = daily.loc[daily["date"].isin(future)]
     assert not late.empty
     # The count rows drew 1, the total rows 1000 and up: daily values come
-    # from the count rows, floored at the counts reported.
-    assert (late["value"] < 1000).all()
-    final = dict(zip(group["places"], tri.final, strict=True))
-    for row in late.itertuples():
-        reported = final[row.location][tri.times.index(row.date)]
-        assert row.value == max(1.0, reported)
+    # from the count rows as drawn, not floored at the counts reported.
+    assert (late["value"] == 1.0).all()
     # Every day of the target weeks is there, for every place and sample.
     first = pd.Timestamp(task.target_end_dates[0]) - pd.Timedelta(days=6)
     days = pd.date_range(first, task.target_end_dates[-1]).strftime("%Y-%m-%d")
@@ -292,3 +289,30 @@ def test_daily_counts_are_the_count_rows_native_quantiles(
     assert len(later)
     step = later["date"].map(lambda d: tri.times.index(d) - start)
     np.testing.assert_allclose(later["value"], step + later["quantile"])
+
+
+def test_the_pipeline_interpolates_to_the_hub_levels_itself(monkeypatch):
+    # One path: the hub levels go to Chronos-2's predict_quantiles, which
+    # interpolates between its own levels; we do not interpolate again.
+    pytest.importorskip("torch")
+    asked = []
+
+    class Spy(_LevelPipeline):
+        def predict_quantiles(
+            self, groups, prediction_length, quantile_levels, **kw
+        ):
+            asked.append(list(quantile_levels))
+            return super().predict_quantiles(
+                groups, prediction_length, quantile_levels, **kw
+            )
+
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: Spy())
+    hub = [0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975]
+    group = {"target": np.zeros((2, 6))}
+    out = foundation.native_sampler(np.array(hub))([group], 3, 1, 0)[0]
+    assert asked == [hub]
+    assert out.shape == (7, 2, 3)
+    np.testing.assert_allclose(
+        out[:, 0, :], np.arange(3)[None, :] + np.array(hub)[:, None]
+    )
+    assert "np.interp" not in Path(foundation.__file__).read_text()
