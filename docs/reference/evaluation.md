@@ -7,14 +7,6 @@ Score forecasts, run the backtest and compare models with each other and with th
     options:
       members: false
 
-::: nowcasteval.scoring
-
-::: nowcasteval.backtest
-
-::: nowcasteval.nowcast
-
-::: nowcasteval.ppc
-
 ::: bdbvhubrenewal.evaluation.hubcompare
 
 ::: bdbvhubrenewal.evaluation.zones

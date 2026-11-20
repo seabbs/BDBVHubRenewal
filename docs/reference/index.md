@@ -6,12 +6,13 @@ The Python API of `bdbvhubrenewal`, grouped by task. See [Setup](../setup.md) to
 | Task | Pages | Start with |
 |---|---|---|
 | Data | [Data](data.md) | `load_target`, `load_daily`, `load_delays`, `delays_for_vintage` |
-| Models | [Forecasters](forecasters.md), [Renewal model](model.md), [Baselinenowcast](baselinenowcast.md) | `get_model`, `list_models`, `ForecastTask`, `ForecastModel.forecast` |
-| Evaluation | [Evaluation](evaluation.md) | `make_tasks`, `run_forecasts`, `score_forecasts`, `release_backtest` |
-| Reporting | [Figures and tables](reporting.md), [Submission](submission.md) | `plot_location_grid`, `plot_forecasts`, `to_hub_table`, `write_submission` |
+| Models | [nowcastbaselines](nowcastbaselines.md), [Forecasters](forecasters.md), [Renewal model](model.md) | `get_model`, `list_models`, `ForecastTask`, `ForecastModel.forecast` |
+| Evaluation | [nowcasteval](nowcasteval.md), [Evaluation](evaluation.md) | `make_tasks`, `run_forecasts`, `score_forecasts`, `release_backtest` |
+| Reporting | [nowcasteval](nowcasteval.md), [Figures and tables](reporting.md), [Submission](submission.md) | `plot_location_grid`, `plot_forecasts`, `to_hub_table`, `write_submission` |
 | CLI | [CLI](cli.md) | `bdbvhubrenewal --help` |
 
 The task, the registry, releases and snapshots come from the [nowcastutils](nowcastutils.md) package.
+Scores, backtests and score figures are in [nowcasteval](nowcasteval.md), and the random walk baselines in [nowcastbaselines](nowcastbaselines.md).
 
 ## A forecast in five steps
 
