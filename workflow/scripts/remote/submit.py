@@ -4,8 +4,10 @@
 
 Run by the coordinator's Snakemake in its checkout. Fails at once if
 the job's worker (its group's, else every worker) does not answer over
-ssh. Otherwise records the job, starts its runner (run.py) detached and
-prints the job's id; the runner waits for room on a worker, then runs it.
+ssh, or if a worker the job may go to copies its files and this
+machine's rsync cannot (compute.rsync_problem). Otherwise records the
+job, starts its runner (run.py) detached and prints the job's id; the
+runner waits for room on a worker, then runs it.
 """
 
 import json
@@ -36,6 +38,11 @@ def main() -> int:
         hosts = ", ".join(found[n].host for n in names)
         print(f"{job['rule']}: no worker answers ({hosts})", file=sys.stderr)
         return 1
+    if any(compute.copies(found[n], cfg["ROOT"], checkout) for n in up):
+        problem = compute.rsync_problem()
+        if problem:
+            print(f"{job['rule']}: {problem}", file=sys.stderr)
+            return 1
     state = compute.state_dir(checkout)
     state.mkdir(parents=True, exist_ok=True)
     jid = f"{job['jobid']}-{time.time_ns()}"

@@ -55,6 +55,7 @@ Every target runs with one profile, `workflow/profiles/default`, and this machin
 
 `COMPUTE=single` (the default) runs every job on this machine, as above.
 `COMPUTE=ssh` makes this machine the coordinator: it holds the one Snakemake run and places each job on a worker (`workflow/profiles/ssh`, the cluster-generic executor with `workflow/scripts/remote/`).
+The coordinator needs GNU rsync 3.1 or later first on `PATH` (the copies use `--ignore-missing-args`). macOS's `/usr/bin/rsync` (openrsync) does not take it, so install rsync from Homebrew there. Submit refuses a job that would be copied with an rsync that cannot, naming the binary.
 
 - `WORKERS` lists the workers as `name=host:ROOT:CHECKOUT`: the host as ssh names it (or `local`, which may leave out ROOT and CHECKOUT for this machine's), its rounds folder and its checkout of this repository.
 - `WORKER_GROUPS` places rule groups on a worker, for example `WORKER_GROUPS="train=laptop score=server"`. The groups are `simulate`, `train`, `evaluate`, `publish` and `score` (`flowlib.compute.RULE_GROUPS`); a group left out, or `any`, runs on the first worker with room. Local rules (listings, records, publishing) always run on the coordinator.
