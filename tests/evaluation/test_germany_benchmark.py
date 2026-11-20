@@ -109,8 +109,10 @@ def test_the_later_half_of_the_dates_is_held_out() -> None:
 def test_our_quantiles_are_the_samples_quantiles_at_the_hub_s_levels(
     forecasts: pd.DataFrame,
 ) -> None:
+    from bdbvhubrenewal.evaluation.germany import FORECAST_LEVELS
+
     per = forecasts.groupby(["model", "origin", "location", "horizon"])
-    assert (per["quantile"].apply(tuple) == QUANTILE_LEVELS).all()
+    assert (per["quantile"].apply(tuple) == FORECAST_LEVELS).all()
     assert per["value"].is_monotonic_increasing.all()
 
 
@@ -292,7 +294,8 @@ def test_paper_table_follows_the_paper_schema(
         paper["origin_date"]
     )
     assert (days.dt.days == paper["horizon"]).all()
-    assert len(paper) == len(forecasts)
+    hub = forecasts["quantile"].round(6).isin(QUANTILE_LEVELS)
+    assert len(paper) == hub.sum()
 
 
 def test_asof_sums_are_the_data_each_nowcast_date_saw(
@@ -532,9 +535,7 @@ def test_scores_add_90_coverage_and_keep_wis_on_the_hub_levels(
     wide = forecasts.pivot_table(
         index=keys, columns="quantile", values="value"
     ).reset_index()
-    got = scores.merge(wide, on=keys).merge(
-        forecasts[[*keys, "truth"]].drop_duplicates(keys), on=keys
-    )
+    got = scores.merge(wide, on=keys)
     inside = (got[0.05] <= got["truth"]) & (got["truth"] <= got[0.95])
     np.testing.assert_array_equal(got["coverage_90"], inside.astype(float))
     assert on_hub["coverage_90"].isna().all()
