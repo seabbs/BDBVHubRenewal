@@ -480,6 +480,15 @@ The shrinkage only guards thin windows (@tbl-tuned-choices).
 We compare each walk model with no pairing, keeping the sample indices the model gave, and with the rolling $\rho_p$.
 We score the country and each province by the CRPS and 90% coverage, and each level's places and weeks as one vector by the energy score [@Gneiting2008] on $\log(x + 1)$ counts.
 
+::: {.callout-note title="Plan"}
+- The Ebola hub takes sample trajectories, so Chronos-2's submission turns its quantiles into trajectories with a Gaussian copula.
+- Each cell keeps its own quantile function, read linearly between the levels and flat beyond them, and the copula joins the cells across places and steps.
+- We score Chronos-2's trajectories with this copula, with every cell drawn independently, and with one level per trajectory across each series' steps (comonotone), as bounds on the dependence.
+- We score the random walk nowcast's trajectories as submitted.
+- We score trajectories by the energy score on counts and on $\log(x + 1)$ counts.
+- We score Ebola trajectories only at the final held-out evaluation, and German and synthetic trajectories now.
+:::
+
 ### Aggregation options
 
 Chronos-2 can forecast every level of a place hierarchy in one block, or each level on its own, and the daily model can give weekly totals in its block or as sums of its days.
@@ -507,9 +516,9 @@ $$
 $$
 Its expectation does not depend on $m$, whereas the usual sample form, with $2m^2$ in the second denominator, favours forecasts with more samples [@Ferro2014; @Zamo2018].
 The fair energy score is the same form for a vector of counts, with the Euclidean norm $\lVert \cdot \rVert$ in place of $|\cdot|$.
-We compute both with scoringrules' `fair` estimator, `crps_ensemble` and `es_ensemble`, the CRPS on counts and on $\log(x + 1)$ counts, and the energy score on $\log(x + 1)$ counts only.
+We compute both with scoringrules' `fair` estimator, `crps_ensemble` and `es_ensemble`, the CRPS on counts and on $\log(x + 1)$ counts, and the energy score on counts and on $\log(x + 1)$ counts.
 The random walks give 1,000 samples and hub teams 100, so the fair form compares them on the same footing.
-Chronos-2 gives quantiles, not samples, so it has no fair CRPS.
+Chronos-2 gives quantiles, so its fair scores are of the trajectories the copula draws from them.
 We score the German hub's seven quantile levels, and 23 levels, from 1% to 99%, for the synthetic study and for forecasts given as samples.
 Relative WIS compares each model with the baseline on the forecasts both made, while bias and coverage use every forecast a model made.
 
