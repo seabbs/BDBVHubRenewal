@@ -10,7 +10,7 @@
   lists them as `name=host:ROOT:CHECKOUT` (`host` as ssh names it, or
   `local`, which may leave out ROOT and CHECKOUT for this machine's).
   `WORKER_GROUPS` maps rule groups to a worker
-  (`train=laptop score=server`); a group left out, or mapped to `any`,
+  (`train=workstation score=server`); a group left out, or mapped to `any`,
   runs on the first worker with room. The pool is the sum of the
   workers' budgets, each read from the worker itself at launch.
 - any other name: its profile, `workflow/profiles/<name>`, alone (a
@@ -115,7 +115,7 @@ MACHINE_KEYS = frozenset(
 `localconfig.DEFAULTS` from the coordinator."""
 
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
-# A job's ssh gives up after 10 minutes without an answer (a laptop
+# A job's ssh gives up after 10 minutes without an answer (a worker
 # asleep), so the job fails and its retry resumes it. Its terminal (-tt)
 # makes the worker hang up the job when the session drops.
 SSH_JOB = [
@@ -303,7 +303,7 @@ def job_command(
     a second (exit 75); the pid file names this run's Snakemake. Its
     stdin is /dev/null: under `ssh -tt` it would be the session's
     terminal, and a shell the job starts would then be interactive (an
-    rc file may attach tmux and wait there for ever).
+    rc file may start a terminal multiplexer and wait there for ever).
     """
     q = shlex.quote
     pid = q(remote_pid_file(worker, job))

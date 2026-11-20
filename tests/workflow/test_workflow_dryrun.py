@@ -408,7 +408,7 @@ def _checkpoint(tmp_path, n):
 
 
 def test_the_live_run_switches_over_without_retraining(tmp_path):
-    # The laptop's slots run: n250 to n750 saved without state of their
+    # The slots run: n250 to n750 saved without state of their
     # own, the trainer's state part way to n1000, and a seed list that
     # reaches 1,500 outbreaks so far.
     train = tmp_path / "checkpoints" / "slots" / "train"

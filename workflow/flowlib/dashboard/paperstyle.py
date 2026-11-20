@@ -6,7 +6,7 @@ colour from the shared map (`nowcasteval.labels`, through
 and in the paper; WIS parts stack and fill as the paper's do
 (`labels.WIS_PART_STACK`, `labels.WIS_PART_FILLS`). `paper/` is put on
 the path here, as the paper's workflow does. The nowcast panels keep the
-laptop dashboard's own drawing (ribbons, medians, truth line).
+dashboard's own drawing (ribbons, medians, truth line).
 """
 
 from __future__ import annotations

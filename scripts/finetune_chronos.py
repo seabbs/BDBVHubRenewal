@@ -203,14 +203,15 @@ def check_package(root: Path) -> None:
 
 MEMORY_GB = 36.0
 """The GPU memory budget of a training step, in GB: the trainer's cap on
-MPS memory (0.85 of a 55.7 GB working set) less room for the model and
-the held-out set."""
+GPU memory (0.85 of the GPU's working set) less room for the model and
+the held-out set. A machine with less GPU memory sets it lower
+(`--memory-gb`)."""
 
 MAX_SERIES = 2000
 """Most series in a block. A block's series count is drawn log-uniformly
-up to it. With gradient checkpointing a block of 2,400 series fits the
-laptop's GPU memory (64 GB) but peaks at about 56 GB in training, so
-2,000 leaves headroom."""
+up to it. With gradient checkpointing a block of 2,000 series fits
+`MEMORY_GB` with headroom; a machine with less GPU memory draws smaller
+blocks (`max_series`)."""
 
 CUTS = 32
 """Snapshots (cut-off slots) of each observation draw, spread over its
@@ -221,7 +222,7 @@ MEMORY_COST = {False: (0.0, 6.7e-5), True: (6.25e-3, 3.35e-6)}
 squared, without and with gradient checkpointing: fitted to 800 series
 taking about 43 GB without it, and 1,000, 1,500 and 2,000 series taking
 9.6, 17.3 and 25.9 GB with it (Chronos-2 with LoRA and AdamW on an Apple
-M4 Max). Group attention makes it grow with the square of the series."""
+GPU). Group attention makes it grow with the square of the series."""
 
 
 def memory_gb(series: int, checkpointed: bool) -> float:

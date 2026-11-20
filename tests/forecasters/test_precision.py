@@ -17,8 +17,8 @@ pytestmark = pytest.mark.skipif(
 @pytest.mark.parametrize(
     ("device", "capability", "want"),
     [
-        ("cuda", (7, 5), "fp16"),  # Turing: fp16 tensor cores, no bf16
-        ("cuda", (8, 6), "bf16"),  # Ampere and later
+        ("cuda", (7, 5), "fp16"),  # fp16 tensor cores, no bf16
+        ("cuda", (8, 6), "bf16"),  # compute capability 8 and above
         ("cuda:1", (9, 0), "bf16"),
         ("mps", None, "bf16"),
         ("cpu", None, "fp32"),

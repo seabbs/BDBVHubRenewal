@@ -7,7 +7,7 @@ SCHEDULE_TARGETS, with its lock and room checks). As soon as a pass
 ends the next starts, after `COORDINATE_PAUSE` seconds (60), or
 `COORDINATE_BACKOFF` (600) after a failed pass, so new releases and
 batches are planned as soon as the run before ends. No timer runs it:
-start it once (under nohup, tmux or a service of the machine's own)
+start it once (under nohup or a service of the machine's own)
 and stop it with `touch output/coordinator.stop`, which ends it after
 the running pass, or by its pid. Standard library only.
 """

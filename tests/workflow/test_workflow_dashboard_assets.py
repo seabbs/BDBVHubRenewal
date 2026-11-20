@@ -7,7 +7,7 @@ import pytest
 
 PAGE = Path(__file__).parents[2] / "workflow" / "flowlib" / "dashboard" / "page"
 NAMES = re.compile(
-    r"""["'](?:germany|ebola|bdbv|DE|CD|archie|rw|zero|complete|zero-shot|"""
+    r"""["'](?:germany|ebola|bdbv|DE|CD|rw|zero|complete|zero-shot|"""
     r"""complete-only|randomwalknowcast|slots|no slots|7day|daily|weekly|"""
     r"""national)["']""",
     re.I,
