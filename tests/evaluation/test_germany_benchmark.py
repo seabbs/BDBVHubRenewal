@@ -485,7 +485,7 @@ def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
     # tasks before the next date's are built.
     events: list[tuple[str, str]] = []
 
-    def tasks(_triangle, date, _n, _seed, _root):
+    def tasks(_triangle, date, _n, _seed, _root, _horizons):
         events.append(("build", date))
         return [date]
 
