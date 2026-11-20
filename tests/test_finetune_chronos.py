@@ -675,8 +675,10 @@ def test_three_day_source_cuts_three_day_blocks(tmp_path, monkeypatch):
     assert blocks
     for b in blocks:
         assert b["source"] == "3day"
-        # D runs 5-16 steps of 3 days.
-        assert 5 <= _d(b) <= 16
+        # D is drawn from 5-16 steps of 3 days, capped at the history
+        # before an early cut-off.
+        assert 1 <= _d(b) <= 16
+    assert max(_d(b) for b in blocks) >= 5
 
 
 def test_blocks_predict_their_own_horizon_in_whole_patches(tmp_path):
