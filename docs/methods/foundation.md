@@ -44,9 +44,13 @@ Chronos-2 forecasts every target series in the block jointly, from one shared la
   It comes from the delay alone, so it needs no walk spread.
 - **Ragged** (`*_ragged`): the same targets, with one lag series per place with cases and lag $d < D$, indexed by onset step as in a regression nowcast.
   Lag series $d$ holds $Y_{p,t,d}$, missing where it is not yet reported, and Chronos-2 masks the missing values.
-  $t^* = c - D$, the last step whose count is at lag $D$ or more, with $D = 4$ weeks or $D = 28$ days.
+  $t^* = c - D$, the last step whose count is at lag $D$ or more, with $D$ estimated from the data (`lag_count`).
+  $D$ is the first lag at which the steps 28 to 112 days (4 to 16 weeks) before the cut-off had 99% of their counts reported, pooled over places and releases, read from no release after the cut-off.
+  It is at most 112 days or 16 weeks and at most what the history allows, with two steps of context before the longest lag, and that many when the window has no counts or never reaches 99%.
+  A model can fix $D$ instead (`lags`); the SI compares the estimate with 4 weeks or 28 days.
   The lag series run past $t^*$ as known future values, which is how recent counts reach the nowcast.
   A place with no cases has no lag series, as they would be all zero.
+  The daily block also has each place's 7-day rolling sum as a series (`rolling7`), so the hub's 7-day target is a series of the block.
   So the daily block, where 75 of 546 places have cases, fits in memory.
 
 Chronos-2 standardises each series and takes its arcsinh, so counts go in as they are.
@@ -61,7 +65,9 @@ Draws are independent across steps and series.
 
 A draw is rounded to the nearest count and floored at zero.
 A step's draw is no lower than its count at the vintage, and steps up to $t^*$ are their count at the vintage.
-The daily source is summed to weeks, as the hub's target is weekly, and each week is no lower than its reported count.
+The hub's target is weekly.
+A daily ragged model reads each week from its place's rolling 7-day series on the week's last day, and a daily complete model sums its seven daily draws.
+Each week is no lower than its reported count.
 
 ## Patches and context
 
@@ -86,7 +92,7 @@ The other fitted models split their provinces across the zones instead ([Health 
 
 The `_ft` models load one LoRA checkpoint of Chronos-2, fine-tuned on outbreaks simulated with epinowcast's generative model.
 The simulations, the training and the checkpoints' scores are in the paper's [supporting information](../paper/si.html#foundation-model-setup-and-fine-tuning), and how to load a checkpoint is on [Using the fine-tuned model](finetuned-chronos.md).
-The simulator is the R package `packages/nowcastfoundation/r`, run on the grid config `config/finetune/grid.yaml` by the workflow's `simulate_batch` rule; the training blocks are cut by `forecasters.finetune.training_block`, and the block design and release cadences are `BLOCK_DESIGN` in `scripts/finetune_chronos.py` and `finetune.release_days`; the [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) says which rounds a run trains on.
+The simulator is the R package `packages/nowcastfoundation/r`, run on the grid config `config/finetune/grid.yaml` by the workflow's `simulate_batch` rule; the training blocks are cut by `nowcastfoundation.finetune.training_block`, and the block design and release cadences are `BLOCK_DESIGN` in `scripts/finetune_chronos.py` and `finetune.release_days`; the [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) says which rounds a run trains on.
 
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
 The first release, `chronos-ft-2c2b22a03107`, was trained from earlier code, so its hash cannot be reproduced from this repository.
@@ -105,6 +111,6 @@ Such fits are retried by running the Fit store workflow with `retry_failed` (`gh
 - The zero-shot models use Chronos-2 as pretrained. It has not seen these data or outbreaks like them.
 - The fine-tuned models have seen only simulated outbreaks, whose delays and dynamics may not match these data.
 - The fine-tuned models were trained on blocks no larger than the memory budget allows, but forecast all 546 hub targets in one block.
-- Draws are independent across steps and places, so every weekly value of the daily models, a sum of seven daily draws, is too narrow, as are sums over weeks or places.
+- Draws are independent across steps and places, so a weekly value of the daily complete model, a sum of seven daily draws, is too narrow, as are sums over weeks or places.
 
 [^chronos2]: Ansari A F et al. (2025) Chronos-2: From univariate to universal forecasting. arXiv:2510.15821. Code: <https://github.com/amazon-science/chronos-forecasting>.

@@ -377,18 +377,23 @@ def _tasks(
     n_samples: int,
     seed: int,
     root: Path | None,
+    horizons: Sequence[int] = HORIZONS,
 ) -> list[ForecastTask]:
     """Return a date's tasks, from the store `root` if it holds them.
 
     The store holds each date's tasks of every offset as a gzip-compressed
-    pickle (level 1: about 40 times smaller, and fast to read).
+    pickle (level 1: about 40 times smaller, and fast to read). Tasks of
+    other horizons than the hub's are kept in a folder named by them.
     """
     if root is None:
-        return nowcast_tasks(triangle, date, n_samples, seed)
-    path = Path(root) / f"{date}.pkl.gz"
+        return nowcast_tasks(triangle, date, n_samples, seed, horizons=horizons)
+    root = Path(root)
+    if tuple(horizons) != tuple(HORIZONS):
+        root = root / f"horizons{min(horizons)}_{max(horizons)}-{len(horizons)}"
+    path = root / f"{date}.pkl.gz"
     if path.exists():
         return list(pickle.loads(gzip.decompress(path.read_bytes())))
-    tasks = nowcast_tasks(triangle, date, n_samples, seed)
+    tasks = nowcast_tasks(triangle, date, n_samples, seed, horizons=horizons)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     raw = pickle.dumps(tasks, protocol=pickle.HIGHEST_PROTOCOL)
@@ -404,6 +409,7 @@ def germany_forecasts(
     n_samples: int,
     seed: int,
     tasks_dir: Path | None = None,
+    horizons: Sequence[int] = HORIZONS,
 ) -> pd.DataFrame:
     """Nowcast each date with each model, as quantiles at the hub's levels.
 
@@ -424,6 +430,10 @@ def germany_forecasts(
         one, else built and written to it. The tasks are the same for
         every checkpoint, so they are built once (`checkpoint.german_tasks_dir`
         keys the store on what they are built from).
+    horizons : sequence of int
+        Days from each nowcast date to the end of each 7-day sum, the
+        hub's 0 to -28 (`HORIZONS`) by default; days after it are
+        forecasts (`data.germany.nowcast_tasks`).
 
     Returns
     -------
@@ -440,7 +450,8 @@ def germany_forecasts(
     tasks: dict[str, list[ForecastTask]] = {}
     if any(isinstance(m, FoundationModel) for m in built):
         tasks = {
-            d: _tasks(triangle, d, n_samples, seed, tasks_dir) for d in dates
+            d: _tasks(triangle, d, n_samples, seed, tasks_dir, horizons)
+            for d in dates
         }
         every = [t for ts in tasks.values() for t in ts]
         built = [
@@ -454,7 +465,7 @@ def germany_forecasts(
     for date in dates:
         mine = tasks.pop(date, None)
         if mine is None:
-            mine = _tasks(triangle, date, n_samples, seed, tasks_dir)
+            mine = _tasks(triangle, date, n_samples, seed, tasks_dir, horizons)
         for task in mine:
             for model in built:
                 at = forecast_quantiles(

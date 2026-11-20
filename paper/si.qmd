@@ -249,7 +249,6 @@ The layouts of the training blocks and their shares.
 Each training block is built as follows.
 
 - A training block cuts one draw's releases at one cut-off and lays them out as the ragged layout does, with the target past the last complete step the outbreak's final counts.
-- The longest lag $D$ is drawn from 2 to 7 weeks, 14 to 49 days or 5 to 16 steps of 3 days, so the model is not tied to one $D$.
 - A system with more than 2,000 series is skipped, and the simulator draws strata so that a system fits.
 - Four or more flat places are grouped into 2 to 6 regions, with region totals.
 - The blocks with more than one series have as targets every level of their system.
@@ -267,6 +266,13 @@ Training takes the simulations in order, in chunks.
 Each simulation gives up to 14 training blocks, which are shuffled within a chunk and packed into steps.
 Each step is filled until it holds 256 series or more, so one large block can make a step of up to 2,000 series.
 
+::: {.callout-note title="Plan"}
+- A table lists the trainer's memory and speed settings at the values the paper run used, read from the workflow configuration.
+- A machine can override them for its own runs, and the table gives the committed defaults.
+- The threshold above which a block's activations are recomputed rather than stored changes only memory and speed, not the trained model.
+- The number of series in a step changes the recipe, as it sets how many blocks each gradient step averages over.
+:::
+
 Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
 A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations.
 At the largest checkpoint tested their median loss is {{< meta evidence.scale_floor.sims.n4000.small.median_loss.none >}} without it and {{< meta evidence.scale_floor.sims.n4000.small.median_loss.floor >}} with it, and the share of 99% quantiles over 100 times the truth is {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.none >}}% and {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.floor >}}%.
@@ -274,13 +280,15 @@ Large series are unchanged, with median loss {{< meta evidence.scale_floor.sims.
 Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.
 
 ::: {.callout-note title="Plan"}
-- The number of lag series is chosen from the data being forecast, for the zero-shot and fine-tuned models alike.
-- We estimate the reporting delay's 99% point from the reference steps complete at the cut-off, from 28 days or 4 weeks to 112 days or 16 weeks before it, pooled over the task's places, and round it up to whole steps.
+- Training and prediction choose the number of lag series by the same rule, for the zero-shot and fine-tuned models alike, and training draws no lag count.
+- Each block or task has one lag count.
+- We estimate the reporting delay's 99% point from the reference steps complete at the cut-off, from 28 days or 4 weeks to 112 days or 16 weeks before it, allowing for right truncation, and round it up to whole steps.
+- We pool the delay over the block's places, as a 99% point for each place is noisy where a place has few cases.
 - The estimate reads no release after the cut-off.
+- In training it reads the simulation's releases up to the cut-off, as prediction reads the real ones.
 - The lag count is the smaller of this estimate and the history available, keeping two steps of context before the longest lag.
 - With no complete steps, no counts in them, or a 99% point not reached within 112 days, we use as many lags as the history allows.
 - A user can set a fixed count or another quantile instead.
-- In training, a block whose drawn lag needs more history than its cut-off has is capped at that history rather than skipped, so early cut-offs are kept.
 - We compare this lag count with a fixed cap of 4 weeks or 28 days on the German development half.
 :::
 
