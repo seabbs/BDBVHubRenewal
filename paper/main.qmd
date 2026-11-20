@@ -123,7 +123,7 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
   - In layer 1 we simulate infections by a renewal process with susceptible depletion in each place and age group, with R(t) following one of several transmission paths, shifts in R(t), immune escape, imports and mixing between strata.
   - In layer 2 we observe infections as reference events after a delay such as incubation, ascertain a share of them and add NB1 or Poisson noise.
   - In layer 3 we report them after a reporting delay that is static or changes over time, through epinowcast's observation model.
-  - In layer 4 we add the reporting system: report days, bunching, backlogs, outages, revisions, so a release can exceed the final count, and the release cadence.
+  - In layer 4 we add the reporting system: report days and weekday effects, backlogs, outages, revisions, so a release can exceed the final count, and the release cadence.
   - In layer 5 we set the strata and aggregation: places and age groups and how they nest, how places interact, how settings vary across strata, and aggregates that are exact sums of their strata or do not add up.
   - Layer 1 is the epidemic setting, and layers 2 to 5 are what fine-tuning teaches.
   - The workflow simulates outbreaks from the grid's config and writes every summary and figure, so a change to the grid regenerates them.
