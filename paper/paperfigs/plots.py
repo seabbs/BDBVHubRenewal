@@ -1225,8 +1225,8 @@ def si_scores_by_finetune_size(
     return fig
 
 
-NOWCAST_LEVELS: Final = (0.025, 0.25, 0.5, 0.75, 0.975)
-"""Quantiles of the nowcast panels: the median and the 50% and 95% bands."""
+NOWCAST_LEVELS: Final = (0.05, 0.25, 0.5, 0.75, 0.95)
+"""Quantiles of the nowcast panels: the median and the 50% and 90% bands."""
 
 _PANEL_INK: Final = {
     "series": "#2a78d6",
@@ -1262,7 +1262,7 @@ def nowcast_panels(
 
     Every panel of a row shows the same truth (black) and the data as of
     its origin (grey, dashed), and one model's median with its 50% and
-    95% bands in one colour, so no two models' lines overlap. Each
+    90% bands in one colour, so no two models' lines overlap. Each
     column is titled with the model and its relative score. The truth and
     data lines are labelled in the first column, and there is no legend.
 
@@ -1330,7 +1330,7 @@ def nowcast_panels(
             )
             q = _panel_quantiles(fc.loc[fc["model"] == model])
             if not q.empty:
-                bands = (((0.025, 0.975), 0.15), ((0.25, 0.75), 0.3))
+                bands = (((0.05, 0.95), 0.15), ((0.25, 0.75), 0.3))
                 for (a, b), alpha in bands:
                     if a in q and b in q:
                         ax.fill_between(
