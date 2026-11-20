@@ -59,7 +59,8 @@ def steps(where: Path, prev: Path | None, device: str, real) -> None:
     """Score segment `where`'s step snapshots that have no result yet.
 
     The segment's steps are those after checkpoint `prev`'s (from step 0
-    for the first) up to its own.
+    for the first) up to its own. Exits non-zero if it has none, scored
+    or not.
     """
     train = where.parent
     upto = json.loads((where / "settings.json").read_text())["steps"]
@@ -68,9 +69,15 @@ def steps(where: Path, prev: Path | None, device: str, real) -> None:
         if prev is not None
         else -1
     )
+    if not evaluations.segment_steps(train, after, upto):
+        # Fails, so the segment is not marked evaluated with nothing scored.
+        sys.exit(
+            f"{where.name}: no step snapshots in steps {after + 1}..{upto} "
+            f"under {train / 'evals'} (not saved, or not copied here)"
+        )
     todo = evaluations.pending(train, after, upto)
     if not todo:
-        fs.log(f"{where.name}: no step snapshots to score")
+        fs.log(f"{where.name}: every step snapshot is scored")
         return
     base = fe.load_base("cpu")
     blocks: dict[Any, list[dict]] = {}

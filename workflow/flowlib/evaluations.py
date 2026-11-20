@@ -24,6 +24,7 @@ __all__ = [
     "checkpoint_settings",
     "merged_history",
     "pending",
+    "segment_steps",
     "start_loss",
     "step_of",
     "step_results",
@@ -98,6 +99,25 @@ def pending(
         and not d.with_name(d.name + ".json").exists()
         and after < step_of(d) <= (upto if upto is not None else step_of(d))
     ]
+
+
+def segment_steps(
+    train: Path | str, after: int = -1, upto: int | None = None
+) -> list[int]:
+    """Return the steps with a snapshot or a result, `after` < step <= `upto`.
+
+    A segment's evaluation scores these; none means its snapshots are
+    missing (not saved, or not copied to the worker).
+    """
+    evals = Path(train) / "evals"
+    found = {
+        step_of(d)
+        for d in evals.glob("step-*")
+        if d.is_dir() and not d.name.endswith(".tmp")
+    } | {step_of(p.with_suffix("")) for p in evals.glob("step-*.json")}
+    return sorted(
+        k for k in found if after < k <= (upto if upto is not None else k)
+    )
 
 
 def start_loss(train: Path | str) -> float | None:
