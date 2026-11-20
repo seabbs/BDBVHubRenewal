@@ -59,7 +59,7 @@ def test_factor_levels_follow_their_weights(grid):
         p = w / w.sum()
         seen = Counter(c[name] for c in cells)
         assert set(seen) <= set(levels)
-        for level, share in zip(levels, p):
+        for level, share in zip(levels, p, strict=True):
             se = np.sqrt(share * (1 - share) / n)
             assert abs(seen[level] / n - share) < 5 * se, (name, level)
 
@@ -95,7 +95,9 @@ def test_keyed_generators_repeat_and_differ(grid):
     a = draws.draw_design(grid, draws.generator(7, 1, 2))
     b = draws.draw_design(grid, draws.generator(7, 1, 2))
     assert a == b
-    others = [draws.draw_design(grid, draws.generator(7, 1, k)) for k in range(20)]
+    others = [
+        draws.draw_design(grid, draws.generator(7, 1, k)) for k in range(20)
+    ]
     assert len({json.dumps(o, sort_keys=True) for o in others}) > 1
 
 
@@ -114,7 +116,8 @@ def test_designs_fit_the_budget_and_report_on_their_days(grid):
         else:
             m = grid["max_independent"]
             if d["strata"] == "places_ages":
-                assert n_p == 2 and n_a <= m // 2
+                assert n_p == 2
+                assert n_a <= m // 2
             if d["strata"] == "ages":
                 assert n_a <= m
         days = d["report_weekdays"]
@@ -210,7 +213,8 @@ def _r_draws(n):
         timeout=900,
         check=True,
     )
-    return [json.loads(line) for line in out.stdout.splitlines() if line.strip()]
+    lines = out.stdout.splitlines()
+    return [json.loads(line) for line in lines if line.strip()]
 
 
 def _listed(x):
@@ -251,17 +255,26 @@ def test_draws_match_the_r_engine_s(grid):
             lb = np.array([len(x) for x in b], dtype=float)
             se = np.sqrt((la.var() + lb.var()) / n) + 1e-9
             assert abs(la.mean() - lb.mean()) < 5 * se, (part, key)
-            ea = [e for x in a for e in x]
-            eb = [e for x in b for e in x]
-            if not ea and not eb:
+            # One number per draw (its first element, and its mean), as a
+            # draw's elements are not independent.
+            ea = [x[0] for x in a if x]
+            eb = [x[0] for x in b if x]
+            if not ea or not eb:
+                assert not ea, (part, key)
+                assert not eb, (part, key)
                 continue
-            if isinstance((ea or eb)[0], str | bool):
+            if isinstance(ea[0], str | bool):
                 ca, cb = Counter(ea), Counter(eb)
                 for level in set(ca) | set(cb):
                     pa, pb = ca[level] / len(ea), cb[level] / len(eb)
                     p = (ca[level] + cb[level]) / (len(ea) + len(eb))
                     se = np.sqrt(p * (1 - p) * (1 / len(ea) + 1 / len(eb)))
                     assert abs(pa - pb) < 5 * se + 1e-9, (part, key, level)
-            else:
-                ks = stats.ks_2samp(np.asarray(ea, float), np.asarray(eb, float))
+                continue
+            ma = [np.mean(x) for x in a if x]
+            mb = [np.mean(x) for x in b if x]
+            for xa, xb in ((ea, eb), (ma, mb)):
+                ks = stats.ks_2samp(
+                    np.asarray(xa, float), np.asarray(xb, float)
+                )
                 assert ks.pvalue > 1e-4, (part, key, ks)
