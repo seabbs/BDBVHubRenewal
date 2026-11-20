@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import re
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -358,25 +356,34 @@ def test_strata_take_hub_codes_whose_parents_are_real_nodes(
 CONFIG = Path(__file__).parents[1] / "workflow" / "config.yaml"
 
 
-def _grid_factors() -> set[str]:
-    """Return the factor names of the pinned simulator's crossed design."""
-    pin = yaml.safe_load(CONFIG.read_text())["evidence"]["simulator"]
-    shown = subprocess.run(
-        ["git", "show", f"{pin['ref']}:{pin['path']}"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if shown.returncode != 0:
-        pytest.skip(f"the simulator pin {pin['ref']} is not fetched")
-    text = shown.stdout
-    body = text[text.index("factors <- list(") :]
-    body = body[: body.index("\n)\n")]
-    return set(re.findall(r"^  (\w+) = ", body, flags=re.MULTILINE))
+HELD_OUT_FACTORS = {
+    "delay_change",
+    "delay_family",
+    "delay_form",
+    "delay_places",
+    "gt_shape",
+    "imports",
+    "mixing",
+    "obs_strata",
+    "observation",
+    "place_rt",
+    "process",
+    "reference_dow",
+    "reporting",
+    "seeding",
+    "shocks",
+    "spread",
+    "strata",
+    "strata_link",
+    "trajectory",
+}
+"""The design factors of the held-out set's grid (r5), as its settings
+files have them."""
 
 
-def test_factors_include_every_factor_of_the_pinned_grid() -> None:
-    assert _grid_factors() <= set(synthetic.FACTORS)
+def test_factors_include_every_factor_of_the_held_out_grid() -> None:
+    assert yaml.safe_load(CONFIG.read_text())["synthetic"]["grid"] == "r5"
+    assert set(synthetic.FACTORS) >= HELD_OUT_FACTORS
 
 
 def _draws(counts: pd.DataFrame, n: int) -> pd.DataFrame:

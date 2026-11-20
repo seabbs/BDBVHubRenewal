@@ -1,9 +1,10 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 r"""The held-out synthetic evaluation of the paper.
 
-The held-out outbreaks come from `scripts/finetune_simulate.R` with seeds
-the fine-tune never saw. Each outbreak is released weekly, on one weekday
-from Wednesday to Saturday drawn by the outbreak, as for the training
+The held-out outbreaks are simulations of the paper's synthetic grid
+(`synthetic.grid`) with seeds the fine-tune never saw. Each outbreak is
+released weekly, on one weekday from Wednesday to Saturday drawn by the
+outbreak, as for the training
 blocks (`scripts/finetune_chronos.py`). A release's vintage is its
 cut-off.
 
@@ -144,9 +145,9 @@ FACTORS: Final = (
     "weeks",
     "cases",
 )
-"""The r4 grid's design factors (`factors` in
-`scripts/finetune_simulate.R`) and other settings that scores are broken
-down by, as `factor_table` gives them."""
+"""The held-out grid's design factors (the settings files' columns) and
+other settings that scores are broken down by, as `factor_table` gives
+them."""
 
 OBSERVATION_COLUMNS: Final = (
     "study",
