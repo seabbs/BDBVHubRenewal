@@ -235,3 +235,60 @@ def test_german_7_day_totals_end_on_the_nowcast_date():
     shifted = pd.Timestamp(nowcast) + _shift(nowcast)
     assert shifted.day_name() == "Saturday"
     assert all(h % 7 == 0 for h in HORIZONS)
+
+
+class _LevelPipeline:
+    """Quantiles of each series and step: the step index plus the level."""
+
+    quantiles = (0.1, 0.5, 0.9)
+
+    def predict_quantiles(
+        self, groups, prediction_length, quantile_levels, **_kw
+    ):
+        import torch
+
+        out = []
+        for g in groups:
+            n_var = np.atleast_2d(g["target"]).shape[0]
+            step = torch.arange(prediction_length, dtype=torch.float32)
+            level = torch.tensor(quantile_levels, dtype=torch.float32)
+            out.append((step[:, None] + level[None, :]).expand(n_var, -1, -1))
+        return out, None
+
+
+def _future(task: ForecastTask, places, last: str):
+    tri = foundation.hub_triangle(task.daily_history, "daily", places, last)
+    return tri, tri.n_context
+
+
+def test_daily_7_day_sums_are_the_aggregate_rows_native_quantiles(
+    ft: FoundationModel, task: ForecastTask, monkeypatch
+) -> None:
+    # No draws, no rounding, no floor at the reported count: the 7-day
+    # sum of a week past the context is its aggregate row's own quantile.
+    pytest.importorskip("torch")
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: _LevelPipeline())
+    levels = [0.1, 0.5, 0.9]
+    out = ft.quantiles(task, levels)
+    assert out is not None
+    places = sorted(set(out["location"]))
+    tri, start = _future(task, places, task.target_end_dates[-1])
+    future = [w for w in task.target_end_dates if tri.times.index(w) >= start]
+    rows = out[out["target_end_date"].isin(future)]
+    step = rows["target_end_date"].map(lambda w: tri.times.index(w) - start)
+    np.testing.assert_allclose(rows["value"], step + rows["quantile"])
+
+
+def test_daily_counts_are_the_count_rows_native_quantiles(
+    ft: FoundationModel, task: ForecastTask, monkeypatch
+) -> None:
+    pytest.importorskip("torch")
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: _LevelPipeline())
+    out = ft.daily_quantiles(task, [0.1, 0.5, 0.9])
+    assert set(out.columns) == {"location", "date", "quantile", "value"}
+    places = sorted(set(out["location"]))
+    tri, start = _future(task, places, task.target_end_dates[-1])
+    later = out[out["date"].map(lambda d: tri.times.index(d) >= start)]
+    assert len(later)
+    step = later["date"].map(lambda d: tri.times.index(d) - start)
+    np.testing.assert_allclose(later["value"], step + later["quantile"])
