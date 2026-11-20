@@ -753,6 +753,17 @@ def tensors(block: dict) -> dict:
     }
 
 
+def checkpoint_threshold(args: argparse.Namespace) -> int:
+    """Return the series above which a step is checkpointed.
+
+    `--checkpoint-above` if given (a machine setting, `CHECKPOINT_ABOVE`),
+    else what the memory budget allows without checkpointing.
+    """
+    if args.checkpoint_above is not None:
+        return int(args.checkpoint_above)
+    return ft.checkpoint_above(args.memory_gb)
+
+
 def checkpoint_large_batches(above: int) -> None:
     """Recompute encoder activations in backward for large batches.
 
@@ -1446,6 +1457,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-gain", type=float, default=0.01)
     parser.add_argument("--stop-from", type=int, default=8000)
     parser.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
+    # Series above which a step recomputes activations in backward (unset:
+    # from --memory-gb). Memory only: the steps and blocks are the same.
+    parser.add_argument("--checkpoint-above", type=int, default=None)
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
     # The series bias (nowcastfoundation.series_bias): learned
@@ -1591,7 +1605,7 @@ def main() -> None:
     (out / "outbreaks-held-out.txt").write_text("\n".join(held) + "\n")
     # Checkpointing and the largest block follow from the memory budget,
     # so held-out blocks are cut to the same size as training blocks.
-    checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
+    checkpoint_large_batches(checkpoint_threshold(args))
     ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
     pool = ProcessPoolExecutor(
         args.cut_workers,
@@ -2057,6 +2071,7 @@ def main() -> None:
                 "tokens": seen.get("tokens", 0),
                 "skipped_blocks": skipped,
                 "memory_gb": args.memory_gb,
+                "checkpoint_above": checkpoint_threshold(args),
             }
             key = ft._settings_hash(settings)
             settings["hash"] = key
