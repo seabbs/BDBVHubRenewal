@@ -39,7 +39,7 @@ rule evaluate_steps:
     shell:
         "DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
         f"{EVALUATE_PY} steps {{params.where}} {{params.prev}} "
-        "--device {params.device} "
+        f"--eval-every {FT['eval_every']} --device {{params.device}} "
         "{params.real} > {log} 2>&1"
 
 
