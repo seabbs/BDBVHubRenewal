@@ -8,11 +8,8 @@ import pytest
 
 numpyro.set_host_device_count(2)
 
-from bdbvhubrenewal.data import (  # noqa: E402
-    PROVINCE_CENTRES,
-    PROVINCE_POPULATIONS,
-)
-from bdbvhubrenewal.data.delays import hub_delay_pmf  # noqa: E402
+from bdbvhub.data.delays import hub_delay_pmf  # noqa: E402
+from bdbvhub.data.tidy import PROVINCE_CENTRES, PROVINCE_POPULATIONS  # noqa: E402
 from nowcastfoundation.simulate import simulate_outbreak  # noqa: E402
 from nowcastrenewal.model import MAIN  # noqa: E402
 from nowcastrenewal.model.inputs import vintage_from_tables  # noqa: E402

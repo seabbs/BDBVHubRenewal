@@ -13,17 +13,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.zones import ZoneData, hub_zones
-from bdbvhubrenewal.forecasters import (
-    NATIONAL,
-    ForecastTask,
-    FoundationModel,
-    ModelUnavailableError,
-    add_national,
-    check_samples,
-    get_model,
-    list_models,
-)
+from bdbvhub.data.zones import ZoneData, hub_zones
+from bdbvhub.models import get_model, list_models
 from nowcastbaselines.chain import NoWalkSpread
 from nowcastbaselines.randomwalk import RandomWalk
 from nowcastbaselines.zones import (
@@ -37,11 +28,19 @@ from nowcastfoundation.forecaster import (
     LAYOUTS,
     MAX_LAG,
     SOURCES,
+    FoundationModel,
     chronos_sampler,
     hub_triangle,
     quantile_draws,
 )
 from nowcastutils import base
+from nowcastutils.base import (
+    NATIONAL,
+    ForecastTask,
+    ModelUnavailableError,
+    add_national,
+    check_samples,
+)
 from nowcastutils.dates import as_date
 from nowcastutils.hierarchy import is_zone, province_of
 from nowcastutils.snapshots import weekly_counts
@@ -665,7 +664,7 @@ def test_adapter_of_another_sha256_fails_and_caches_nothing(
 def test_missing_adapter_is_stored_as_failed(
     task: ForecastTask, fake_checkpoint
 ) -> None:
-    from bdbvhubrenewal.evaluation import store
+    from bdbvhub.store import store
 
     # The latest release lists its checksums but the adapter cannot be
     # downloaded. As a missing Chronos-2: a failed fit, not a fit with no
@@ -1121,7 +1120,7 @@ def test_a_pending_realdata_checkpoint_names_what_is_missing(
 def test_the_realdata_models_wait_for_their_pin() -> None:
     # While the pin is pending they are not registered, so neither the
     # BDBV fit store nor a backtest resolves their checkpoint.
-    from bdbvhubrenewal.evaluation.store import stored_models
+    from bdbvhub.store.store import stored_models
 
     if foundation.realdata_pinned():
         pytest.skip("the realdata-ft release is pinned")

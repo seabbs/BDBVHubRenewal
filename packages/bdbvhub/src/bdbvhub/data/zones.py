@@ -20,7 +20,7 @@ from typing import Final
 
 import pandas as pd
 
-from bdbvhubrenewal.data.tidy import (
+from bdbvhub.data.tidy import (
     load_daily_zones,
     load_health_zones,
     load_locations,
@@ -115,7 +115,7 @@ def zone_places() -> pd.DataFrame:
     pandas.DataFrame
         Columns `PLACE_COLUMNS`.
     """
-    path = files("bdbvhubrenewal.data").joinpath("zone_centres.csv")
+    path = files("bdbvhub.data").joinpath("zone_centres.csv")
     with path.open() as f:
         table = pd.read_csv(f, comment="#")
     table = table.rename(columns={"worldpop": "population"})

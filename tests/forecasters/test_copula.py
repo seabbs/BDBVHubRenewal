@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 from scipy.stats import spearmanr
 
-from bdbvhubrenewal.forecasters import NATIONAL
 from nowcastbaselines.copula import (
     MAX_RHO,
     PRIOR,
@@ -15,6 +14,7 @@ from nowcastbaselines.copula import (
     estimate_rho,
     pair_walks,
 )
+from nowcastutils.base import NATIONAL
 
 PROVINCES = ("CD-A", "CD-B", "CD-C", "CD-D")
 

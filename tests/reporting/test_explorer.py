@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.reporting import explorer
+from bdbvhub.reporting import explorer
 
 COLOURS = {
     "a (ours)": ("#111111", "#eeeeee", "6 3"),

@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 import yaml
 
-from bdbvhubrenewal.submission.hub import (
+from bdbvhub.submission.hub import (
     HUB_COLUMNS,
     model_id,
     render_model_metadata,
@@ -16,7 +16,7 @@ from bdbvhubrenewal.submission.hub import (
     write_model_metadata,
     write_submission,
 )
-from bdbvhubrenewal.submission.validate import (
+from bdbvhub.submission.validate import (
     Hub,
     validate_metadata,
     validate_submission,
@@ -218,7 +218,7 @@ def test_own_national_rows_must_be_complete() -> None:
 
 
 def test_only_the_chronos_models_give_their_own_national() -> None:
-    from bdbvhubrenewal.submission.hub import own_national
+    from bdbvhub.submission.hub import own_national
 
     assert own_national("fm_chronos_daily_ragged_ft")
     assert own_national("fm_chronos_weekly_ragged")

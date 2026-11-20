@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.digest import REPORT_ONLY, backtest_digest
+from bdbvhub.store.digest import REPORT_ONLY, backtest_digest
 from nowcasteval.backtest import BacktestConfig
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,7 +19,7 @@ def _digest_tree(root: Path) -> dict[str, Path]:
         shutil.copy(ROOT / name, root / name)
     files = {
         "code": root / "src/bdbvhubrenewal/evaluation/a.py",
-        "report": root / "src/bdbvhubrenewal/reporting/report.py",
+        "report": root / "packages/bdbvhub/src/bdbvhub/reporting/report.py",
         "data": root / "data/target.csv",
         "sources": root / "data/sources.json",
         "raw": root / "data/raw/x.csv",
@@ -76,7 +76,7 @@ def test_backtest_code_never_imports_report_only_modules() -> None:
         used = _reporting_imports(path) & report_only
         # The `report` and `live-checkpoint` commands, which no backtest
         # runs.
-        if rel == "src/bdbvhubrenewal/cli.py":
+        if rel == "packages/bdbvhub/src/bdbvhub/cli.py":
             used -= {"report", "live_checkpoint_page"}
         assert not used, f"{rel} imports {used}"
 
@@ -109,11 +109,11 @@ def test_model_code_covers_what_its_forecasts_run(
     daily: pd.DataFrame,
     config: BacktestConfig,
 ) -> None:
-    from bdbvhubrenewal.data import load_daily_zones, load_health_zones
-    from bdbvhubrenewal.data.zones import hub_zones
-    from bdbvhubrenewal.evaluation.digest import model_code
-    from bdbvhubrenewal.evaluation.zones import zone_forecasts
-    from bdbvhubrenewal.forecasters import get_model
+    from bdbvhub.data.tidy import load_daily_zones, load_health_zones
+    from bdbvhub.data.zones import hub_zones
+    from bdbvhub.models import get_model
+    from bdbvhub.store.digest import model_code
+    from bdbvhub.zones import zone_forecasts
     from nowcasteval import backtest as bt
     from nowcasteval.nowcast import forecast_releases
 
@@ -146,7 +146,7 @@ def test_model_code_covers_what_its_forecasts_run(
 
 
 def test_model_code_leaves_out_other_models() -> None:
-    from bdbvhubrenewal.evaluation.digest import model_code
+    from bdbvhub.store.digest import model_code
 
     code = set(model_code("randomwalk", ROOT))
     assert (
@@ -164,7 +164,7 @@ def test_model_code_leaves_out_other_models() -> None:
 
 
 def test_a_fit_key_holds_the_zone_split_only_where_its_model_calls_it() -> None:
-    from bdbvhubrenewal.evaluation.store import fit_code
+    from bdbvhub.store.store import fit_code
 
     zones = "packages/nowcastbaselines/src/nowcastbaselines/zones.py"
     # The province-level models split their zones in their own forecast
@@ -191,7 +191,7 @@ def test_fit_code_covers_what_a_stored_fit_runs(
     daily: pd.DataFrame,
     config: BacktestConfig,
 ) -> None:
-    from bdbvhubrenewal.evaluation import store
+    from bdbvhub.store import store
 
     tasks = store.origin_tasks(target, delays, config, daily)
     task = tasks[sorted(tasks)[-1]]
@@ -219,7 +219,7 @@ def test_model_code_follows_imports_into_workspace_packages(
 ) -> None:
     # The packages move (WP2b) puts modules under packages/<name>/src, so
     # the walk resolves each top-level package to its own source folder.
-    from bdbvhubrenewal.evaluation.digest import model_code
+    from bdbvhub.store.digest import model_code
 
     for folder in ("src", "packages"):
         shutil.copytree(

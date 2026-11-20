@@ -45,6 +45,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
+from bdbvhub.models import get_model, list_models
 from bdbvhubrenewal.data.germany import (
     ALL_AGES,
     GERMANY,
@@ -56,11 +57,11 @@ from bdbvhubrenewal.data.germany import (
     level,
     nowcast_tasks,
 )
-from bdbvhubrenewal.forecasters import ForecastTask, get_model, list_models
 from nowcasteval.marginals import forecast_quantiles
 from nowcasteval.nowcast import rolling_truth
 from nowcasteval.scoring import relative_skill, score_quantiles
 from nowcastfoundation.forecaster import FoundationModel, prefetch
+from nowcastutils.base import ForecastTask
 
 log = logging.getLogger(__name__)
 
@@ -311,7 +312,7 @@ def fetch_germany(  # pragma: no cover - network
     dict
         The sources, also written to `dest/sources.json`.
     """
-    from bdbvhubrenewal.data.tidy import _request
+    from bdbvhub.data.tidy import _request
 
     out = Path(dest)
     out.mkdir(parents=True, exist_ok=True)

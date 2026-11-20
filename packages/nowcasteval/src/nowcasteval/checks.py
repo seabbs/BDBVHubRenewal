@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bdbvhubrenewal.reporting.site import site_baseline
+from bdbvhub.reporting.site import site_baseline
 from nowcastbaselines.chain import Settings
 from nowcasteval.scoring import summarise_scores
 

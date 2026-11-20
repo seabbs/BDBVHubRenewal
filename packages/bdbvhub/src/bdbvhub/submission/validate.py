@@ -296,7 +296,7 @@ class Hub:
 
         Examples
         --------
-        >>> from bdbvhubrenewal.submission.validate import Hub, validate_file
+        >>> from bdbvhub.submission.validate import Hub, validate_file
         >>> hub = Hub.load("../BDBV-Modeling-Hub")
         >>> report = validate_file("model-output/x/2026-11-07-x.csv", hub)
         >>> report.valid, [c.check for c in report.failed]

@@ -34,9 +34,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.data.tidy import delays_for_vintage
-from bdbvhubrenewal.data.zones import ZoneData, hub_places
+from bdbvhub.data.delays import hub_delay_pmf
+from bdbvhub.data.tidy import delays_for_vintage
+from bdbvhub.data.zones import ZoneData, hub_places
 from nowcasteval.nowcast import TRUTH_LEVEL
 from nowcasteval.scoring import energy_scores, score_forecasts
 from nowcastfoundation.simulate import (
@@ -669,7 +669,7 @@ def merge_by_model(path: Path | str, new: pd.DataFrame) -> pd.DataFrame:
     """Merge a run's rows into a results file, keeping other models' rows.
 
     The fitted variants are slow, so their rows come from the fit store
-    (`bdbvhubrenewal.evaluation.store`). A run replaces the rows of the
+    (`bdbvhub.store.store`). A run replaces the rows of the
     models it ran and keeps the rest, so a run of no model keeps them all.
 
     Parameters
@@ -1355,7 +1355,7 @@ def scenario_forecasts(
         them (`evaluation.zones.zone_allocations`), each with `scenario`.
     """
     # Local import: the zone backtest builds on this module.
-    from bdbvhubrenewal.evaluation.zones import zone_allocations
+    from bdbvhub.zones import zone_allocations
 
     lags = None if daily is None else cutoff_lags(daily)
     all_forecasts, all_zones = [], []
@@ -1413,7 +1413,7 @@ def score_scenarios(
     tuple of pandas.DataFrame
         The scores, the energy scores and the truth, as `run_scenarios`.
     """
-    from bdbvhubrenewal.evaluation.zones import score_zone_allocations
+    from bdbvhub.zones import score_zone_allocations
 
     del daily
     k = config.complete_after_weeks

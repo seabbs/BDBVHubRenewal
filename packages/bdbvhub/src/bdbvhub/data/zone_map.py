@@ -24,7 +24,7 @@ from typing import Any, Final
 
 import pandas as pd
 
-from bdbvhubrenewal.data.tidy import HUB_REPO
+from bdbvhub.data.tidy import HUB_REPO
 from nowcastrenewal.bvd import BVD_REPO, Downloader, _download
 
 __all__ = ["BOUNDARIES_PATH", "MAPPING_PATH", "zone_boundaries", "zone_names"]

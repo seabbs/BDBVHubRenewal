@@ -15,9 +15,10 @@ from collections.abc import Mapping
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.forecasters import ForecastTask, get_model
-from bdbvhubrenewal.reporting.explorer import compact, trajectories
+from bdbvhub.models import get_model
+from bdbvhub.reporting.explorer import compact, trajectories
 from nowcastbaselines.zones import zone_forecast
+from nowcastutils.base import ForecastTask
 from nowcastutils.hierarchy import province_of
 from nowcastutils.snapshots import weekly_counts
 

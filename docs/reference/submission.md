@@ -3,15 +3,15 @@
 Write and check hub files and model metadata, and build the submitted round pages. See [Getting started](../getting-started.ipynb) for a worked example.
 { .page-subtitle }
 
-::: bdbvhubrenewal.submission
+::: bdbvhub.submission
     options:
       members: false
 
-::: bdbvhubrenewal.submission.hub
+::: bdbvhub.submission.hub
 
-::: bdbvhubrenewal.submission.metadata
+::: bdbvhub.submission.metadata
 
-::: bdbvhubrenewal.submission.validate
+::: bdbvhub.submission.validate
     options:
       members:
         - Check
@@ -21,6 +21,6 @@ Write and check hub files and model metadata, and build the submitted round page
         - validate_submission
         - validate_metadata
 
-::: bdbvhubrenewal.submission.fitting
+::: bdbvhub.submission.fitting
 
-::: bdbvhubrenewal.submission.rounds
+::: bdbvhub.submission.rounds

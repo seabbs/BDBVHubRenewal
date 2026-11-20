@@ -59,14 +59,9 @@ from typing import Any, Final
 
 import pandas as pd
 
-from bdbvhubrenewal.data import load_daily, load_delays, load_target
-from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
-from bdbvhubrenewal.forecasters import (
-    ForecastModel,
-    ForecastTask,
-    get_model,
-    list_models,
-)
+from bdbvhub.data.tidy import load_daily, load_delays, load_target
+from bdbvhub.data.zones import ZoneData, load_zone_data
+from bdbvhub.models import get_model, list_models
 from nowcasteval.backtest import (
     BacktestConfig,
     load_config,
@@ -75,6 +70,7 @@ from nowcasteval.backtest import (
     run_forecasts,
     vintage_task,
 )
+from nowcastutils.base import ForecastModel, ForecastTask
 from nowcastutils.files import write_csv
 from nowcastutils.hierarchy import is_zone
 
@@ -111,7 +107,7 @@ __all__ = [
 ]
 
 FIT_FUNCTIONS: Final = {
-    "src/bdbvhubrenewal/evaluation/store.py": (
+    "packages/bdbvhub/src/bdbvhub/store/store.py": (
         "build_model",
         "fit",
         "fit_files",
@@ -130,17 +126,17 @@ it never refits.
 
 KEY_SKIP: Final = (
     "packages/nowcasteval/src/nowcasteval/backtest.py",
-    "src/bdbvhubrenewal/evaluation/digest.py",
-    "src/bdbvhubrenewal/evaluation/store.py",
+    "packages/bdbvhub/src/bdbvhub/store/digest.py",
+    "packages/bdbvhub/src/bdbvhub/store/store.py",
     "packages/nowcasteval/src/nowcasteval/plots.py",
-    "src/bdbvhubrenewal/reporting/site.py",
+    "packages/bdbvhub/src/bdbvhub/reporting/site.py",
 )
 """Loader, IO and report modules a model's code imports but a fit does not
 run, left out of its key with what only they import (unless the model's
 own module imports them). The store's and backtest's functions a fit runs
 are keyed by source instead (`FIT_FUNCTIONS`)."""
 
-STORE_DATA: Final = "src/bdbvhubrenewal/data/*.csv"
+STORE_DATA: Final = "packages/bdbvhub/src/bdbvhub/data/*.csv"
 """The package's data files, which a fit may read (the province centres
 of the renewal models' gravity kernel). Every stored fit's key holds
 them."""
@@ -304,6 +300,8 @@ def _code_parts(source: str) -> list[str]:
     """
     tree = ast.parse(source)
     for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            node.value = MOVED_MODULES.get(node.value, node.value)
         body = getattr(node, "body", None)
         if not isinstance(body, list):
             continue
@@ -370,13 +368,17 @@ def _fit_functions(root: Path) -> list[str]:
 
 MOVED_MODULES: Final = {
     "nowcastrenewal.forecaster": "bdbvhubrenewal.forecasters.renewal",
+    "bdbvhub.submission.fitting": "bdbvhubrenewal.submission.fitting",
+    "bdbvhub.data": "bdbvhubrenewal.data",
 }
 """Moved modules (WP2b) by the name they had when the keys were set.
 
 The functions in `FIT_FUNCTIONS` are dumped whole, own-package imports
 included, so an import of a moved module is dumped by its old name and
-the keys hold. This goes at the next refit, when these dumps drop
-own-package imports as `_code_parts` does."""
+the keys hold. Module code names a moved package by its old name too
+where a string holds it (`files("bdbvhub.data")`, for the data files).
+This goes at the next refit, when these dumps drop own-package imports
+as `_code_parts` does."""
 
 
 def _fit_source(node: ast.stmt) -> str:
@@ -428,7 +430,7 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
     list of str
         Paths relative to `root`, sorted.
     """
-    from bdbvhubrenewal.evaluation.digest import model_code
+    from bdbvhub.store.digest import model_code
 
     code = model_code(model, root, (), cli=False, skip=KEY_SKIP)
     data = [p.relative_to(root).as_posix() for p in Path(root).glob(STORE_DATA)]
@@ -907,7 +909,7 @@ def fit_files(
     dict
         File name to base64 contents, or empty.
     """
-    from bdbvhubrenewal.submission.fitting import get_config, write_records
+    from bdbvhub.submission.fitting import get_config, write_records
     from nowcastrenewal.forecaster import FIT_VARIANTS
 
     write = getattr(model, "write_fit_dir", None)

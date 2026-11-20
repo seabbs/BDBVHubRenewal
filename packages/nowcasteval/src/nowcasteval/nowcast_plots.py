@@ -14,7 +14,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 
-from bdbvhubrenewal.reporting.site import site_baseline
+from bdbvhub.reporting.site import site_baseline
 from nowcasteval.plots import (
     THEMES,
     _date_axis,

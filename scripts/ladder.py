@@ -38,14 +38,14 @@ import pandas as pd  # noqa: E402
 from jax import random  # noqa: E402
 from numpyro.infer import Predictive  # noqa: E402
 
-from bdbvhubrenewal.data import (  # noqa: E402
+from bdbvhub.data.delays import hub_delay_pmf  # noqa: E402
+from bdbvhub.data.tidy import (  # noqa: E402
     load_daily,
     load_delays,
     load_locations,
     load_target,
 )
-from bdbvhubrenewal.data.delays import hub_delay_pmf  # noqa: E402
-from bdbvhubrenewal.data.zones import hub_places  # noqa: E402
+from bdbvhub.data.zones import hub_places  # noqa: E402
 from nowcastbaselines.randomwalk import RandomWalk  # noqa: E402
 from nowcasteval.ppc import summarise_draws  # noqa: E402
 from nowcasteval.scoring import crps_sample  # noqa: E402

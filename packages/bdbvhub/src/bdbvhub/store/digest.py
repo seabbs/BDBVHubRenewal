@@ -20,7 +20,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final
 
-from bdbvhubrenewal.evaluation.store import _strip
+from bdbvhub.store.store import _strip
 
 __all__ = [
     "BACKTEST_INPUTS",
@@ -125,11 +125,11 @@ def _digest(base: Path, names: Sequence[str], text: str) -> str:
 FORECAST_ENTRIES: Final = (
     "packages/nowcasteval/src/nowcasteval/backtest.py",
     "packages/nowcasteval/src/nowcasteval/nowcast.py",
-    "src/bdbvhubrenewal/evaluation/zones.py",
+    "packages/bdbvhub/src/bdbvhub/zones.py",
 )
 """The modules whose forecasting halves a forecast-only run calls."""
 
-CLI_MODULE: Final = "bdbvhubrenewal.cli"
+CLI_MODULE: Final = "bdbvhub.cli"
 """The CLI module, added to a forecast-only run's code as a file."""
 
 SOURCE_DIRS: Final = ("src", "packages/*/src")
@@ -243,7 +243,7 @@ def _follows(path: Path) -> bool:
 
 def _model_modules() -> dict[str, str]:
     """Map each registered model to the module that defines it."""
-    from bdbvhubrenewal.forecasters import list_models
+    from bdbvhub.models import list_models
 
     out = {}
     for spec in list_models():

@@ -145,7 +145,7 @@ def test_plot_cutoff_days_labels_each_week_total(
 
 
 def test_model_styles_are_fixed_by_name() -> None:
-    from bdbvhubrenewal.forecasters import list_models
+    from bdbvhub.models import list_models
 
     registered = {s.name for s in list_models()}
     # The real-data models are registered only once their release is

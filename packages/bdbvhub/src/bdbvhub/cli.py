@@ -50,7 +50,8 @@ from typing import Any
 
 import pandas as pd
 
-from bdbvhubrenewal.data import (
+from bdbvhub.data import tidy
+from bdbvhub.data.tidy import (
     build_tidy_data,
     coherence_summary,
     fetch_hub_data,
@@ -59,21 +60,12 @@ from bdbvhubrenewal.data import (
     load_delays,
     load_health_zones,
     load_target,
-    tidy,
 )
-from bdbvhubrenewal.data.zones import (
-    ZoneData,
-    hub_places,
-    hub_zones,
-    load_zone_data,
-)
-from bdbvhubrenewal.evaluation import store, store_archive
-from bdbvhubrenewal.submission.fitting import (
-    get_config,
-    run_fit,
-    run_forecast,
-)
-from bdbvhubrenewal.submission.hub import (
+from bdbvhub.data.zones import ZoneData, hub_places, hub_zones, load_zone_data
+from bdbvhub.store import archive as store_archive
+from bdbvhub.store import store
+from bdbvhub.submission.fitting import get_config, run_fit, run_forecast
+from bdbvhub.submission.hub import (
     ROUND_NAME,
     SUBMISSION_CONFIG,
     model_abbr_for,
@@ -85,14 +77,14 @@ from bdbvhubrenewal.submission.hub import (
     write_submission,
     zones_need_not_sum,
 )
-from bdbvhubrenewal.submission.metadata import MODEL_METADATA
-from bdbvhubrenewal.submission.validate import (
+from bdbvhub.submission.metadata import MODEL_METADATA
+from bdbvhub.submission.validate import (
     Check,
     Hub,
     validate_metadata,
     validate_submission,
 )
-from bdbvhubrenewal.submission.validate import main as validate_main
+from bdbvhub.submission.validate import main as validate_main
 from nowcastbaselines.zones import zones_for_model
 from nowcasteval import backtest as bt
 from nowcasteval.nowcast import (
@@ -1024,7 +1016,7 @@ def _score(args: argparse.Namespace) -> int:
     Writes the files the backtest, recovery check, scenarios and zone
     backtest write when they run every model at once.
     """
-    from bdbvhubrenewal.evaluation.zones import ZoneForecasts, score_zones
+    from bdbvhub.zones import ZoneForecasts, score_zones
 
     parts = [Path(p) for p in args.parts]
     results, output = Path(args.results), Path(args.output)
@@ -1279,7 +1271,7 @@ def _comparison_stored(
     Only rounds in `rounds` and models not in `live` are taken, in the
     comparison's sample columns, with `kind` as `source`.
     """
-    from bdbvhubrenewal.evaluation import hubcompare as hc
+    from bdbvhub import compare as hc
 
     if whole.empty:
         return stored
@@ -1307,7 +1299,7 @@ def _stored(
     results, none if it loaded no fits. Hub teams' forecasts are matched
     to the real vintage serving their round, and have no delay.
     """
-    from bdbvhubrenewal.evaluation import hubcompare as hc
+    from bdbvhub import compare as hc
 
     cols = [
         "model",
@@ -1643,7 +1635,7 @@ def _zone_origins(args: argparse.Namespace) -> list[str] | None:
 
 
 def _zone_backtest(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.evaluation.zones import zone_backtest
+    from bdbvhub.zones import zone_backtest
 
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
     # The zone backtest keeps its own default horizons and seed, with
@@ -1651,7 +1643,7 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     draws = bt.load_config(args.backtest_config).score_samples
     config = dataclasses.replace(bt.BacktestConfig(), n_samples=draws)
     if args.forecast_only:
-        from bdbvhubrenewal.evaluation.zones import zone_forecasts
+        from bdbvhub.zones import zone_forecasts
 
         zone_forecasts(
             load_target(args.data),
@@ -1697,9 +1689,9 @@ def _write_zone_results(
     draws_out: Path,
 ) -> None:
     """Write the zone backtest's tables."""
-    from bdbvhubrenewal.evaluation.hubcompare import forecast_quantiles
-    from bdbvhubrenewal.evaluation.zones import zone_relative_skill
-    from bdbvhubrenewal.reporting.explorer import draw_subset
+    from bdbvhub.compare import forecast_quantiles
+    from bdbvhub.reporting.explorer import draw_subset
+    from bdbvhub.zones import zone_relative_skill
 
     out.parent.mkdir(parents=True, exist_ok=True)
     write_csv(scores, out)
@@ -1895,8 +1887,8 @@ def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
 
 
 def _compare_hub(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.evaluation import hubcompare as hc
-    from bdbvhubrenewal.reporting.explorer import TRAJECTORY_DRAWS
+    from bdbvhub import compare as hc
+    from bdbvhub.reporting.explorer import TRAJECTORY_DRAWS
 
     cfg = hc.load_comparison_config(args.config)
     hub_dir, cache = Path(args.hub_dir), Path(args.cache_dir)
@@ -2202,7 +2194,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     The same from Python:
 
-    >>> from bdbvhubrenewal.cli import main
+    >>> from bdbvhub.cli import main
     >>> main(["nowcast", "--model", "randomwalknowcast", "--vintage", "latest"])
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -2270,10 +2262,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "germany-ft-load":
         return _germany_ft_load(args)
     if args.command == "digest":
-        from bdbvhubrenewal.evaluation.digest import (
-            backtest_digest,
-            model_digest,
-        )
+        from bdbvhub.store.digest import backtest_digest, model_digest
 
         if args.model:
             print(model_digest(args.model, args.root, args.extra, args.text))
@@ -2302,7 +2291,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "compare-hub":
         return _compare_hub(args)
     if args.command == "freeze-round":
-        from bdbvhubrenewal.submission.rounds import freeze_round
+        from bdbvhub.submission.rounds import freeze_round
 
         wrote = freeze_round(args.ledger, args.round)
         print(
@@ -2310,14 +2299,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             + ("page frozen." if wrote else "already frozen.")
         )
         return 0
-    from bdbvhubrenewal.reporting.report import make_report
+    from bdbvhub.reporting.report import make_report
 
     make_report(
         figures=args.figures,
         generated=args.generated,
         data_dir=_data_root(),
     )
-    from bdbvhubrenewal.submission.rounds import make_round_pages
+    from bdbvhub.submission.rounds import make_round_pages
 
     done = make_round_pages(args.ledger, generated=args.generated)
     print(f"Round pages: {len(done)} submitted rounds.")

@@ -262,8 +262,8 @@ def bdbv_sensitivity(
     pandas.DataFrame
         `variant_scores` rows of every model, variant, origin and level.
     """
-    from bdbvhubrenewal.data import load_daily, load_delays, load_target
-    from bdbvhubrenewal.evaluation.store import origin_tasks
+    from bdbvhub.data.tidy import load_daily, load_delays, load_target
+    from bdbvhub.store.store import origin_tasks
     from nowcasteval.backtest import load_config, real_vintages
     from nowcasteval.nowcast import resolve_truth_delay, rolling_truth
 

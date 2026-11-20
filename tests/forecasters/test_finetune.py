@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import NATIONAL
 from nowcastfoundation.finetune import (
     final_counts,
     releases,
@@ -14,6 +13,7 @@ from nowcastfoundation.finetune import (
     weekly_cutoffs,
 )
 from nowcastfoundation.forecaster import hub_triangle
+from nowcastutils.base import NATIONAL
 
 
 def _counts() -> pd.DataFrame:

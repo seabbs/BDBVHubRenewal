@@ -165,7 +165,7 @@ jobs:
             with: >-
               packages/nowcasteval/src/nowcasteval/pairing.py
               packages/nowcasteval/src/nowcasteval/scoring.py
-              src/bdbvhubrenewal/evaluation/store.py
+              packages/bdbvhub/src/bdbvhub/store/store.py
             run: >-
               uv run bdbvhubrenewal pairing-sensitivity --study bdbv
               --out output/parts/pairing
@@ -423,7 +423,7 @@ jobs:
             packages/nowcasteval/src/nowcasteval/backtest.py
             packages/nowcasteval/src/nowcasteval/nowcast.py
             packages/nowcasteval/src/nowcasteval/scoring.py
-            src/bdbvhubrenewal/reporting/hubtables.py' || '' }}
+            packages/bdbvhub/src/bdbvhub/reporting/hubtables.py' || '' }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC2086

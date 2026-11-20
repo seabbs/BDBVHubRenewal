@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from bdbvhub.models import get_model
 from bdbvhubrenewal.data.germany import (
     HORIZONS,
     OFFSETS,
@@ -19,8 +20,8 @@ from bdbvhubrenewal.data.germany import (
     place_code,
     read_triangle,
 )
-from bdbvhubrenewal.forecasters import NATIONAL, get_model
 from nowcasteval.backtest import run_forecasts
+from nowcastutils.base import NATIONAL
 
 FIXTURE = (
     Path(__file__).resolve().parents[1]

@@ -17,7 +17,7 @@ This module owns everything around it:
   `delay-summary.csv` beside its forecasts;
 - `fit_renewal` and `forecast_renewal`: the `fit` and `forecast` of the
   `main` and `bvd` fit configurations
-  (`bdbvhubrenewal.submission.fitting`).
+  (`bdbvhub.submission.fitting`).
 
 This module reads only `ModelConfig`, `MAIN`, `BVD`, `zones.build_model`,
 `model_args`, `model.EXTRA_FIELDS`, `forecast_trajectories` and

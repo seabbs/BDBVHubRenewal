@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bdbvhubrenewal.reporting.store_note import store_note, write_store_note
+from bdbvhub.reporting.store_note import store_note, write_store_note
 
 
 def _row(origin: str, used: str | None, current: bool, failed: bool = False):

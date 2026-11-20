@@ -18,8 +18,8 @@ from collections.abc import Callable, Mapping, Sequence
 
 import pandas as pd
 
-from bdbvhubrenewal.forecasters import NATIONAL
-from bdbvhubrenewal.reporting.site import site_baseline
+from bdbvhub.reporting.site import site_baseline
+from nowcastutils.base import NATIONAL
 
 __all__ = [
     "ENERGY_SUMMARY",

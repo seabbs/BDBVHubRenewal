@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.cli import main
+from bdbvhub.cli import main
 from bdbvhubrenewal.evaluation.germany import load_germany_config
 from nowcasteval import plots
 
@@ -25,7 +25,7 @@ def in_root(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # The vintages used here are in the past, and a forecast date cannot
     # follow its reference date.
     monkeypatch.setattr(
-        "bdbvhubrenewal.submission.hub.run_date",
+        "bdbvhub.submission.hub.run_date",
         lambda *_: dt.date(2026, 8, 1),
     )
     old = Path.cwd()
@@ -202,7 +202,7 @@ def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
 
 
 def test_host_devices_cover_the_chains(monkeypatch: pytest.MonkeyPatch) -> None:
-    from bdbvhubrenewal.cli import host_devices
+    from bdbvhub.cli import host_devices
 
     monkeypatch.setenv("XLA_FLAGS", "--xla_foo=1")
     host_devices(4)
@@ -220,7 +220,7 @@ def test_host_devices_takes_effect_after_importing_the_package() -> None:
     # by `host_devices` before a fit comes too late and chains run one
     # after another.
     code = (
-        "from bdbvhubrenewal.cli import host_devices\n"
+        "from bdbvhub.cli import host_devices\n"
         "host_devices(3)\n"
         "import jax\n"
         "print(jax.local_device_count())\n"
@@ -242,7 +242,7 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     # publication lag, not the prior.
     import argparse
 
-    from bdbvhubrenewal.cli import _task
+    from bdbvhub.cli import _task
     from nowcastrenewal.forecaster import vintage_inputs
     from nowcastrenewal.model import MAIN
 
@@ -269,8 +269,8 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
 
     import numpy as np
 
-    from bdbvhubrenewal.cli import _stored
-    from bdbvhubrenewal.data import load_target
+    from bdbvhub.cli import _stored
+    from bdbvhub.data.tidy import load_target
     from nowcasteval.backtest import run_forecasts
     from nowcasteval.scoring import energy_scores
     from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
@@ -433,7 +433,7 @@ def test_concat_results_keeps_every_partial(tmp_path: Path) -> None:
 def test_digest_prints_the_backtest_digest(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    from bdbvhubrenewal.evaluation.digest import backtest_digest
+    from bdbvhub.store.digest import backtest_digest
 
     args = ["digest", "--root", str(ROOT), "--text", "cell"]
     assert main([*args, "--with", "results"]) == 0
@@ -442,7 +442,7 @@ def test_digest_prints_the_backtest_digest(
 
 
 def test_chunk_splits_in_order_into_contiguous_blocks() -> None:
-    from bdbvhubrenewal.cli import chunk
+    from bdbvhub.cli import chunk
 
     items = list("abcdefg")
     parts = [chunk(items, f"{k}/3") for k in range(3)]
@@ -493,7 +493,7 @@ def test_backtest_runs_recovery_apart_by_chunk(
 
 
 def chunk_of(items: tuple[str, ...], k: int, n: int) -> list[str]:
-    from bdbvhubrenewal.cli import chunk
+    from bdbvhub.cli import chunk
 
     return chunk(items, f"{k}/{n}")
 
@@ -502,7 +502,7 @@ def chunk_of(items: tuple[str, ...], k: int, n: int) -> list[str]:
 def test_backtest_without_recovery_never_runs_it(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from bdbvhubrenewal import cli
+    from bdbvhub import cli
     from nowcasteval import backtest as bt
 
     def recovery(*args: object, **kwargs: object) -> None:
@@ -537,7 +537,7 @@ def test_backtest_without_recovery_never_runs_it(
 def test_backtest_scores_the_complete_target_on_the_truth_delay(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from bdbvhubrenewal import cli
+    from bdbvhub import cli
     from nowcasteval import backtest as bt
     from nowcasteval.nowcast import resolve_truth_delay
 
@@ -572,8 +572,8 @@ def test_score_scores_the_complete_target_on_the_truth_delay(
 ) -> None:
     import argparse
 
-    from bdbvhubrenewal import cli
-    from bdbvhubrenewal.data.tidy import load_delays
+    from bdbvhub import cli
+    from bdbvhub.data.tidy import load_delays
     from nowcasteval import backtest as bt
     from nowcasteval.nowcast import (
         ReleaseBacktest,
@@ -632,9 +632,7 @@ def test_zone_backtest_of_a_skipped_block_writes_empty_files(
         del args, kwargs
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-    monkeypatch.setattr(
-        "bdbvhubrenewal.evaluation.zones.zone_backtest", nothing
-    )
+    monkeypatch.setattr("bdbvhub.zones.zone_backtest", nothing)
     names = ["zone-scores.csv", "zone-energy.csv", "zone-quantiles.csv"]
     outs = [
         "--out", str(tmp_path / names[0]),
@@ -660,7 +658,7 @@ def test_concat_results_skips_empty_parts(tmp_path: Path) -> None:
 
 
 def test_digest_of_one_model(capsys: pytest.CaptureFixture[str]) -> None:
-    from bdbvhubrenewal.evaluation.digest import model_digest
+    from bdbvhub.store.digest import model_digest
 
     assert main(["digest", "--root", str(ROOT), "--model", "randomwalk"]) == 0
     key = capsys.readouterr().out.strip()
@@ -669,7 +667,7 @@ def test_digest_of_one_model(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_fit_store_plan_takes_origins(tmp_path: Path) -> None:
-    from bdbvhubrenewal.cli import main
+    from bdbvhub.cli import main
 
     out, keys = tmp_path / "matrix.json", tmp_path / "keys.json"
     rc = main(
@@ -703,7 +701,7 @@ def test_fit_store_plan_refuses_an_origin_it_does_not_fit(
 ) -> None:
     # 2026-08-18 is in `[forecast] skip_origins`. Planning it silently
     # gave "0 of 0 fits to make", which `await_fits` read as all present.
-    from bdbvhubrenewal.cli import main
+    from bdbvhub.cli import main
 
     args = ["fit-store", "plan", "--store", str(tmp_path / "store")]
     args += ["--models", "renewal", "--origins", "2026-08-18"]
@@ -714,7 +712,7 @@ def test_fit_store_plan_refuses_an_origin_it_does_not_fit(
 def test_fit_store_unpack_says_when_the_store_has_no_fit(
     tmp_path: Path,
 ) -> None:
-    from bdbvhubrenewal.cli import main
+    from bdbvhub.cli import main
 
     args = ["fit-store", "unpack", "--store", str(tmp_path / "store")]
     args += ["--model", "renewal", "--origin", "2026-11-08"]
@@ -820,7 +818,7 @@ def test_loaders_follow_bdbv_data_dir_after_the_cli_starts(
     # A new process: the conftest sets this one's loader default itself.
     cwd, env = _outside_repo(tmp_path)
     code = (
-        "from bdbvhubrenewal.cli import main\n"
+        "from bdbvhub.cli import main\n"
         "from bdbvhubrenewal.data import load_locations\n"
         "main(['--version'])\n"
         "print(len(load_locations()))\n"
@@ -843,7 +841,7 @@ def test_the_smoke_fit_runs_with_no_data_dir(tmp_path: Path) -> None:
     sampler = '{"num_chains": 1, "num_warmup": 5, "num_samples": 5}'
     out = subprocess.run(
         [
-            sys.executable, "-m", "bdbvhubrenewal.cli", "fit",
+            sys.executable, "-m", "bdbvhub.cli", "fit",
             "--model", "renewal", "--config", "main",
             "--sampler-json", sampler, "--out", str(tmp_path / "fit"),
         ],
@@ -868,7 +866,7 @@ def test_the_smoke_fit_runs_with_no_data_dir(tmp_path: Path) -> None:
 def test_data_defaults_follow_bdbv_data_dir(
     monkeypatch: pytest.MonkeyPatch, argv: list[str], attr: str, path: str
 ) -> None:
-    from bdbvhubrenewal.cli import build_parser
+    from bdbvhub.cli import build_parser
 
     monkeypatch.setenv("BDBV_DATA_DIR", "elsewhere")
     args = build_parser().parse_args(argv)
@@ -879,7 +877,7 @@ def test_data_defaults_follow_bdbv_data_dir(
 def test_cli_fit_store_archives_what_each_model_submits(
     flat_model: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from bdbvhubrenewal.evaluation import store
+    from bdbvhub.store import store
     from nowcastbaselines.zones import with_zones
     from nowcastutils import base
 
@@ -966,7 +964,7 @@ def test_cli_germany_asof_writes_the_data_each_date_saw(
 
 
 def _stored_fit(store: Path, weeks: list[str]) -> None:
-    from bdbvhubrenewal.evaluation import store as st
+    from bdbvhub.store import store as st
 
     rows = pd.DataFrame(
         {
@@ -1004,8 +1002,8 @@ def test_stored_samples_take_every_week_of_the_stored_fit(
     import argparse
     import json
 
-    from bdbvhubrenewal.cli import _stored
-    from bdbvhubrenewal.data import load_target
+    from bdbvhub.cli import _stored
+    from bdbvhub.data.tidy import load_target
 
     weeks = ["2026-09-12", "2026-09-19", "2026-09-26", "2026-10-03"]
     store = tmp_path / "store"
@@ -1054,7 +1052,7 @@ def test_hub_comparison_takes_the_whole_fits_of_its_rounds() -> None:
     # compare-hub keeps the whole fits of the hub rounds only, for models
     # it does not run live, in its sample columns, and they replace the
     # stored rows of the same model and round.
-    from bdbvhubrenewal.cli import _comparison_stored
+    from bdbvhub.cli import _comparison_stored
 
     whole = pd.DataFrame(
         {
@@ -1114,7 +1112,7 @@ def test_a_stored_forecast_takes_the_zones_of_its_fit_directory(
     # The candidate archive passes a stored zone fit's samples with its
     # zones file. The table takes those zones, as the submission does from
     # the fit directory (#366).
-    from bdbvhubrenewal import cli
+    from bdbvhub import cli
     from nowcastrenewal.zones import ZONES_FILE
     from nowcastutils.forecast import Forecast
 

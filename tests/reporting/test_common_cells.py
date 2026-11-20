@@ -52,7 +52,7 @@ def test_full_rows_share_n_and_a_model_lacking_cells_is_marked() -> None:
 
 
 def test_report_relative_crps_marks_partial_rows() -> None:
-    from bdbvhubrenewal.reporting.report import relative_crps
+    from bdbvhub.reporting.report import relative_crps
 
     table = relative_crps(
         _rows(), by=("pool",), baseline="randomwalknowcast"

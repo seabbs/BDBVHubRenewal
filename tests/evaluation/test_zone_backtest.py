@@ -5,13 +5,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data import load_daily, load_daily_zones
-from bdbvhubrenewal.data.zones import hub_zones
-from bdbvhubrenewal.evaluation.zones import (
-    ZONE_BASELINE,
-    zone_backtest,
-    zone_relative_skill,
-)
+from bdbvhub.data.tidy import load_daily, load_daily_zones
+from bdbvhub.data.zones import hub_zones
+from bdbvhub.zones import ZONE_BASELINE, zone_backtest, zone_relative_skill
 
 DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
 
@@ -115,7 +111,7 @@ def test_zone_backtest_by_origin_chunk_matches_one_run(
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
     vintages: list[str],
 ) -> None:
-    from bdbvhubrenewal.cli import chunk
+    from bdbvhub.cli import chunk
 
     origins = vintages[:-1]
     parts = [
@@ -156,11 +152,7 @@ def test_zone_forecasts_made_apart_by_model_score_as_one_run(
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
     tmp_path: Path,
 ) -> None:
-    from bdbvhubrenewal.evaluation.zones import (
-        ZoneForecasts,
-        score_zones,
-        zone_forecasts,
-    )
+    from bdbvhub.zones import ZoneForecasts, score_zones, zone_forecasts
 
     args = (
         target,
@@ -180,7 +172,7 @@ def test_zone_forecasts_made_apart_by_model_score_as_one_run(
 
 
 def test_zone_forecasts_read_skips_an_empty_part(tmp_path: Path) -> None:
-    from bdbvhubrenewal.evaluation.zones import ZoneForecasts
+    from bdbvhub.zones import ZoneForecasts
 
     empty = pd.DataFrame(columns=["origin", "model"])
     ZoneForecasts(empty, empty, empty).write(tmp_path / "a")

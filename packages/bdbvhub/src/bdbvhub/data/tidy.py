@@ -225,7 +225,7 @@ def load_province_centres() -> pd.DataFrame:
         Columns `location`, `latitude`, `longitude`, `worldpop` and
         `zones`.
     """
-    path = files("bdbvhubrenewal.data").joinpath("province_centres.csv")
+    path = files("bdbvhub.data").joinpath("province_centres.csv")
     with path.open() as fh:
         return pd.read_csv(fh, comment="#")
 

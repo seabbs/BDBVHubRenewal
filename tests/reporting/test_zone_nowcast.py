@@ -5,10 +5,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.reporting.zone_nowcast import (
-    place_chart_data,
-    zone_counts,
-)
+from bdbvhub.reporting.zone_nowcast import place_chart_data, zone_counts
 
 V = "2026-11-01"
 NAMES = {"CD-IT": "Ituri", "CD-NK": "Nord Kivu"}

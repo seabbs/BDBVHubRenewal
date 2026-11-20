@@ -20,14 +20,13 @@ from typing import Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.forecasters import ForecastTask
-from bdbvhubrenewal.submission.hub import (
+from bdbvhub.submission.hub import (
     own_national,
     to_hub_table,
     zones_need_not_sum,
 )
 from nowcastbaselines.zones import zones_for_model
-from nowcastutils.base import NATIONAL, SAMPLE_COLUMNS
+from nowcastutils.base import NATIONAL, SAMPLE_COLUMNS, ForecastTask
 from nowcastutils.files import write_csv
 from nowcastutils.hierarchy import is_zone
 from nowcastutils.snapshots import weekly_counts

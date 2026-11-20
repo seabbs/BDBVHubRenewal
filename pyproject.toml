@@ -21,6 +21,7 @@ dependencies = [
   "nowcastbaselines",
   "nowcastfoundation",
   "nowcastrenewal",
+  "bdbvhub",
 ]
 keywords = [
   "epidemiology",
@@ -55,7 +56,7 @@ Repository = "https://github.com/seabbs/bdbv-hub-modelling"
 Issues = "https://github.com/seabbs/bdbv-hub-modelling/issues"
 
 [project.scripts]
-bdbvhubrenewal = "bdbvhubrenewal.cli:main"
+bdbvhubrenewal = "bdbvhub.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.8,<0.14"]
@@ -108,6 +109,7 @@ nowcasteval = { workspace = true }
 nowcastbaselines = { workspace = true }
 nowcastfoundation = { workspace = true }
 nowcastrenewal = { workspace = true }
+bdbvhub = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -163,7 +165,7 @@ convention = "numpy"
 # Ported from the hub validation bundle, whose checks are named after
 # hubValidations' and are documented in docs/submission/hub-spec.md.
 # The small config classes and helpers carry no docstrings.
-"src/bdbvhubrenewal/submission/validate.py" = ["D101", "D102", "D103"]
+"packages/bdbvhub/src/bdbvhub/submission/validate.py" = ["D101", "D102", "D103"]
 # Method signatures follow PyRenew's, and maths names keep their capitals.
 "packages/nowcastrenewal/src/nowcastrenewal/model/**" = ["ARG002", "N803", "N806", "PTH123"]
 # The model's tests, from the prototype.

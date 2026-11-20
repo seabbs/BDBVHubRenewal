@@ -213,7 +213,7 @@ def to_hub_table(
 
     Examples
     --------
-    >>> from bdbvhubrenewal.submission.hub import (
+    >>> from bdbvhub.submission.hub import (
     ...     model_id, to_hub_table, write_submission
     ... )
     >>> samples = forecasts.query("model == 'randomwalknowcast'")
@@ -319,7 +319,7 @@ def own_national(name: str | None) -> bool:
         return False
     import typing
 
-    from bdbvhubrenewal.forecasters import list_models
+    from bdbvhub.models import list_models
     from nowcastfoundation.forecaster import FoundationModel
 
     specs = {s.name: s for s in list_models()}

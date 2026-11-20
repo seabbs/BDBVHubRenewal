@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data import load_health_zones
+from bdbvhub.data.tidy import load_health_zones
 from nowcastfoundation.simulate import calibrated_settings, simulate_outbreak
 
 DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"

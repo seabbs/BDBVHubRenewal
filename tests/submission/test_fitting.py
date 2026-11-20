@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.cli import main
-from bdbvhubrenewal.data import coherence_summary, national_coherence
-from bdbvhubrenewal.submission.fitting import (
+from bdbvhub.cli import main
+from bdbvhub.data.tidy import coherence_summary, national_coherence
+from bdbvhub.submission.fitting import (
     list_configs,
     randomwalk_config,
     register_config,
@@ -28,7 +28,7 @@ def in_root(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # The vintages used here are in the past, and a forecast date cannot
     # follow its reference date.
     monkeypatch.setattr(
-        "bdbvhubrenewal.submission.hub.run_date",
+        "bdbvhub.submission.hub.run_date",
         lambda *_: dt.date(2026, 8, 1),
     )
     old = Path.cwd()
@@ -43,7 +43,7 @@ def plain(tmp_path_factory: pytest.TempPathFactory) -> Path:
     out = tmp_path_factory.mktemp("plain")
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(
-            "bdbvhubrenewal.submission.hub.run_date",
+            "bdbvhub.submission.hub.run_date",
             lambda *_: dt.date(2026, 8, 1),
         )
         mp.chdir(ROOT)
@@ -209,7 +209,7 @@ def test_cli_plot_ppc(tmp_path: Path) -> None:
 def test_delays_for_vintage_uses_the_latest_available(
     delays: pd.DataFrame,
 ) -> None:
-    from bdbvhubrenewal.data import delays_for_vintage
+    from bdbvhub.data.tidy import delays_for_vintage
 
     have = str(delays["vintage"].max())
     same, note = delays_for_vintage(delays, have)
@@ -234,7 +234,7 @@ def test_nowcast_notes_what_it_handled(tmp_path: Path, plain: Path) -> None:
 
 @pytest.mark.usefixtures("in_root")
 def test_submission_id_is_one_config_value(tmp_path: Path) -> None:
-    from bdbvhubrenewal.submission.hub import model_abbr_for
+    from bdbvhub.submission.hub import model_abbr_for
 
     hub_toml = ROOT / "config" / "hub.toml"
     assert model_abbr_for("renewalbvd", hub_toml) == "renewal"
@@ -270,7 +270,7 @@ def test_randomwalknowcast_has_its_own_hub_id(
 ) -> None:
     # A second hub model, submitted under its own id every round. The
     # hub's abbreviations allow no hyphen and fewer than 16 characters.
-    from bdbvhubrenewal.submission.hub import model_abbr_for
+    from bdbvhub.submission.hub import model_abbr_for
 
     abbr = model_abbr_for("randomwalknowcast", ROOT / "config" / "hub.toml")
     assert abbr == "rwnowcast"
@@ -340,7 +340,7 @@ def test_committed_renewal_metadata_is_one_of_the_variants(
 ) -> None:
     # seabbs-renewal.yml is the metadata of the variant chosen for
     # submission. After a choice, regenerate it (see
-    # bdbvhubrenewal.submission.metadata).
+    # bdbvhub.submission.metadata).
     path = ROOT / "hub" / "model-metadata" / "seabbs-renewal.yml"
     rendered = {}
     for variant in ("renewal", "renewalsp", "renewalbvd"):
@@ -453,7 +453,7 @@ def test_cli_prints_the_checkpoint_a_run_resolves(
 def test_zone_coherence(
     target: pd.DataFrame, health_zones: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.data import zone_coherence
+    from bdbvhub.data.tidy import zone_coherence
 
     table = zone_coherence(target, health_zones)
     assert set(table["level"]) == {"province", "national"}
@@ -466,7 +466,7 @@ def test_zone_coherence(
 def test_zone_coherence_reports_cases_in_no_zone(
     target: pd.DataFrame, health_zones: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.data import zone_coherence
+    from bdbvhub.data.tidy import zone_coherence
 
     zones = health_zones.copy()
     row = zones.index[

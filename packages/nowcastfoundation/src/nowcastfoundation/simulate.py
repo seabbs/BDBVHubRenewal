@@ -19,7 +19,7 @@ day, and is published after a lag of 0 to 3 days.
 `SimulatedOutbreak.vintage` publishes what the hub would show at a date:
 known onsets by onset week, missing onsets given an onset by subtracting
 a delay drawn from the hub's imputation delay at that date
-(`bdbvhubrenewal.data.delays.hub_delay_pmf`), their total, and the
+(`bdbvhub.data.delays.hub_delay_pmf`), their total, and the
 delay line data.
 `SimulatedOutbreak.truth` is the final total once every case is reported.
 """
@@ -37,9 +37,8 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbvhubrenewal.data import PROVINCE_POPULATIONS
-from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.data.tidy import province_places
+from bdbvhub.data.delays import hub_delay_pmf
+from bdbvhub.data.tidy import PROVINCE_POPULATIONS, province_places
 from nowcastrenewal.model.censored import censored_pmf
 from nowcastrenewal.model.inputs import gravity_kernel as model_gravity_kernel
 from nowcastrenewal.model.model import (

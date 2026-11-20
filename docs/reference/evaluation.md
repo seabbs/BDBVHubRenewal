@@ -7,8 +7,8 @@ Score forecasts, run the backtest and compare models with each other and with th
     options:
       members: false
 
-::: bdbvhubrenewal.evaluation.hubcompare
+::: bdbvhub.compare
 
-::: bdbvhubrenewal.evaluation.zones
+::: bdbvhub.zones
 
 ::: bdbvhubrenewal.evaluation.germany

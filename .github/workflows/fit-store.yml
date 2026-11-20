@@ -2,7 +2,7 @@ name: Fit store
 
 # Fits each fitted model once per real origin and stores the result on
 # the fit-store branch, one file per fit, keyed by a hash of what reaches
-# the fit (bdbvhubrenewal.evaluation.store.fit_key). `plan` lists the
+# the fit (bdbvhub.store.store.fit_key). `plan` lists the
 # keys the store lacks, so only those are fitted: a model code change
 # refits every origin, and a new hub release adds one fit per model.
 # Pages reads the store and never fits; this workflow rebuilds it when
@@ -22,7 +22,7 @@ on:
     branches: [main]
     paths:
       - 'src/bdbvhubrenewal/__init__.py'
-      - 'src/bdbvhubrenewal/cli.py'
+      - 'packages/bdbvhub/src/bdbvhub/cli.py'
       - 'packages/nowcastutils/**'
       - 'packages/nowcastbaselines/**'
       - 'packages/nowcastfoundation/src/**'
@@ -30,14 +30,14 @@ on:
       - 'src/bdbvhubrenewal/evaluation/__init__.py'
       - 'packages/nowcasteval/src/nowcasteval/__init__.py'
       - 'packages/nowcasteval/src/nowcasteval/backtest.py'
-      - 'src/bdbvhubrenewal/evaluation/digest.py'
+      - 'packages/bdbvhub/src/bdbvhub/store/digest.py'
       - 'packages/nowcasteval/src/nowcasteval/nowcast.py'
       - 'packages/nowcasteval/src/nowcasteval/ppc.py'
       - 'packages/nowcasteval/src/nowcasteval/scoring.py'
-      - 'src/bdbvhubrenewal/evaluation/store.py'
+      - 'packages/bdbvhub/src/bdbvhub/store/store.py'
       - 'src/bdbvhubrenewal/reporting/__init__.py'
-      - 'src/bdbvhubrenewal/submission/__init__.py'
-      - 'src/bdbvhubrenewal/submission/fitting.py'
+      - 'packages/bdbvhub/src/bdbvhub/submission/__init__.py'
+      - 'packages/bdbvhub/src/bdbvhub/submission/fitting.py'
       - 'src/bdbvhubrenewal/forecasters/**'
       - 'packages/nowcastrenewal/src/**'
       - 'config/backtest.toml'
@@ -53,7 +53,7 @@ on:
   pull_request:
     paths:
       - 'src/bdbvhubrenewal/__init__.py'
-      - 'src/bdbvhubrenewal/cli.py'
+      - 'packages/bdbvhub/src/bdbvhub/cli.py'
       - 'packages/nowcastutils/**'
       - 'packages/nowcastbaselines/**'
       - 'packages/nowcastfoundation/src/**'
@@ -61,14 +61,14 @@ on:
       - 'src/bdbvhubrenewal/evaluation/__init__.py'
       - 'packages/nowcasteval/src/nowcasteval/__init__.py'
       - 'packages/nowcasteval/src/nowcasteval/backtest.py'
-      - 'src/bdbvhubrenewal/evaluation/digest.py'
+      - 'packages/bdbvhub/src/bdbvhub/store/digest.py'
       - 'packages/nowcasteval/src/nowcasteval/nowcast.py'
       - 'packages/nowcasteval/src/nowcasteval/ppc.py'
       - 'packages/nowcasteval/src/nowcasteval/scoring.py'
-      - 'src/bdbvhubrenewal/evaluation/store.py'
+      - 'packages/bdbvhub/src/bdbvhub/store/store.py'
       - 'src/bdbvhubrenewal/reporting/__init__.py'
-      - 'src/bdbvhubrenewal/submission/__init__.py'
-      - 'src/bdbvhubrenewal/submission/fitting.py'
+      - 'packages/bdbvhub/src/bdbvhub/submission/__init__.py'
+      - 'packages/bdbvhub/src/bdbvhub/submission/fitting.py'
       - 'src/bdbvhubrenewal/forecasters/**'
       - 'packages/nowcastrenewal/src/**'
       - 'config/backtest.toml'

@@ -109,9 +109,9 @@ rule agg_data:
         """
         exec >{log} 2>&1
         export GITHUB_TOKEN=${{GITHUB_TOKEN:-$(gh auth token)}}
-        uv run python -m bdbvhubrenewal.cli data \
+        uv run python -m bdbvhub.cli data \
             --raw {params.root}/data/raw --out {params.root}/data --ref {params.ref}
-        uv run python -m bdbvhubrenewal.cli germany-fetch \
+        uv run python -m bdbvhub.cli germany-fetch \
             --out {params.root}/germany
         git show {params.zero_shot} >{output.zero_shot}
         git show {params.existing} >{output.existing}

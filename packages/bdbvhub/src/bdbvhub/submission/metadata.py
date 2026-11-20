@@ -2,7 +2,7 @@
 """Hub metadata text for each model that may be submitted.
 
 `bdbvhubrenewal metadata --model <model>` renders it with
-`bdbvhubrenewal.submission.hub.render_model_metadata`.
+`bdbvhub.submission.hub.render_model_metadata`.
 """
 
 from __future__ import annotations

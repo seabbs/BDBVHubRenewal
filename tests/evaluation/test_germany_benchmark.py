@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 from scipy.stats import norm
 
+from bdbvhub.models import list_models
 from bdbvhubrenewal.data.germany import HORIZONS, hub_target, read_triangle
 from bdbvhubrenewal.evaluation.germany import (
     PAPER_COLUMNS,
@@ -27,7 +28,6 @@ from bdbvhubrenewal.evaluation.germany import (
     team_forecasts,
     with_truth,
 )
-from bdbvhubrenewal.forecasters import list_models
 from nowcasteval.nowcast import rolling_truth
 
 ROOT = Path(__file__).resolve().parents[2]

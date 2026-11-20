@@ -114,7 +114,7 @@ def test_simulated_missing_onsets_follow_the_report_day() -> None:
 def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: ignore[no-untyped-def]
     import jax.numpy as jnp
 
-    from bdbvhubrenewal.data import PROVINCE_POPULATIONS
+    from bdbvhub.data.tidy import PROVINCE_POPULATIONS
     from nowcastrenewal.model.inputs import gravity_kernel as model_kernel
     from nowcastrenewal.model.model import (
         generation_interval,
@@ -128,7 +128,7 @@ def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: i
         list(s.locations)
     ].to_numpy()
     pop = np.array([PROVINCE_POPULATIONS[q] for q in s.locations])
-    from bdbvhubrenewal.data.tidy import province_places
+    from bdbvhub.data.tidy import province_places
 
     table = province_places(s.locations)
     w = mixing_matrix(

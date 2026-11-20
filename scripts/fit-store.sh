@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The fit store branch (`bdbvhubrenewal.evaluation.store`).
+# The fit store branch (`bdbvhub.store.store`).
 #
 #   scripts/fit-store.sh guard EVENT REF SCRATCH
 #       print `true` if the run may write a store, `false` if it only

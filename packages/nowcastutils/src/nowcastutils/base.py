@@ -121,7 +121,7 @@ class ForecastTask:
         as `daily_history`. None if there are none. Keyed as
         `zone_history`.
     zone_codes : tuple of str
-        The hub's zone codes (`bdbvhubrenewal.data.zones.hub_zones`).
+        The hub's zone codes (`bdbvhub.data.zones.hub_zones`).
         Keyed as `zone_history`.
     imputation_delay : numpy.ndarray or None
         The daily pmf of the delay the data provider subtracts from a

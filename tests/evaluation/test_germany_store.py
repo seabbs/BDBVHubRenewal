@@ -227,7 +227,7 @@ def test_the_store_script_refuses_a_partial_label(tmp_path: Path) -> None:
 def test_the_load_command_writes_the_chosen_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhubrenewal import cli
+    from bdbvhub import cli
     from nowcastfoundation import forecaster as foundation
 
     store = tmp_path / "store"
@@ -268,7 +268,7 @@ def test_the_load_command_writes_the_chosen_checkpoint(
 def test_the_load_command_writes_nothing_without_a_stored_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhubrenewal import cli
+    from bdbvhub import cli
     from nowcastfoundation import forecaster as foundation
 
     monkeypatch.setattr(foundation, "finetuned_releases", lambda: RELEASES)
@@ -319,7 +319,7 @@ def test_only_the_live_run_s_checkpoints_are_shown() -> None:
 def test_the_load_command_shows_the_live_run_with_its_label(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhubrenewal import cli
+    from bdbvhub import cli
     from nowcastfoundation import forecaster as foundation
 
     releases = [

@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.data.zones import zone_places
+from bdbvhub.data.delays import hub_delay_pmf
+from bdbvhub.data.zones import zone_places
 from nowcastrenewal.model.inputs import imputation_pmf, province_distances
 
 

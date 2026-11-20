@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from bdbvhubrenewal.data.zone_map import zone_boundaries, zone_names
+from bdbvhub.data.zone_map import zone_boundaries, zone_names
 
 SQUARE = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
 

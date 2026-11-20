@@ -1,51 +1,10 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Nowcasts and forecasts for the BDBV Modeling Hub.
+"""The German nowcasting benchmark, until it moves to its own package.
 
-The package has these parts:
+The hub code is in `bdbvhub`, the models in the `nowcast*` packages.
 
-- `data`: the hub data, dates, simulated vintages,
-  empirical delays and BVDOutbreakSize releases.
-- `forecasters`: the forecaster interface, registry, random walk and the
-  renewal variants (`forecasters.renewal`).
-- `model`: the PyRenew renewal model (JAX), imported lazily.
-- `submission`: the hub file writer and checks, model metadata, the CI
-  fit configurations and the submitted rounds.
-- `evaluation`: scoring, the backtest, posterior predictive checks and
-  the comparison with hub forecasts.
-- `reporting`: figures and docs tables.
-- `cli`: the `bdbvhubrenewal` command.
-
-- Repository: <https://github.com/seabbs/bdbv-hub-modelling>
-- Docs: <https://samabbott.co.uk/bdbv-hub-modelling/>
+- `data.germany`: the German hospitalisation nowcasting hub data as tasks.
+- `evaluation.germany`, `evaluation.germany_store`: the benchmark and its
+  store.
+- `reporting.germany`: its docs page.
 """
-
-from bdbvhubrenewal import (
-    data,
-    evaluation,
-    forecasters,
-    reporting,
-    submission,
-)
-from bdbvhubrenewal.data import load_delays, load_target
-from bdbvhubrenewal.forecasters import (
-    ForecastModel,
-    ForecastTask,
-    get_model,
-    register_model,
-)
-from bdbvhubrenewal.submission.hub import to_hub_table
-
-__all__ = [
-    "ForecastModel",
-    "ForecastTask",
-    "data",
-    "evaluation",
-    "forecasters",
-    "get_model",
-    "load_delays",
-    "load_target",
-    "register_model",
-    "reporting",
-    "submission",
-    "to_hub_table",
-]

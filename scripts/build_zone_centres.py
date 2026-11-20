@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Build `src/bdbvhubrenewal/data/zone_centres.csv`.
+"""Build `packages/bdbvhub/src/bdbvhub/data/zone_centres.csv`.
 
 Reads the INRB-UMIE build of the DRC health zone map, the source of
 `province_centres.csv`, and the hub's zone code mapping, and writes one
@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-OUT = Path("src/bdbvhubrenewal/data/zone_centres.csv")
+OUT = Path("packages/bdbvhub/src/bdbvhub/data/zone_centres.csv")
 HEADER = (
     "# Area-weighted centroids of each health zone's largest ring and "
     "WorldPop 2025 counts. Source: INRB-UMIE/BDBV2026-Data@f7d3907 "

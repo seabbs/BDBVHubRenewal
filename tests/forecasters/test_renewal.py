@@ -10,17 +10,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import (
+from bdbvhub.models import get_model, list_models
+from bdbvhub.submission.hub import model_abbr_for
+from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastrenewal import forecaster as rn
+from nowcastutils.base import (
     NATIONAL,
     ForecastModel,
     ForecastTask,
     check_samples,
-    get_model,
-    list_models,
 )
-from bdbvhubrenewal.submission.hub import model_abbr_for
-from nowcasteval.backtest import BacktestConfig, make_tasks
-from nowcastrenewal import forecaster as rn
 from nowcastutils.forecast import Forecast
 
 pytest.importorskip("pyrenew")

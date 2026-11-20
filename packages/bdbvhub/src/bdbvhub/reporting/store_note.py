@@ -3,7 +3,7 @@
 
 Every page with fitted-model results includes `fit-store.md`, written
 from the record `bdbvhubrenewal fit-store load` leaves in the results
-(`bdbvhubrenewal.evaluation.store.STATUS_FILE`): the commits the fits
+(`bdbvhub.store.store.STATUS_FILE`): the commits the fits
 were made at, and the fits for this build's code not stored yet.
 """
 
@@ -15,8 +15,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
 
-from bdbvhubrenewal.evaluation.store import STATUS_FILE
-from bdbvhubrenewal.reporting.site import site_models
+from bdbvhub.reporting.site import site_models
+from bdbvhub.store.store import STATUS_FILE
 
 __all__ = ["store_note", "write_store_note"]
 

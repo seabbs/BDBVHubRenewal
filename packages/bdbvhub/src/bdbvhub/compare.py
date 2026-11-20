@@ -49,8 +49,8 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from bdbvhubrenewal.data.zones import ZoneData
-from bdbvhubrenewal.forecasters import get_model, list_models
+from bdbvhub.data.zones import ZoneData
+from bdbvhub.models import get_model, list_models
 from nowcastbaselines.zones import zone_task
 from nowcasteval.backtest import BacktestConfig, make_tasks, run_forecasts
 from nowcasteval.nowcast import release_backtest
@@ -211,7 +211,7 @@ def own_hub_ids(path: Path | str = "config/hub.toml") -> dict[str, str]:
         `{"renewalbvd": "seabbs-renewal", "randomwalknowcast":
         "seabbs-rwnowcast"}`.
     """
-    from bdbvhubrenewal.submission.hub import model_id
+    from bdbvhub.submission.hub import model_id
 
     raw = tomllib.loads(Path(path).read_text())
     tables = {raw["submission"]["model"]: raw["submission"]}
@@ -314,7 +314,7 @@ def fetch_hub_submissions(  # pragma: no cover - network
         A manifest with the commit, the access date and each kept file,
         also written to `dest/manifest.json`.
     """
-    from bdbvhubrenewal.data.tidy import HUB_REPO, _api, _raw
+    from bdbvhub.data.tidy import HUB_REPO, _api, _raw
 
     token = token or os.environ.get("GITHUB_TOKEN")
     keep, other = Path(dest), Path(cache)
