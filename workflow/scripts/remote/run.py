@@ -76,7 +76,7 @@ def rsync(src: str, dst: str, missing_ok: bool = False) -> int:
     """Copy one file or folder; return rsync's exit code."""
     cmd = ["rsync", "-a", "-e", " ".join(compute.SSH)]
     if missing_ok:
-        cmd.append("--ignore-missing-args")
+        cmd.extend(compute.RSYNC_FLAGS)
     return subprocess.run([*cmd, src, dst]).returncode
 
 
