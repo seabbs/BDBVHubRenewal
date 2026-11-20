@@ -259,13 +259,18 @@ simulate_outbreak <- function(grid, design, v, ctx) {
       mean = observe(mu, .group, v$obs_family, v$sqrt_phi_obs)
     )]
   }))
-  pp[, location := if (multi_place && multi_age) {
-    paste(place, age, sep = "-")
-  } else if (multi_age) {
-    age
-  } else {
-    place
-  }]
+  location_of <- function(place, age) {
+    if (multi_place && multi_age) {
+      paste(place, age, sep = "-")
+    } else if (multi_age) {
+      age
+    } else {
+      place
+    }
+  }
+  pp[, location := location_of(place, age)]
+  # Each stratum's location, in the order of `stratum_population`.
+  v$stratum_location <- location_of(strata$place, strata$age)
   if (design$revisions == "yes") {
     pp <- revise_counts(pp, v)
   }
@@ -297,7 +302,10 @@ simulate_cell <- function(grid, design, ctx, id = NA_character_) {
     } else {
       first <- res$counts[draw == 1L]
       reason <- redraw_reason(sum(res$counts$count) / ctx$draws, grid)
-      if (is.na(reason)) qc_reason(first, grid) else reason
+      population <- stats::setNames(
+        res$values$stratum_population, res$values$stratum_location
+      )
+      if (is.na(reason)) qc_reason(first, grid, population) else reason
     }
     if (is.na(reason)) {
       return(list(out = res, failures = failures))
@@ -381,6 +389,10 @@ simulate_independent <- function(grid, design, ctx, id = NA_character_) {
   values$stratum_observation <- join("observation")
   values$stratum_size <- join("size")
   values$max_delay <- max(vapply(record, function(r) r$max_delay, 1))
+  values$stratum_population <- vapply(
+    strata_values, function(x) sum(x$stratum_population), 1
+  )
+  values$stratum_location <- labels[active]
   values$quiet_places <- quiet
   list(
     out = list(
@@ -484,21 +496,25 @@ redraw_reason <- function(size, grid) {
 #' Why a simulation fails the sim QC, if it does
 #'
 #' The checks of scripts/sim_qc.py on one draw's counts, with the grid's
-#' thresholds (`grid$qc`): cases per stratum with cases, the largest
-#' week-on-week rise in weekly cases by reference date (weeks from
-#' Monday), and the mean reporting delay.
+#' thresholds (`grid$qc`): more cases in a stratum than its population,
+#' the largest week-on-week rise in weekly cases by reference date (weeks
+#' from Monday), and the mean reporting delay.
 #'
 #' @param counts One draw's counts: `location`, `reference_date`,
 #'   `report_date` and `count`.
 #' @param grid A grid (`read_grid`).
+#' @param population Each stratum's population, named by location, or
+#'   `NULL` to skip the size check.
 #' @return The reason, or `NA` if the simulation passes.
 #' @export
-qc_reason <- function(counts, grid) {
+qc_reason <- function(counts, grid, population = NULL) {
   q <- grid$qc
   w <- counts$count
-  per_stratum <- sum(w) / max(1L, data.table::uniqueN(counts$location))
-  if (per_stratum > q$max_cases_per_stratum) {
-    return(sprintf("cases per stratum above %s", q$max_cases_per_stratum))
+  if (!is.null(population)) {
+    cases <- tapply(w, counts$location, sum)
+    if (any(cases > population[names(cases)], na.rm = TRUE)) {
+      return("cases in a stratum above its population")
+    }
   }
   ref <- counts$reference_date
   week <- ref - (as.integer(format(ref, "%u")) - 1L)
