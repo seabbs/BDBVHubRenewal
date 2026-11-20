@@ -507,10 +507,14 @@ def test_forecasts_carry_the_90_interval_beside_the_hub_levels(
     from bdbvhubrenewal.evaluation.germany import (
         FORECAST_LEVELS,
         QUANTILE_LEVELS,
+        paper_forecasts,
     )
 
     assert set(FORECAST_LEVELS) == {*QUANTILE_LEVELS, 0.05, 0.95}
     assert set(forecasts["quantile"].round(6)) == set(FORECAST_LEVELS)
+    # The paper's table keeps the hub's levels, which it scores.
+    paper = paper_forecasts(forecasts)
+    assert set(paper["quantile_level"].round(6)) == set(QUANTILE_LEVELS)
 
 
 def test_scores_add_90_coverage_and_keep_wis_on_the_hub_levels(
