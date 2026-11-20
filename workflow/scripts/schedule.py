@@ -33,8 +33,9 @@ def main() -> int:
     if action == "install":
         # The persistent coordinator run replaces the timer.
         print(
-            "no timer is installed any more: run `task workflow:run` once"
-            " (under nohup or tmux); `ACTION=uninstall` removes an old timer"
+            "no timer runs the workflow: run `task workflow:run` once"
+            " (under nohup or a service manager); `ACTION=uninstall`"
+            " removes an installed timer"
         )
         return 2
     cfg = localconfig.read()

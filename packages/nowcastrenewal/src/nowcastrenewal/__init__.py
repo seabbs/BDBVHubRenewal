@@ -5,6 +5,5 @@ Import from the modules themselves, for example
 `from nowcastrenewal.forecaster import RenewalModel`.
 """
 
-# The renewal models' fit keys hold `__version__` once: it moved here from
-# `bdbvhubrenewal/__init__`, which renewalsp's key no longer reads.
+# The renewal models' fit keys hold `__version__` once.
 __version__ = "0.1.0"

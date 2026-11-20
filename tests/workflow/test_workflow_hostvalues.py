@@ -13,8 +13,29 @@ import pytest
 from flowlib.hostvalues import problems
 
 ROOT = Path(__file__).parents[2]
-HOSTS = ("archie",)
-"""Machines this project has run on."""
+
+
+def _local_hosts() -> tuple[str, ...]:
+    """Host and worker names from this machine's untracked config."""
+    env = ROOT / "config" / "local.env"
+    if not env.is_file():
+        return ()
+    names = set()
+    for line in env.read_text().splitlines():
+        key, _, value = line.partition("=")
+        value = value.strip().strip('"')
+        if key.strip() == "HOST_NAME" and value:
+            names.add(value)
+        if key.strip() == "WORKERS":
+            names |= {w.split("=", 1)[0] for w in value.split() if "=" in w}
+    return tuple(sorted(names - {"local"}))
+
+
+HOSTS = _local_hosts()
+"""This machine's host and worker names (config/local.env), if any."""
+
+EXAMPLE_HOSTS = ("examplehost",)
+"""A host name for the checks of what the guard finds."""
 
 SKIP = ("tests/", "config/local.env.example", "uv.lock", "ci/uv.lock")
 
@@ -47,14 +68,14 @@ def test_no_tracked_file_holds_a_machine_s_values():
     [
         "ROOT=/home/someone/rounds",
         "cache: /Users/someone/hf",
-        "ssh archie ls",
+        "ssh examplehost ls",
         "serve on 10.0.4.2",
         "open http://127.0.0.1:8765/",
         "rsync rounds-host.example.org:22/x",
     ],
 )
 def test_each_kind_of_machine_value_is_found(text):
-    assert problems(text, HOSTS)
+    assert problems(text, EXAMPLE_HOSTS)
 
 
 @pytest.mark.parametrize(
@@ -69,4 +90,4 @@ def test_each_kind_of_machine_value_is_found(text):
     ],
 )
 def test_documented_defaults_and_versions_are_allowed(text):
-    assert problems(text, HOSTS) == []
+    assert problems(text, EXAMPLE_HOSTS) == []

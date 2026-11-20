@@ -188,14 +188,17 @@ def main() -> int:
         else:
             rc = elsewhere(cfg, worker, rec)
     finally:
-        if rc != 0:
-            say(f"exit {rc}")
-            tell(state / f"{jid}.log", files(rec["job"].get("log")))
+        # The exit file first: a failure to append the log must not leave
+        # the job without one.
         tmp = state / f"{jid}.exit.tmp"
         tmp.write_text(f"{rc}\n")
         tmp.replace(state / f"{jid}.exit")
-        if rc == 0:
-            say(f"exit {rc}")
+        say(f"exit {rc}")
+        if rc != 0:
+            try:
+                tell(state / f"{jid}.log", files(rec["job"].get("log")))
+            except (OSError, KeyError, TypeError) as err:
+                say(f"could not append the runner log: {err}")
     return rc
 
 

@@ -194,3 +194,12 @@ def test_the_grid_hashes_the_names_it_was_first_hashed_with():
         "src/bdbvhubrenewal/forecasters/finetune.py",
     }
     assert names - trainer == first
+
+
+def test_code_files_hash_the_same_from_any_directory(tmp_path, monkeypatch):
+    import finetune_chronos as ft
+
+    name = next(iter(ft.CODE))
+    here = ft.code_sha256(ft.CODE[name])
+    monkeypatch.chdir(tmp_path)
+    assert ft.code_sha256(ft.CODE[name]) == here

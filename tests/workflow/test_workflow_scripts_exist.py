@@ -20,8 +20,8 @@ def _missing() -> list[str]:
 
 @pytest.mark.xfail(
     strict=True,
-    reason="#260 merged before fm-finetune-slots, which brings the "
-    "fine-tuning and scoring scripts (#277); remove this mark when it lands",
+    reason="some fine-tuning and scoring scripts a rule runs are not in "
+    "the repository; remove this mark when they are",
 )
 def test_every_script_a_rule_runs_exists() -> None:
     assert _missing() == []

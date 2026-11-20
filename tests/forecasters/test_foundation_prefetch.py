@@ -117,8 +117,8 @@ def test_predict_gives_each_pass_its_groups_bias_rows(
 def test_native_quantiles_carry_the_series_bias(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # The weekly model's own quantiles were predicted without the rows'
-    # places, so a checkpoint's series bias was left out.
+    # The weekly model's own quantiles carry the rows' places, so a
+    # checkpoint's series bias is applied.
     seen = _bias_rows(monkeypatch)
     pipe = _Pipeline(model=object())
     monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)

@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from nowcastfoundation import forecaster as foundation
+from nowcastfoundation.backends import chronos2
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("torch") is None, reason="needs torch"
@@ -17,8 +18,8 @@ pytestmark = pytest.mark.skipif(
 @pytest.mark.parametrize(
     ("device", "capability", "want"),
     [
-        ("cuda", (7, 5), "fp16"),  # Turing: fp16 tensor cores, no bf16
-        ("cuda", (8, 6), "bf16"),  # Ampere and later
+        ("cuda", (7, 5), "fp16"),  # fp16 tensor cores, no bf16
+        ("cuda", (8, 6), "bf16"),  # compute capability 8 and above
         ("cuda:1", (9, 0), "bf16"),
         ("mps", None, "bf16"),
         ("cpu", None, "fp32"),
@@ -36,7 +37,7 @@ def test_auto_takes_each_device_s_half_precision(
         monkeypatch.setattr(
             torch.cuda, "get_device_capability", lambda *_: capability
         )
-    assert foundation.inference_precision(device, "auto") == want
+    assert chronos2.inference_precision(device, "auto") == want
 
 
 def test_precision_comes_from_the_environment_fp32_by_default(
@@ -45,12 +46,12 @@ def test_precision_comes_from_the_environment_fp32_by_default(
     # Stored fits and submissions set none, so they stay fp32 and keep
     # their keys; the scoring units get auto from the workflow.
     monkeypatch.delenv("PRECISION", raising=False)
-    assert foundation.inference_precision("cuda") == "fp32"
+    assert chronos2.inference_precision("cuda") == "fp32"
     monkeypatch.setenv("PRECISION", "bf16")
-    assert foundation.inference_precision("cpu") == "bf16"
+    assert chronos2.inference_precision("cpu") == "bf16"
     monkeypatch.setenv("PRECISION", "fp8")
     with pytest.raises(ValueError, match="fp8"):
-        foundation.inference_precision("cpu")
+        chronos2.inference_precision("cpu")
 
 
 class _Pipeline:

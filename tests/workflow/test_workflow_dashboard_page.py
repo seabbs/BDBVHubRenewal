@@ -203,9 +203,8 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
     assert "id=bdata" in out
     assert "id=seldata" in out
     assert '<option value="daily" selected>daily</option>' in out
-    # No hard-coded runs or hosts.
+    # No hard-coded runs.
     assert "no slots" not in out
-    assert "archie" not in out
 
 
 def test_the_page_never_reloads_and_a_served_one_updates_in_place(tmp_path):

@@ -66,10 +66,11 @@ def inference_precision(device: str, precision: str | None = None) -> str:
     `precision`, by default `PRECISION`, fp32 if unset: stored fits and
     submissions set none, so they stay fp32; the workflow gives scoring
     units `auto` (`flowlib.machine.torch_env`). `auto` takes each device's
-    half precision: fp16 on CUDA before Ampere (Turing has fp16 tensor
-    cores and no bf16), bf16 on Ampere and later and on Apple GPUs, fp32
-    on the CPU (bf16 ran about 5 times slower on a CPU without native
-    bf16). fp16 moved relative WIS by under 0.06% on a Turing GPU.
+    half precision: fp16 on CUDA GPUs below compute capability 8 (fp16
+    tensor cores, no bf16), bf16 on compute capability 8 and above and on
+    Apple GPUs, fp32 on the CPU (bf16 ran about 5 times slower on a CPU
+    without native bf16). fp16 moved relative WIS by under 0.06% on a GPU
+    without bf16.
 
     Raises
     ------

@@ -232,7 +232,7 @@ VARIANTS: Final[dict[str, Variant]] = {
             "Single patch: renewal fitted to each province's series on its "
             "own, with no pooling or coupling; national is their sum.",
             # One series cannot inform the share at risk, and pins its Rt
-            # walk, whose levels are then sampled (#330).
+            # walk, whose levels are then sampled.
             overrides={
                 "national": True,
                 "depletion": False,
@@ -255,8 +255,7 @@ CENTRED_RT_MIN_CASES: Final = 250
 its log Rt walk to be centred (`ModelConfig.centred_rt`). At the
 2026-11-15 release, centred walks diverged in provinces of 2 to 13 cases
 (40 to 148 of 1500 draws) and did no better at 120 cases, while at 527
-cases and above they had a step size about 5 times the non-centred one
-(#330)."""
+cases and above they had a step size about 5 times the non-centred one."""
 
 FIT_VARIANTS: Final[dict[str, str]] = {
     "main": "renewal",

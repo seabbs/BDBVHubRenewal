@@ -1,4 +1,4 @@
-"""Fixes from #267: config values keep their commas, failures are reported."""
+"""Dashboard config values keep their commas, and failures are reported."""
 
 import io
 import subprocess

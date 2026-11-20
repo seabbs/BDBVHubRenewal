@@ -1,7 +1,7 @@
 # The workflow
 
 One Snakemake workflow simulates outbreaks, fine-tunes Chronos-2 on them, publishes the checkpoints and scores them.
-The paper's workflow (`paper/workflow/Snakefile`) runs beside it for now and joins as a module next (#257).
+The paper's workflow (`paper/workflow/Snakefile`) runs beside it.
 This page walks through it in order, with the command for each piece, from a whole target down to one file.
 
 ## Running it
@@ -25,7 +25,7 @@ Low level, any output file, for example:
 
 ```sh
 uv run --group paper snakemake <ROOT>/rounds/r4/sims/counts-30421.csv.gz  # one batch
-uv run --group paper snakemake <RUN>/train/n1000/settings.json            # one checkpoint
+uv run --group paper snakemake <RUN>/train/n800/settings.json            # one checkpoint
 uv run --group paper snakemake <SCORE_CACHE>/germany-days/slots-<hash>.done    # one checkpoint's German scores
 ```
 
@@ -58,7 +58,7 @@ Every target runs with one profile, `workflow/profiles/default`, and this machin
 The coordinator needs GNU rsync 3.1 or later first on `PATH` (the copies use `--ignore-missing-args`). macOS's `/usr/bin/rsync` (openrsync) does not take it, so install rsync from Homebrew there. Submit refuses a job that would be copied with an rsync that cannot, naming the binary.
 
 - `WORKERS` lists the workers as `name=host:ROOT:CHECKOUT`: the host as ssh names it (or `local`, which may leave out ROOT and CHECKOUT for this machine's), its rounds folder and its checkout of this repository.
-- `WORKER_GROUPS` places rule groups on a worker, for example `WORKER_GROUPS="train=laptop score=server"`. The groups are `simulate`, `train`, `evaluate`, `publish` and `score` (`flowlib.compute.RULE_GROUPS`); a group left out, or `any`, runs on the first worker with room. Local rules (listings, records, publishing) always run on the coordinator.
+- `WORKER_GROUPS` places rule groups on a worker, for example `WORKER_GROUPS="train=workstation score=server"`. The groups are `simulate`, `train`, `evaluate`, `publish` and `score` (`flowlib.compute.RULE_GROUPS`); a group left out, or `any`, runs on the first worker with room. Local rules (listings, records, publishing) always run on the coordinator.
 - The pool is the sum of the workers' budgets, each read from the worker's own local config at launch (`machine.py budget`); a worker that does not answer is left out, and its jobs fail at submit until it does. A GPU rule placed by its group also takes that worker's own `gpu_<worker>`, so one worker's jobs never hold another's GPU. The submit script holds a job until it fits beside the jobs already on its worker.
 - A job on another root or checkout: the worker must answer over ssh at submit, or the job fails at once (no other worker takes it); its checkout must be at the coordinator's commit; the job's inputs are pushed by rsync, its worker's Snakemake (`WORKER_SNAKEMAKE`) runs it with the coordinator's run settings (paths moved to the worker's ROOT) and the worker's own machine settings (device, headroom, caches); then its log, and on success its outputs and `params.copy_back`, are pulled back before the job counts as done. A worker silent for 10 minutes fails the job, and its retry resumes from the saved state. The job's session has a terminal, so the worker ends the job when the session drops; a retry that still finds the job running there (its pid under the worker's ROOT, `.remote-jobs/`) fails rather than start a second copy, and a cancel stops it by that pid.
 - The trainer's own state stays on its worker, so `train` stays on one worker.
@@ -87,7 +87,7 @@ The engine is the R package `packages/nowcastfoundation/r`, run by `workflow/scr
 - `simulate_batch`: one batch of the engine through `workflow/scripts/simulate.R`, under `JOB_PREFIX` at nice 19, once there is memory, disk and load to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one, and its whole command runs with that library and the system's tools ahead of PATH (R puts the system libraries on `LD_LIBRARY_PATH`, under which a bash from another prefix fails).
 - `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
-- `sim_qc`: the sim QC (`scripts/sim_qc.py`), a record of each round (no thresholds since Sam's 13:25 decision: it records each simulation's summaries and an empty exclusion list; rounds checked before keep theirs), whose exclusions (`qc/excluded.csv`, with reason and evidence) the trainer skips. Nothing is deleted.
+- `sim_qc`: the sim QC (`scripts/sim_qc.py`), a record of each round (no thresholds: it records each simulation's summaries and an empty exclusion list), whose exclusions (`qc/excluded.csv`, with reason and evidence) the trainer skips. Nothing is deleted.
 - `round_ready`: the seed list and `READY`, last.
 - `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
 - `release_batch`, `release_qc`, `release`: opt-in, each batch and the round's QC exclusions to its round's release.
@@ -98,7 +98,7 @@ Outputs are in `<ROOT>/rounds/r<N>/`.
 
 ## 2. Fine-tune (`rules/finetune.smk`)
 
-One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into one segment per checkpoint prefix (250, 500, 750, 1,000, 2,000, 4,000, 8,400).
+One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into one segment per checkpoint prefix (`finetune.prefixes`).
 Segment N resumes from the state kept with the prefix before and stops once `n<N>` is saved (`--until N`).
 The state carries the learning-rate schedule, the step, the batch position and torch's random state, so the segments in turn are the run that never stopped.
 
@@ -106,7 +106,7 @@ The state carries the learning-rate schedule, the step, the batch position and t
 - `fetch_batch`: a batch into `<RUN>/sims/`, hard linked from this machine's rounds, copied from the rounds host's (`remote`, `REMOTE` and `REMOTE_ROOT`) or downloaded from its release (`release`; `sims_from`, or `SIMS_FROM` in `config/local.env`).
 - The batches a machine without the rounds can have are listed afresh each time a run plans (`listed_batches` in rules/common.smk, recorded in `<RUN>/available-batches.txt`): those the rounds host's manifests list (mirrored with its QC exclusions in `<RUN>/rounds/`), or those released. A segment is planned only once its batches are listed, counting the training seeds up to the first batch not yet listed, and nothing trains before the whole validation round is listed.
 - `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks after QC exclusions, one spare, and the validation round's batches. A finished checkpoint is final and is never retrained.
-- `evaluate_steps`, `evaluate_checkpoint`: with `finetune.eval: offload` the trainer only trains, saving an adapter snapshot at step 0 and each evaluation step. After each segment, `evaluate_steps` scores the snapshots (`train/evals/step-<k>.json`) and `evaluate_checkpoint` the checkpoint (`n<N>/held-out.json`, beside its settings), with the trainer's own loss functions (`workflow/scripts/evaluate_offloaded.py`). They take the GPU below the trainer, in the `evaluate` group, so `WORKER_GROUPS="evaluate=archie"` runs them off the trainer's machine. The dashboard, `checkpoint_check` and the release read the results with the trainer's (`flowlib.evaluations`).
+- `evaluate_steps`, `evaluate_checkpoint`: with `finetune.eval: offload` the trainer only trains, saving an adapter snapshot at step 0 and each evaluation step. After each segment, `evaluate_steps` scores the snapshots (`train/evals/step-<k>.json`) and `evaluate_checkpoint` the checkpoint (`n<N>/held-out.json`, beside its settings), with the trainer's own loss functions (`workflow/scripts/evaluate_offloaded.py`). They take the GPU below the trainer, in the `evaluate` group, so `WORKER_GROUPS="evaluate=server"` runs them off the trainer's machine. The dashboard, `checkpoint_check` and the release read the results with the trainer's (`flowlib.evaluations`).
 - `checkpoint_check`: a report of whether checkpoint `check_at` (800) beats zero-shot on the held-out simulations. No BDBV data is scored in development: BDBV is held out for the paper. It never stops training.
 - `finetune`: every prefix.
 
@@ -147,7 +147,7 @@ Settings:
 - `config/dashboard.local.yaml` (git ignores it; `config/dashboard.example.yaml` is committed; `DASHBOARD_CONFIG` in `config/local.env` names another file): this machine's runs (training output folders with a hue, the live run, a base run, or release prefixes), exclusions, the mirror folder, and where the score table, each dataset, the BDBV truth table, extra tables, notes and the notes file come from. A `host:path` source is copied read-only with rsync over ssh; nothing is written back.
 - `DASHBOARD_RUNS` and `--run`, `--ref`: more runs and references on top.
 
-On a laptop that trains while another machine scores:
+On a machine that trains while another scores:
 
 ```sh
 uv sync --group paper                                          # once
@@ -177,7 +177,7 @@ Work that appears during a run, such as a new checkpoint or a landed round, wait
 Snakemake locks the worktree it runs in, so each machine has one driver worktree.
 A tick is skipped when another tick is still running (a lock in `output/`) or when less than `MIN_FREE_GB` of memory or `MIN_DISK_GB` of disk is free. Its log is `output/workflow-tick.log`.
 
-`task nowcast-workflow:run` (`workflow/scripts/coordinate.py`) is the coordinator run: it runs a tick, and as soon as one ends starts the next, after `COORDINATE_PAUSE` seconds (60), or `COORDINATE_BACKOFF` (600) after a failed tick. No timer runs it: start it once, under nohup or tmux, and stop it with `touch output/coordinator.stop` (it ends after the running tick) or by its pid.
+`task nowcast-workflow:run` (`workflow/scripts/coordinate.py`) is the coordinator run: it runs a tick, and as soon as one ends starts the next, after `COORDINATE_PAUSE` seconds (60), or `COORDINATE_BACKOFF` (600) after a failed tick. No timer runs it: start it once, under nohup or a service manager, and stop it with `touch output/coordinator.stop` (it ends after the running tick) or by its pid.
 The timer that ran ticks before is not installed any more; `task nowcast-workflow:schedule` shows an old one (`ACTION=show`) and removes it (`ACTION=uninstall`).
 
 On CI, the site and the paper (`.github/workflows/pages.yml`) rebuild every 6 hours (`43 */6 * * *`, after the fit store's run) and whenever `evidence/` changes on main, so new checkpoint scores reach the docs and the paper without a manual step.

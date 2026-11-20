@@ -85,7 +85,7 @@ def test_reference_events_match_the_r_engine(history: bool) -> None:
 
 def test_an_established_stratum_opens_at_its_ascertained_level() -> None:
     # A stratum at a constant level before and during the span has
-    # constant expected reference events from day 1 (#511).
+    # constant expected reference events from day 1.
     pmf = incubation_pmf(9.0)
     events = ReferenceEvents(
         "ref",

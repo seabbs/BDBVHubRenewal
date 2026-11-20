@@ -119,7 +119,7 @@ rule score:
     input:
         # The units are asked for themselves too: with mtime triggers alone
         # (the profiles'), a new label's units missing under tables already
-        # built were "missing, no update", and ticks scored nothing new.
+        # built would be "missing, no update" and never scored.
         unit_stamps,
         rules.score_table.output,
         lambda wc: followups(wc),

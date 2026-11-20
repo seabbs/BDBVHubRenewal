@@ -23,7 +23,13 @@ import pytest
 from numpyro import handlers
 
 from nowcastrenewal.latent.pmfs import gt_pmf
-from nowcastrenewal.latent.rt import PlaceRt, RtPath, WeeklyNoise, daily_walk
+from nowcastrenewal.latent.rt import (
+    KINDS,
+    PlaceRt,
+    RtPath,
+    WeeklyNoise,
+    daily_walk,
+)
 from nowcastrenewal.latent.simulate import (
     COLUMNS,
     simulate_latent,
@@ -33,18 +39,6 @@ from nowcastrenewal.latent.start import InitializeStrata
 
 FIXTURES = Path(__file__).parent / "fixtures" / "latent"
 LATENT = sorted(FIXTURES.glob("latent-*.json"))
-KINDS = [
-    "endemic",
-    "controlled",
-    "growth",
-    "decline",
-    "flat",
-    "rise_fall_gradual",
-    "fall_rise",
-    "rise_fall_sharp",
-    "oscillating",
-    "multi_wave",
-]
 
 
 def load(name: str) -> dict[str, Any]:

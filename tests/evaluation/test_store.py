@@ -835,7 +835,7 @@ def test_load_compacts_the_zone_samples(
     import base64
     import gzip
 
-    # As the forecasts (#363): zone samples are compacted per fit and
+    # As the forecasts: zone samples are compacted per fit and
     # stacked, so the store's zone samples never sit in memory as text.
     empty = pd.DataFrame()
     keys = {}
@@ -1068,7 +1068,7 @@ def test_a_stored_fit_with_zones_archives_its_own_zones(
 ) -> None:
     # A zone fit stores its zones (`ZONES_FILE`). With no candidate config
     # the archive still gives them to the hub table, beside the stored
-    # samples, so its zones are the ones the model would submit (#366).
+    # samples, so its zones are the ones the model would submit.
     from bdbvhubrenewal.evaluation import store_archive
     from nowcastrenewal.zones import ZONES_FILE
 

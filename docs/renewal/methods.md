@@ -133,11 +133,11 @@ The submission walks a chain of candidates, `renewalbvd`, `renewalsp`, `renewal`
 ## Limitations
 
 - Fits are slow.
-  A zone fit takes 1.5 to 2 times as long as the province fits it replaced, and the time grows with the number of zones fitted.
+  A zone fit takes 1.5 to 2 times as long as a fit by province, and the time grows with the number of zones fitted.
 - The silent zones take the random walk's introductions, whose delay is fitted to pairs of releases at most 42 days apart.
   Where no pair is that close, as at the 2026-10-09 origin, the delay is fitted to the longer pairs instead.
   A day of every age at the first release of such a pair is final at the second, so the delay is still identified, but from one pair only.
-- The province fits we replaced saturated the maximum tree depth in most draws, which made their convergence slow and fragile.
+- Fits by province saturate the maximum tree depth in most draws, which makes their convergence slow and fragile.
   The zone fits do not.
   In `renewalsp`, the centred walk keeps its largest province from doing so.
 - In the backtest of the zone fits against the province fits, scored against each later release, the zone fits beat the province fits at every level.

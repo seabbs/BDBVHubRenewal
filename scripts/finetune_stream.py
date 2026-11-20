@@ -1650,11 +1650,11 @@ def main() -> None:
     base = {
         "chronos_revision": CHRONOS_REVISION,
         "code_sha256": {
-            **{n: ft._sha256(Path(p)) for n, p in ft.CODE.items()},
+            **{n: ft.code_sha256(p) for n, p in ft.CODE.items()},
             ft.TRAINER: ft._sha256(Path(__file__)),
             # The bias's code shapes a bias checkpoint, so it is hashed.
             **(
-                {n: ft._sha256(Path(p)) for n, p in BIAS_CODE.items()}
+                {n: ft.code_sha256(p) for n, p in BIAS_CODE.items()}
                 if args.series_bias
                 else {}
             ),

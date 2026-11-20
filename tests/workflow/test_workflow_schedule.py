@@ -33,7 +33,7 @@ def test_with_workers_a_tick_coordinates_them(tmp_path, monkeypatch):
     cfg = {
         "SCHEDULE_TARGETS": "simulate",
         "COMPUTE": "ssh",
-        "WORKERS": "archie=local",
+        "WORKERS": "server=local",
         "ROOT": str(tmp_path),
         "CORES": "4",
         "MEM_MB": "8192",

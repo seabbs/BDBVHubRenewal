@@ -26,7 +26,7 @@ import finetune_chronos as ft
 import finetune_stream as fs
 
 from nowcastfoundation import series_bias
-from nowcastfoundation.forecaster import torch_device
+from nowcastfoundation.backends.chronos2 import torch_device
 
 KINDS = ("start", "monitor", "by_source", "checkpoint")
 

@@ -1,7 +1,7 @@
 """Score an offloaded run's snapshots and checkpoints (rules/evaluate.smk).
 
     python workflow/scripts/evaluate_offloaded.py steps TRAIN/n<N> \
-        [--prev TRAIN/n<M>] [--eval-every K]
+        --eval-every K [--prev TRAIN/n<M>]
     python workflow/scripts/evaluate_offloaded.py checkpoint TRAIN/n<N>
 
 `steps` scores segment n<N>'s step snapshots, `checkpoint` its adapter, with
@@ -29,7 +29,7 @@ import finetune_stream as fs  # noqa: E402
 from flowlib import evaluations  # noqa: E402
 
 from nowcastfoundation import series_bias  # noqa: E402
-from nowcastfoundation.forecaster import torch_device  # noqa: E402
+from nowcastfoundation.backends.chronos2 import torch_device  # noqa: E402
 
 
 def fresh(base, device: str):
@@ -55,11 +55,11 @@ def score(base, adapter: Path, blocks, kinds, batch_size, real, device):
     return losses, time.perf_counter() - tick
 
 
-def missing(train: Path, after: int, upto: int, every: int | None) -> list[str]:
+def missing(train: Path, after: int, upto: int, every: int) -> list[str]:
     """Return the segment's due steps with neither snapshot nor result.
 
-    With `every`, each step after `after` up to `upto` that is a multiple
-    of it is due; without, the segment must hold at least one.
+    Each step after `after` up to `upto` that is a multiple of `every` is
+    due.
     """
     evals = train / "evals"
 
@@ -69,14 +69,6 @@ def missing(train: Path, after: int, upto: int, every: int | None) -> list[str]:
             evals / f"{name}.json"
         ).exists()
 
-    if every is None:
-        held = [
-            p
-            for p in evals.glob("step-*")
-            if not p.name.endswith(".tmp")
-            and after < evaluations.step_of(p.with_suffix("")) <= upto
-        ]
-        return [] if held else ["any step"]
     due = range((after // every + 1) * every, upto + 1, every)
     return [f"step-{k:07d}" for k in due if not found(k)]
 
@@ -86,7 +78,7 @@ def steps(
     prev: Path | None,
     device: str,
     real,
-    every: int | None = None,
+    every: int,
 ) -> None:
     """Score segment `where`'s step snapshots that have no result yet.
 
@@ -190,6 +182,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     device = torch_device(args.device)
     real = fs.load_blocks(args.real_validation) if args.real_validation else []
     if args.what == "steps":
+        if args.eval_every is None:
+            p.error("steps needs --eval-every")
         steps(args.where, args.prev, device, real, args.eval_every)
     else:
         checkpoint(args.where, device, real)

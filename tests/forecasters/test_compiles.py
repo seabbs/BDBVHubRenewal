@@ -6,7 +6,7 @@ programs. Compiling must not change a single draw. A change to the
 model's draws re-pins them: both for local plus global introduction
 rates, randomwalknowcast for quiet places with recent cases walking
 from their level, and both for pairing their province draws within each
-week (#253), which reorders draws and keeps every cell's.
+week, which reorders draws and keeps every cell's.
 """
 
 from __future__ import annotations

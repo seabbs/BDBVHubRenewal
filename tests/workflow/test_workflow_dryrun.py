@@ -408,7 +408,7 @@ def _checkpoint(tmp_path, n):
 
 
 def test_the_live_run_switches_over_without_retraining(tmp_path):
-    # The laptop's slots run: n250 to n750 saved without state of their
+    # The slots run: n250 to n750 saved without state of their
     # own, the trainer's state part way to n1000, and a seed list that
     # reaches 1,500 outbreaks so far.
     train = tmp_path / "checkpoints" / "slots" / "train"
@@ -527,7 +527,7 @@ def test_verify_alone_never_releases(tmp_path):
 
 def test_score_computes_nothing_on_bdbv_held_out_for_the_paper(tmp_path):
     # BDBV is held out entirely: no BDBV unit,
-    # zone unit or data refresh is a scoring job, and `zones` is gone.
+    # zone unit or data refresh is a scoring job.
     config = {"score": {"labels": ["slots-aaa", "bbb"]}}
     jobs = dry(tmp_path, "score", config=config)
     assert not {"score_bdbv", "score_zones", "bdbv_data"} & set(jobs)
@@ -591,8 +591,7 @@ def test_skipped_checkpoints_are_not_scored(tmp_path):
 
 def test_a_checkpoint_released_after_the_tables_is_scored(tmp_path):
     # With mtime triggers alone, a new label's units under tables already
-    # built were "missing, no update": every tick did nothing (r5 n4000,
-    # 2026-11-19).
+    # built would be "missing, no update", and no tick would score them.
     cache = tmp_path / "scores"
     for unit, labels in (
         ("germany-days", ["reference", "slots-aaa"]),

@@ -1,6 +1,6 @@
 """The fast weekly-delay and release-pair paths give the same density.
 
-Each fast path is checked against the code it replaces, in float64, for
+Each fast path is checked against a plain reference version, in float64, for
 the values and for the gradient.
 """
 

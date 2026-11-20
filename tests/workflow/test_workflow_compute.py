@@ -15,8 +15,8 @@ CFG = {
     "ROOT": "/srv/rounds",
     "RUN": "/srv/rounds/checkpoints/r6",
     "SCORE_CACHE": "/srv/rounds/scores",
-    "WORKERS": "archie=local laptop=mac:/Users/me/rounds:/Users/me/repo",
-    "WORKER_GROUPS": "train=laptop score=archie",
+    "WORKERS": "server=local workstation=mac:/Users/me/rounds:/Users/me/repo",
+    "WORKER_GROUPS": "train=workstation score=server",
 }
 
 
@@ -27,27 +27,29 @@ def test_single_is_the_default_and_has_no_workers():
 
 def test_workers_are_named_hosts_with_their_root_and_checkout():
     got = compute.workers(CFG, checkout="/home/me/repo")
-    assert list(got) == ["archie", "laptop"]
-    assert got["archie"] == compute.Worker(
-        "archie", "local", "/srv/rounds", "/home/me/repo"
+    assert list(got) == ["server", "workstation"]
+    assert got["server"] == compute.Worker(
+        "server", "local", "/srv/rounds", "/home/me/repo"
     )
-    assert got["laptop"] == compute.Worker(
-        "laptop", "mac", "/Users/me/rounds", "/Users/me/repo"
+    assert got["workstation"] == compute.Worker(
+        "workstation", "mac", "/Users/me/rounds", "/Users/me/repo"
     )
 
 
 def test_a_worker_needs_a_root_and_checkout_unless_local():
-    with pytest.raises(ValueError, match="laptop"):
-        compute.workers({**CFG, "WORKERS": "laptop=mac"}, checkout="/r")
+    with pytest.raises(ValueError, match="workstation"):
+        compute.workers({**CFG, "WORKERS": "workstation=mac"}, checkout="/r")
 
 
 def test_groups_name_a_worker_or_any():
-    got = compute.groups(CFG, ["archie", "laptop"])
-    assert got == {"train": "laptop", "score": "archie"}
+    got = compute.groups(CFG, ["server", "workstation"])
+    assert got == {"train": "workstation", "score": "server"}
     with pytest.raises(ValueError, match="nowhere"):
-        compute.groups({**CFG, "WORKER_GROUPS": "train=nowhere"}, ["archie"])
+        compute.groups({**CFG, "WORKER_GROUPS": "train=nowhere"}, ["server"])
     with pytest.raises(ValueError, match="group"):
-        compute.groups({**CFG, "WORKER_GROUPS": "trains=laptop"}, ["laptop"])
+        compute.groups(
+            {**CFG, "WORKER_GROUPS": "trains=workstation"}, ["workstation"]
+        )
 
 
 def test_every_heavy_rule_has_a_group():
@@ -59,8 +61,8 @@ def test_every_heavy_rule_has_a_group():
 
 
 def test_paths_under_the_root_or_checkout_move_to_the_worker():
-    laptop = compute.workers(CFG, checkout="/home/me/repo")["laptop"]
-    at = compute.mapper("/srv/rounds", "/home/me/repo", laptop)
+    workstation = compute.workers(CFG, checkout="/home/me/repo")["workstation"]
+    at = compute.mapper("/srv/rounds", "/home/me/repo", workstation)
     assert (
         at("/srv/rounds/checkpoints/r6/x")
         == "/Users/me/rounds/checkpoints/r6/x"
@@ -72,16 +74,16 @@ def test_paths_under_the_root_or_checkout_move_to_the_worker():
 
 
 def test_a_job_elsewhere_takes_the_run_settings_but_not_the_machine_ones():
-    laptop = compute.workers(CFG, checkout="/home/me/repo")["laptop"]
+    workstation = compute.workers(CFG, checkout="/home/me/repo")["workstation"]
     cfg = {
         **CFG,
         "SIMS_FROM": "local",
         "DEVICE": "cuda",
         "HEADROOM_GB": "8",
-        "HOST_NAME": "archie",
+        "HOST_NAME": "server",
         "HF_HOME": "/srv/hf",
     }
-    env = compute.job_env(cfg, laptop)
+    env = compute.job_env(cfg, workstation)
     assert env["ROOT"] == "/Users/me/rounds"
     assert env["RUN"] == "/Users/me/rounds/checkpoints/r6"
     assert env["SCORE_CACHE"] == "/Users/me/rounds/scores"
@@ -102,16 +104,16 @@ def test_a_job_fits_a_worker_with_room_left():
 
 def test_placement_takes_the_group_worker_or_the_first_that_fits():
     budgets = {
-        "archie": {"cores": 4, "mem_mb": 8000, "gpu": 1},
-        "laptop": {"cores": 8, "mem_mb": 16000, "gpu": 1},
+        "server": {"cores": 4, "mem_mb": 8000, "gpu": 1},
+        "workstation": {"cores": 8, "mem_mb": 16000, "gpu": 1},
     }
     need = {"cores": 2, "mem_mb": 4000, "gpu": 0}
-    busy = {"archie": [{"cores": 4, "mem_mb": 0, "gpu": 0}], "laptop": []}
-    assert compute.place("laptop", need, budgets, busy) == "laptop"
-    assert compute.place("archie", need, budgets, busy) is None
-    assert compute.place("any", need, budgets, busy) == "laptop"
-    idle = {"archie": [], "laptop": []}
-    assert compute.place("any", need, budgets, idle) == "archie"
+    busy = {"server": [{"cores": 4, "mem_mb": 0, "gpu": 0}], "workstation": []}
+    assert compute.place("workstation", need, budgets, busy) == "workstation"
+    assert compute.place("server", need, budgets, busy) is None
+    assert compute.place("any", need, budgets, busy) == "workstation"
+    idle = {"server": [], "workstation": []}
+    assert compute.place("any", need, budgets, idle) == "server"
 
 
 def test_single_keeps_this_machine_and_the_default_profile():
@@ -123,8 +125,8 @@ def test_single_keeps_this_machine_and_the_default_profile():
 
 def test_ssh_pools_the_workers_and_submits_through_the_scripts():
     budgets = {
-        "archie": {"cores": 12, "mem_mb": 50000, "gpu": 1},
-        "laptop": {"cores": 10, "mem_mb": 24000, "gpu": 1},
+        "server": {"cores": 12, "mem_mb": 50000, "gpu": 1},
+        "workstation": {"cores": 10, "mem_mb": 24000, "gpu": 1},
     }
     got = compute.args({**CFG, "SIM_SLOTS": "6"}, budgets=budgets)
     assert got[:2] == ["--workflow-profile", "workflow/profiles/ssh"]
@@ -188,21 +190,21 @@ def test_the_jobscript_gives_the_job_and_its_snakemake_arguments():
 
 
 BUDGETS = {
-    "archie": {"cores": 12, "mem_mb": 50000, "gpu": 1},
-    "laptop": {"cores": 10, "mem_mb": 24000, "gpu": 1},
+    "server": {"cores": 12, "mem_mb": 50000, "gpu": 1},
+    "workstation": {"cores": 10, "mem_mb": 24000, "gpu": 1},
 }
 
 
 def test_a_worker_s_gpu_is_its_own_for_the_groups_placed_on_it():
-    # Two pooled GPUs must not let two archie score units start while the
-    # laptop's GPU waits for the trainer.
+    # Two pooled GPUs must not let two server score units start while the
+    # workstation's GPU waits for the trainer.
     got = compute.args(CFG, budgets=BUDGETS)
     res = got[got.index("--resources") + 1 :]
-    assert "gpu_laptop=1" in res
-    assert "gpu_archie=1" in res
+    assert "gpu_workstation=1" in res
+    assert "gpu_server=1" in res
     sets = got[got.index("--set-resources") + 1 : got.index("--resources")]
-    assert "train_segment:gpu_laptop=1" in sets
-    assert "score_germany:gpu_archie=1" in sets
+    assert "train_segment:gpu_workstation=1" in sets
+    assert "score_germany:gpu_server=1" in sets
     assert not any(s.startswith("score_bdbv:") for s in sets)
 
 
@@ -223,7 +225,7 @@ def test_a_worker_that_does_not_answer_is_left_out(tmp_path, monkeypatch):
     monkeypatch.setenv("REMOTE_STATE", str(tmp_path))
 
     def budget_of(worker, _checkout, _cfg):
-        if worker.name == "laptop":
+        if worker.name == "workstation":
             raise subprocess.CalledProcessError(255, "ssh")
         return BUDGETS[worker.name]
 
@@ -231,7 +233,7 @@ def test_a_worker_that_does_not_answer_is_left_out(tmp_path, monkeypatch):
     got = compute.args(CFG)
     assert got[got.index("--jobs") + 1] == "12"
     saved = json.loads((tmp_path / "budgets.json").read_text())
-    assert list(saved) == ["archie"]
+    assert list(saved) == ["server"]
 
 
 def test_another_compute_names_its_profile_and_nothing_else(tmp_path):
@@ -266,7 +268,8 @@ def test_evaluation_is_a_group_a_host_can_place():
 
 def test_a_job_on_a_worker_reads_nothing_from_the_session(tmp_path):
     # ssh -tt gives the job a terminal; a job reading it (an interactive
-    # shell, which may attach tmux from its rc file) would wait forever.
+    # shell, which may start a terminal multiplexer from its rc file)
+    # would wait forever.
     w = compute.Worker("w", "local", str(tmp_path / "root"), str(tmp_path))
     command = compute.job_command(
         w, {"rule": "b", "wildcards": {}}, {"ROOT": str(tmp_path)}, "cat", []

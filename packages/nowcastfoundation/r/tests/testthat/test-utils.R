@@ -30,7 +30,7 @@ test_that("the epinowcast internals the engine calls exist in the pin", {
   for (f in c(".resolve_growth_rate_length", ".map_centred_intercepts")) {
     expect_true(
       exists(f, envir = asNamespace("epinowcast"), inherits = FALSE),
-      info = paste("epinowcast no longer has", f)
+      info = paste("epinowcast has no", f)
     )
   }
 })

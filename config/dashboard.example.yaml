@@ -61,4 +61,4 @@ notes:
 
 # A notes file shown under Recent activity ("host:path" or a local path);
 # leave it out to hide the section.
-mailbox: {source: "rounds-host:bdbv-mailbox.md", lines: 30}
+mailbox: {source: "rounds-host:notes.md", lines: 30}

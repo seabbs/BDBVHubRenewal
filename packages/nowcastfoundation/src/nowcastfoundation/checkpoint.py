@@ -309,7 +309,10 @@ PRECISION_FILE: Final = "precision.txt"
 
 def record_precision(root: Path) -> None:
     """Write the precision a unit forecasts in to its folder."""
-    from nowcastfoundation.forecaster import inference_precision, torch_device
+    from nowcastfoundation.backends.chronos2 import (
+        inference_precision,
+        torch_device,
+    )
 
     Path(root).mkdir(parents=True, exist_ok=True)
     precision = inference_precision(torch_device())
