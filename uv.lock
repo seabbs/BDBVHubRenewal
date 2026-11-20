@@ -18,10 +18,12 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "bdbvhub",
     "bdbvhubrenewal",
     "nowcastbaselines",
     "nowcasteval",
     "nowcastfoundation",
+    "nowcastgermany",
     "nowcastrenewal",
     "nowcastutils",
 ]
@@ -200,15 +202,54 @@ wheels = [
 ]
 
 [[package]]
-name = "bdbvhubrenewal"
+name = "bdbvhub"
 version = "0.1.0"
-source = { editable = "." }
+source = { editable = "packages/bdbvhub" }
 dependencies = [
     { name = "jax" },
     { name = "matplotlib" },
     { name = "nowcastbaselines" },
     { name = "nowcasteval" },
     { name = "nowcastfoundation" },
+    { name = "nowcastgermany" },
+    { name = "nowcastrenewal" },
+    { name = "nowcastutils" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "pyyaml" },
+    { name = "tabulate" },
+    { name = "tzdata" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jax", specifier = ">=0.12.0" },
+    { name = "matplotlib", specifier = ">=3.8,<4" },
+    { name = "nowcastbaselines", editable = "packages/nowcastbaselines" },
+    { name = "nowcasteval", editable = "packages/nowcasteval" },
+    { name = "nowcastfoundation", editable = "packages/nowcastfoundation" },
+    { name = "nowcastgermany", editable = "packages/nowcastgermany" },
+    { name = "nowcastrenewal", editable = "packages/nowcastrenewal" },
+    { name = "nowcastutils", editable = "packages/nowcastutils" },
+    { name = "numpy", specifier = ">=1.26,<3" },
+    { name = "pandas", specifier = ">=2.1,<4" },
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "tabulate", specifier = ">=0.9" },
+    { name = "tzdata", specifier = ">=2024.1" },
+]
+
+[[package]]
+name = "bdbvhubrenewal"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "bdbvhub" },
+    { name = "jax" },
+    { name = "matplotlib" },
+    { name = "nowcastbaselines" },
+    { name = "nowcasteval" },
+    { name = "nowcastfoundation" },
+    { name = "nowcastgermany" },
     { name = "nowcastrenewal" },
     { name = "nowcastutils" },
     { name = "numpy" },
@@ -256,11 +297,13 @@ paper = [
 
 [package.metadata]
 requires-dist = [
+    { name = "bdbvhub", editable = "packages/bdbvhub" },
     { name = "jax", specifier = ">=0.12.0" },
     { name = "matplotlib", specifier = ">=3.8,<4" },
     { name = "nowcastbaselines", editable = "packages/nowcastbaselines" },
     { name = "nowcasteval", editable = "packages/nowcasteval" },
     { name = "nowcastfoundation", editable = "packages/nowcastfoundation" },
+    { name = "nowcastgermany", editable = "packages/nowcastgermany" },
     { name = "nowcastrenewal", editable = "packages/nowcastrenewal" },
     { name = "nowcastutils", editable = "packages/nowcastutils" },
     { name = "numpy", specifier = ">=1.26,<3" },
@@ -2252,6 +2295,29 @@ requires-dist = [
     { name = "nowcastutils", editable = "packages/nowcastutils" },
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "pandas", specifier = ">=2.1,<4" },
+]
+
+[[package]]
+name = "nowcastgermany"
+version = "0.1.0"
+source = { editable = "packages/nowcastgermany" }
+dependencies = [
+    { name = "nowcasteval" },
+    { name = "nowcastfoundation" },
+    { name = "nowcastutils" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "scipy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "nowcasteval", editable = "packages/nowcasteval" },
+    { name = "nowcastfoundation", editable = "packages/nowcastfoundation" },
+    { name = "nowcastutils", editable = "packages/nowcastutils" },
+    { name = "numpy", specifier = ">=1.26,<3" },
+    { name = "pandas", specifier = ">=2.1,<4" },
+    { name = "scipy", specifier = ">=1.11,<2" },
 ]
 
 [[package]]

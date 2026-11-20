@@ -7,16 +7,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data import load_health_zones
-from bdbvhubrenewal.data.zones import hub_zones
-from bdbvhubrenewal.forecasters import (
-    NATIONAL,
-    ForecastTask,
-    RandomWalk,
-    RandomWalkNowcast,
-)
-from bdbvhubrenewal.submission.hub import to_hub_table, write_submission
-from bdbvhubrenewal.submission.validate import Hub, validate_submission
+from bdbvhub.data.tidy import load_health_zones
+from bdbvhub.data.zones import hub_zones
+from bdbvhub.submission.hub import to_hub_table, write_submission
+from bdbvhub.submission.validate import Hub, validate_submission
+from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcastbaselines.zones import (
     ZoneAllocator,
     _apportion,
@@ -28,6 +23,7 @@ from nowcastbaselines.zones import (
     zones_for_model,
 )
 from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastutils.base import NATIONAL, ForecastTask
 from nowcastutils.hierarchy import province_of
 from nowcastutils.snapshots import weekly_counts
 
@@ -510,7 +506,7 @@ def test_hub_table_checks_zone_sums_unless_told_not_to(
 
 
 def test_zones_need_not_sum_for_the_walks_and_the_foundation_model() -> None:
-    from bdbvhubrenewal.submission.hub import zones_need_not_sum
+    from bdbvhub.submission.hub import zones_need_not_sum
 
     # The walks run each zone on its own data; the foundation model takes
     # its zones straight from its block. Neither sums them to provinces.

@@ -339,7 +339,7 @@ def vintage_from_tables(
     Parameters
     ----------
     target : pandas.DataFrame
-        Rows as in `bdbvhubrenewal.data.load_target`, with `cutoff`.
+        Rows as in `bdbvhub.data.tidy.load_target`, with `cutoff`.
     delays : pandas.DataFrame or None
         Delay rows (`location`, `onset_week`, `delay`) at this vintage.
     vintage : str

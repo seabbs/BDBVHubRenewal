@@ -115,7 +115,7 @@ def test_the_summary_has_zero_shot_and_the_newest_checkpoint() -> None:
 
 
 def test_the_docs_page_gets_the_label_and_summary(tmp_path) -> None:
-    from bdbvhubrenewal.cli import main
+    from bdbvhub.cli import main
 
     scores = tmp_path / "scores.csv"
     _rows().to_csv(scores, index=False)
@@ -128,7 +128,7 @@ def test_the_docs_page_gets_the_label_and_summary(tmp_path) -> None:
 
 
 def test_the_docs_page_waits_without_scores(tmp_path) -> None:
-    from bdbvhubrenewal.cli import main
+    from bdbvhub.cli import main
 
     out = tmp_path / "ft-preliminary.md"
     missing = str(tmp_path / "none.csv")
@@ -139,7 +139,7 @@ def test_the_docs_page_waits_without_scores(tmp_path) -> None:
 
 
 def test_an_empty_scores_file_also_waits(tmp_path) -> None:
-    from bdbvhubrenewal.cli import main
+    from bdbvhub.cli import main
 
     empty = tmp_path / "scores.csv"
     empty.write_text("")

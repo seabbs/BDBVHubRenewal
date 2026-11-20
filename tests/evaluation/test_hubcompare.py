@@ -9,8 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.zones import hub_zones, load_zone_data
-from bdbvhubrenewal.evaluation.hubcompare import (
+from bdbvhub.compare import (
     ATTRIBUTION,
     OPEN_LICENCES,
     forecast_quantiles,
@@ -25,6 +24,7 @@ from bdbvhubrenewal.evaluation.hubcompare import (
     submission_dir,
     summarise_comparison,
 )
+from bdbvhub.data.zones import hub_zones, load_zone_data
 from nowcasteval.backtest import BacktestConfig
 from nowcasteval.plots import comparison_colours, plot_hub_round
 from nowcastutils.dates import reference_date_for_vintage
@@ -375,7 +375,7 @@ def test_score_comparison_scores_each_later_release(
 def test_zone_truth_fills_missing_zone_weeks_with_zero(
     target: pd.DataFrame,
 ) -> None:
-    from bdbvhubrenewal.evaluation.hubcompare import zone_truth
+    from bdbvhub.compare import zone_truth
 
     zones = pd.DataFrame(
         {
@@ -398,7 +398,7 @@ def test_zone_truth_fills_missing_zone_weeks_with_zero(
 def test_score_comparison_scores_hub_zones(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.evaluation.hubcompare import zone_truth
+    from bdbvhub.compare import zone_truth
 
     hub = _hub_rows().assign(model="teamA-weekly", source="hub")
     zone = hub.loc[hub["location"] == "CD-IT"].assign(location="CD-IT-01")
@@ -451,7 +451,7 @@ def test_summarise_comparison(
 
 
 def test_trajectory_samples_keep_open_teams_and_first_draws() -> None:
-    from bdbvhubrenewal.evaluation.hubcompare import trajectory_samples
+    from bdbvhub.compare import trajectory_samples
 
     rows = [
         {
@@ -523,7 +523,7 @@ def test_plot_hub_round(
 
 
 def test_with_submissions_keeps_main_builds_beside_submissions() -> None:
-    from bdbvhubrenewal.evaluation.hubcompare import with_submissions
+    from bdbvhub.compare import with_submissions
 
     def rows(model: str, source: str, ref: str, value: float) -> pd.DataFrame:
         return pd.DataFrame(
@@ -571,7 +571,7 @@ def test_comparison_label_names_our_hub_models() -> None:
 
 
 def test_own_hub_ids() -> None:
-    from bdbvhubrenewal.evaluation.hubcompare import own_hub_ids
+    from bdbvhub.compare import own_hub_ids
 
     ids = own_hub_ids(ROOT / "config" / "hub.toml")
     assert ids["randomwalknowcast"] == "seabbs-rwnowcast"

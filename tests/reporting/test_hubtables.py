@@ -6,10 +6,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data import load_daily_zones
-from bdbvhubrenewal.data.zones import hub_zones
-from bdbvhubrenewal.forecasters import get_model
-from bdbvhubrenewal.reporting.hubtables import (
+from bdbvhub.data.tidy import load_daily_zones
+from bdbvhub.data.zones import hub_zones
+from bdbvhub.models import get_model
+from bdbvhub.reporting.hubtables import (
     HUB_QUANTILE_LEVELS,
     hub_quantiles,
     hub_tables,
@@ -208,7 +208,7 @@ def test_a_model_that_forecasts_the_country_keeps_its_national_rows(
     # The Chronos-2 models forecast the country in their joint block, and
     # their national draws are written as they are, not as the sum of the
     # provinces. Other models' national rows are the provinces' sum.
-    from bdbvhubrenewal.reporting import hubtables
+    from bdbvhub.reporting import hubtables
     from nowcastutils.base import SAMPLE_COLUMNS
 
     real = target.loc[target["kind"] == "real"]

@@ -1,5 +1,5 @@
 # Refit the hub's onset imputation delays (HUB_GENGAMMA in
-# src/bdbvhubrenewal/data/delays.py).
+# packages/bdbvhub/src/bdbvhub/data/delays.py).
 #
 # The hub fits a generalised gamma in hours to the delays published at
 # 2026-10-17 (auxiliary-data/imputation-details.md). Releases before

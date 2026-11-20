@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.reporting import report
+from bdbvhub.reporting import report
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -22,7 +22,7 @@ read it only as page input."""
 def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     from evaluation.test_hubcompare import _write_hub
 
-    from bdbvhubrenewal.cli import main
+    from bdbvhub.cli import main
 
     gen, fig = tmp_path / "gen", tmp_path / "fig"
     report._comparison_page(fig, gen, tmp_path / "missing", target)

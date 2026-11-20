@@ -14,7 +14,7 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | `bdbvhubrenewal nowcast --model random walk --vintage <as_of> --out <dir>` | exists | `prepare` (random walk candidate and baseline) |
 | `bdbvhubrenewal metadata --model <model> --out <dir>` | exists | `gate` |
 | `scripts/validate-hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
-| `bdbvhubrenewal fit ...` | done (`bdbvhubrenewal.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the model fitted to each province on its own, `nowcastrenewal.forecaster`) | `fit` |
+| `bdbvhubrenewal fit ...` | done (`bdbvhub.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the model fitted to each province on its own, `nowcastrenewal.forecaster`) | `fit` |
 | `nowcast --config <c> --fit <dir>` | done | `fit` |
 | `bdbvhubrenewal plot-submission ...` | done, `plots.plot_submission` | every candidate |
 | `bdbvhubrenewal plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
@@ -276,7 +276,7 @@ Add `output/` to `.gitignore` if it is not already there.
 
 ## Fit key
 
-A fitted candidate's key is the fit store's (`bdbvhubrenewal.evaluation.store.fit_key`): the task at the round's origin, the model and its sampler settings, the BVDOutbreakSize release, the code the fit runs and the locked dependencies.
+A fitted candidate's key is the fit store's (`bdbvhub.store.store.fit_key`): the task at the round's origin, the model and its sampler settings, the BVDOutbreakSize release, the code the fit runs and the locked dependencies.
 It is defined in that one place, which is the lesson from BVDOutbreakSize's cache-key drift.
 The submission's task at a vintage is the store's (`backtest.vintage_task`), so the same code and data give the same key.
 

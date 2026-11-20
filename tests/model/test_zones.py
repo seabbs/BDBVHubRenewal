@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 from numpyro.infer import init_to_median
 
-from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.data.zones import zone_places
+from bdbvhub.data.delays import hub_delay_pmf
+from bdbvhub.data.zones import zone_places
 from nowcastrenewal.model import MAIN, build_model, model_args
 from nowcastrenewal.model.inputs import vintage_from_tables
 from nowcastrenewal.model.zones import (

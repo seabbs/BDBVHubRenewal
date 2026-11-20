@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data import (
+from bdbvhub.data.tidy import (
     PROVINCE_CENTRES,
     PROVINCE_POPULATIONS,
     cutoff_window,
@@ -325,7 +325,7 @@ def test_tidy_daily_keeps_zones_apart(raw: dict[str, Path]) -> None:
 
 
 def test_release_updates_count_a_vanished_row_as_a_fall() -> None:
-    from bdbvhubrenewal.data import release_updates
+    from bdbvhub.data.tidy import release_updates
 
     counts = pd.DataFrame(
         {
@@ -354,7 +354,7 @@ def test_release_updates_count_a_vanished_row_as_a_fall() -> None:
 
 
 def test_downward_summary_shares() -> None:
-    from bdbvhubrenewal.data import downward_summary
+    from bdbvhub.data.tidy import downward_summary
 
     updates = pd.DataFrame(
         {"location": ["A", "A", "A", "B"], "change": [-3, 1, 0, 6]}
@@ -369,7 +369,7 @@ def test_downward_summary_shares() -> None:
 
 
 def test_imputed_by_release(target: pd.DataFrame) -> None:
-    from bdbvhubrenewal.data import imputed_by_release
+    from bdbvhub.data.tidy import imputed_by_release
 
     out = imputed_by_release(target)
     cd = out.loc[out["location"] == "CD"]
@@ -406,7 +406,8 @@ def test_loaders_default_to_bdbv_data_dir(
     # A fit loads the populations with `load_locations()`, no directory
     # given, also in renewalsp's spawned province workers, which do not
     # inherit a default the CLI set. Only the environment reaches them.
-    from bdbvhubrenewal.data import load_locations, tidy
+    from bdbvhub.data import tidy
+    from bdbvhub.data.tidy import load_locations
 
     fixture = Path(__file__).resolve().parents[1] / "fixtures" / "data"
     monkeypatch.setattr(tidy, "_DEFAULT_DATA_DIR", tmp_path / "absent")

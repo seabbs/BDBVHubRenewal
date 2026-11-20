@@ -8,24 +8,22 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import (
-    ForecastTask,
-    ModelUnavailableError,
-    RandomWalk,
-    RandomWalkNowcast,
-    add_national,
-    check_samples,
-    get_model,
-    list_models,
-)
+from bdbvhub.models import get_model, list_models
 from nowcastbaselines.chain import (
     NoCompleteWeek,
     NoDelayPair,
     NoWalkSpread,
     Settings,
 )
+from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcasteval.backtest import BacktestConfig, make_tasks, run_forecasts
-from nowcastutils.base import MissingSnapshots
+from nowcastutils.base import (
+    ForecastTask,
+    MissingSnapshots,
+    ModelUnavailableError,
+    add_national,
+    check_samples,
+)
 
 
 def _task(

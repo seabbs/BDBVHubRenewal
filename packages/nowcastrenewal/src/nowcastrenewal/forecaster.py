@@ -17,7 +17,7 @@ This module owns everything around it:
   `delay-summary.csv` beside its forecasts;
 - `fit_renewal` and `forecast_renewal`: the `fit` and `forecast` of the
   `main` and `bvd` fit configurations
-  (`bdbvhubrenewal.submission.fitting`).
+  (`bdbvhub.submission.fitting`).
 
 This module reads only `ModelConfig`, `MAIN`, `BVD`, `zones.build_model`,
 `model_args`, `model.EXTRA_FIELDS`, `forecast_trajectories` and
@@ -1413,7 +1413,7 @@ class RenewalModel:
         --------
         Fitting takes minutes per task on a CPU.
 
-        >>> from bdbvhubrenewal.forecasters import get_model
+        >>> from bdbvhub.models import get_model
         >>> model = get_model("renewal")
         >>> samples = model.forecast(task)
         >>> model.fit_diagnostics  # divergences and R-hat of the fit

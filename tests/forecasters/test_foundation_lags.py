@@ -8,8 +8,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.zones import ZoneData, hub_zones
-from bdbvhubrenewal.forecasters import ForecastTask, get_model
+from bdbvhub.data.zones import ZoneData, hub_zones
+from bdbvhub.models import get_model
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastfoundation.forecaster import (
     LAG_QUANTILE,
@@ -18,6 +18,7 @@ from nowcastfoundation.forecaster import (
     HubTriangle,
     lag_count,
 )
+from nowcastutils.base import ForecastTask
 
 D = LAG_WINDOW["daily"][1]
 

@@ -11,8 +11,10 @@ import pandas as pd
 import pytest
 from scipy.stats import norm
 
-from bdbvhubrenewal.data.germany import HORIZONS, hub_target, read_triangle
-from bdbvhubrenewal.evaluation.germany import (
+from bdbvhub.models import list_models
+from nowcasteval.nowcast import rolling_truth
+from nowcastgermany.data import HORIZONS, hub_target, read_triangle
+from nowcastgermany.evaluation import (
     PAPER_COLUMNS,
     QUANTILE_LEVELS,
     SCORE_COLUMNS,
@@ -27,8 +29,6 @@ from bdbvhubrenewal.evaluation.germany import (
     team_forecasts,
     with_truth,
 )
-from bdbvhubrenewal.forecasters import list_models
-from nowcasteval.nowcast import rolling_truth
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = (
@@ -478,7 +478,7 @@ def test_held_out_models_wait_until_they_are_registered(caplog) -> None:
 def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     # Each German task holds its own copy of the release history, so a
     # model that is not predicted ahead builds and forecasts one date's
@@ -504,7 +504,7 @@ def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
 def test_forecasts_pass_their_horizons_and_store_them_apart(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     seen: list[tuple[int, ...]] = []
 

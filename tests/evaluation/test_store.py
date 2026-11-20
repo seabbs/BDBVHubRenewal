@@ -13,16 +13,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.zones import ZoneData, load_zone_data
-from bdbvhubrenewal.evaluation import store
-from bdbvhubrenewal.forecasters import ForecastTask, get_model
+from bdbvhub.data.zones import ZoneData, load_zone_data
+from bdbvhub.models import get_model
+from bdbvhub.store import store
 from nowcasteval.backtest import (
     BacktestConfig,
     make_tasks,
     real_vintages,
     vintage_task,
 )
-from nowcastutils.base import NATIONAL, SAMPLE_COLUMNS
+from nowcastutils.base import NATIONAL, SAMPLE_COLUMNS, ForecastTask
 from nowcastutils.forecast import Forecast
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -63,7 +63,7 @@ def tasks(
 def _copy_repo(tmp_path: Path) -> Path:
     for name in ("pyproject.toml", "uv.lock"):
         shutil.copy(ROOT / name, tmp_path / name)
-    for folder in ("src", "packages"):
+    for folder in ("packages",):
         shutil.copytree(
             ROOT / folder,
             tmp_path / folder,
@@ -207,7 +207,7 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
         path = root / rel
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
 
-    src = "src/bdbvhubrenewal"
+    hub = "packages/bdbvhub/src/bdbvhub"
     renewal = "packages/nowcastrenewal/src/nowcastrenewal"
     before = digests()
     # The zone variants share a module, so share a key, and renewalsp,
@@ -226,16 +226,16 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     assert after["renewal"] != before["renewal"]
     before = after
     # The CLI is not fit code.
-    edit(f"{src}/cli.py")
+    edit(f"{hub}/cli.py")
     assert digests() == before
     # The store's loader and IO code do not key a fit: editing them never
     # refits.
-    edit(f"{src}/evaluation/store.py")
+    edit(f"{hub}/store/store.py")
     edit("packages/nowcasteval/src/nowcasteval/backtest.py")
     assert digests() == before
     # The functions a fit runs do, for every model.
     for rel, func in (
-        (f"{src}/evaluation/store.py", "def fit("),
+        (f"{hub}/store/store.py", "def fit("),
         (
             "packages/nowcasteval/src/nowcasteval/backtest.py",
             "def run_forecasts(",
@@ -270,7 +270,7 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
 
     before = digests()
     own = store.code_digest("fm_chronos_weekly_ragged", root)
-    edit("src/bdbvhubrenewal/evaluation/zones.py")
+    edit("packages/bdbvhub/src/bdbvhub/zones.py")
     assert digests() == before
     assert store.code_digest("fm_chronos_weekly_ragged", root) == own
     edit("packages/nowcastbaselines/src/nowcastbaselines/zones.py")
@@ -316,7 +316,7 @@ def test_fit_code_is_the_models_code_not_the_store() -> None:
     # The store and the backtest module are loader and IO code; the
     # functions of theirs a fit runs are keyed by source (`FIT_FUNCTIONS`).
     for files in (renewal, walk):
-        assert "src/bdbvhubrenewal/evaluation/store.py" not in files
+        assert "packages/bdbvhub/src/bdbvhub/store/store.py" not in files
         assert "packages/nowcasteval/src/nowcasteval/backtest.py" not in files
 
 
@@ -350,7 +350,7 @@ def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
     # The gravity kernel reads the province centres at fit time.
     root = _copy_repo(tmp_path)
     before = store.code_digest("renewal", root)
-    path = root / "src/bdbvhubrenewal/data/province_centres.csv"
+    path = root / "packages/bdbvhub/src/bdbvhub/data/province_centres.csv"
     path.write_text(path.read_text() + "CD-XX,0.0,0.0\n")
     assert store.code_digest("renewal", root) != before
 
@@ -365,7 +365,7 @@ def test_report_code_does_not_key_a_fit(tmp_path: Path) -> None:
 
     before = digests()
     for rel in (
-        "src/bdbvhubrenewal/evaluation/digest.py",
+        "packages/bdbvhub/src/bdbvhub/store/digest.py",
         "packages/nowcasteval/src/nowcasteval/plots.py",
     ):
         path = root / rel
@@ -387,8 +387,8 @@ def _key_files(monkeypatch: pytest.MonkeyPatch) -> set[str]:
     """List the repository files a fit key depends on."""
     import inspect
 
-    from bdbvhubrenewal import cli
-    from bdbvhubrenewal.evaluation import digest
+    from bdbvhub import cli
+    from bdbvhub.store import digest
 
     read: set[Path] = set()
     open_ = Path.open
@@ -572,7 +572,7 @@ def test_the_stored_task_covers_the_submissions_rounds(
     import dataclasses
     import datetime as dt
 
-    from bdbvhubrenewal import cli
+    from bdbvhub import cli
     from nowcasteval.backtest import load_config
 
     config = load_config("config/backtest.toml")
@@ -684,7 +684,7 @@ def test_a_fit_that_raises_is_stored_as_failed(
 @pytest.fixture
 def candidate_flat(fitted_flat: str, monkeypatch: pytest.MonkeyPatch) -> str:
     """Make the stand-in a submission candidate, config `flatcfg`."""
-    from bdbvhubrenewal.submission import fitting
+    from bdbvhub.submission import fitting
     from nowcastrenewal import forecaster as renewal
     from nowcastutils import base
 
@@ -724,7 +724,7 @@ def test_a_candidate_fit_carries_what_the_submission_reads(
     tasks: dict[str, ForecastTask],
     tmp_path: Path,
 ) -> None:
-    from bdbvhubrenewal.submission.fitting import read_fit as read_record
+    from bdbvhub.submission.fitting import read_fit as read_record
 
     root = tmp_path / "store"
     keys = store.current_keys(tasks, [candidate_flat], {}, "c")
@@ -974,7 +974,7 @@ class _Hub:
         fit_dir: Path | None = None,
         forecast: Forecast | None = None,
     ) -> pd.DataFrame:
-        from bdbvhubrenewal.submission.hub import HUB_COLUMNS
+        from bdbvhub.submission.hub import HUB_COLUMNS
 
         if model == self.fail:
             raise ValueError("no forecast")
@@ -1004,7 +1004,7 @@ def test_the_archive_holds_the_fit_the_store_holds_at_record_time(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhub.store import archive as store_archive
 
     _plain(fitted_flat, monkeypatch)
     root = tmp_path / "store"
@@ -1069,7 +1069,7 @@ def test_a_stored_fit_with_zones_archives_its_own_zones(
     # A zone fit stores its zones (`ZONES_FILE`). With no candidate config
     # the archive still gives them to the hub table, beside the stored
     # samples, so its zones are the ones the model would submit (#366).
-    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhub.store import archive as store_archive
     from nowcastrenewal.zones import ZONES_FILE
 
     root = tmp_path / "store"
@@ -1094,7 +1094,7 @@ def test_a_model_that_fails_leaves_the_others_archived(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhub.store import archive as store_archive
     from nowcastutils import base
 
     _plain(fitted_flat, monkeypatch)
@@ -1151,7 +1151,7 @@ def test_a_model_that_fails_leaves_the_others_archived(
 
 
 def test_the_candidate_models_are_the_policy_and_the_stored_models() -> None:
-    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhub.store import archive as store_archive
 
     models = store_archive.candidate_models(ROOT / "ci/policy.toml")
     # A random walk candidate runs its model, as `candidate.sh` does.
@@ -1170,7 +1170,7 @@ def test_stored_samples_keep_the_unassigned_national_part(
     tasks: dict[str, ForecastTask],
     tmp_path: Path,
 ) -> None:
-    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhub.store import archive as store_archive
 
     task = tasks[sorted(tasks)[-1]]
     fit = store.fit(fitted_flat, task, {}, "c")
@@ -1205,8 +1205,8 @@ def test_a_stored_own_national_model_keeps_its_national_rows(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    from bdbvhubrenewal.evaluation import store_archive
-    from bdbvhubrenewal.submission.hub import to_hub_table
+    from bdbvhub.store import archive as store_archive
+    from bdbvhub.submission.hub import to_hub_table
 
     # As a Chronos-2 model, which forecasts the country in its joint
     # block and submits those national draws (`own_national`).
@@ -1252,7 +1252,7 @@ def test_stored_samples_missing_a_week_are_not_archived(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhub.store import archive as store_archive
 
     task = tasks[sorted(tasks)[-1]]
     fit = store.fit(fitted_flat, task, {}, "c")
@@ -1268,7 +1268,7 @@ def test_stored_samples_missing_a_week_are_not_archived(
 
 
 def test_the_policy_candidates_are_the_policy_models() -> None:
-    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhub.store import archive as store_archive
 
     policy = ROOT / "ci/policy.toml"
     candidates = store_archive.policy_candidates(policy)
@@ -1292,7 +1292,7 @@ def test_the_archive_s_store_task_keys_zone_models_as_the_store(
 ) -> None:
     # Models that read the zones are keyed on them, so the archive's task
     # needs them to find their stored fits.
-    from bdbvhubrenewal.evaluation import store_archive
+    from bdbvhub.store import archive as store_archive
 
     zones = ZoneData(health_zones, daily_zones, ("CD-IT-01", "CD-NK-01"))
     latest = real_vintages(target)[-1]
@@ -1359,11 +1359,20 @@ def test_fit_function_keys_name_moved_modules_by_their_old_name() -> None:
 
     old = (
         "    from bdbvhubrenewal.forecasters.renewal import FIT_VARIANTS\n"
-        "    from bdbvhubrenewal.submission.fitting import get_config\n"
+        "    from bdbvhub.submission.fitting import get_config\n"
     )
     new = (
-        "    from bdbvhubrenewal.submission.fitting import get_config\n"
+        "    from bdbvhub.submission.fitting import get_config\n"
         "    from nowcastrenewal.forecaster import FIT_VARIANTS\n"
     )
     assert dump(new) == dump(old)
     assert dump("    from nowcastrenewal.model import x\n") != dump(old)
+
+
+def test_module_keys_name_moved_packages_by_their_old_name() -> None:
+    # A data file read through a moved package (WP2b) keeps its
+    # statement's hash.
+    old = 'path = files("bdbvhubrenewal.data").joinpath("a.csv")\n'
+    new = 'path = files("bdbvhub.data").joinpath("a.csv")\n'
+    assert store._code_parts(new) == store._code_parts(old)
+    assert store._code_parts('x = "bdbvhub"\n') != store._code_parts(old)

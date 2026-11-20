@@ -3,18 +3,18 @@
 Load the hub data, build forecast vintages and simulate outbreaks to test models on. See [Getting started](../getting-started.ipynb) for a worked example.
 { .page-subtitle }
 
-::: bdbvhubrenewal.data
+::: bdbvhub.data
     options:
       members: false
 
-::: bdbvhubrenewal.data.tidy
+::: bdbvhub.data.tidy
 
 ::: nowcastfoundation.simulate
 
-::: bdbvhubrenewal.data.delays
+::: bdbvhub.data.delays
 
 ::: nowcastrenewal.bvd
 
-::: bdbvhubrenewal.data.zones
+::: bdbvhub.data.zones
 
-::: bdbvhubrenewal.data.germany
+::: nowcastgermany.data

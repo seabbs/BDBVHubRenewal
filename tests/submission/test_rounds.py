@@ -5,12 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.cli import main
-from bdbvhubrenewal.submission.rounds import (
-    freeze_round,
-    latest_run,
-    make_round_pages,
-)
+from bdbvhub.cli import main
+from bdbvhub.submission.rounds import freeze_round, latest_run, make_round_pages
 
 REF = "2026-10-31"
 

@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.digest import REPORT_ONLY, backtest_digest
+from bdbvhub.store.digest import REPORT_ONLY, backtest_digest
 from nowcasteval.backtest import BacktestConfig
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -18,8 +18,8 @@ def _digest_tree(root: Path) -> dict[str, Path]:
     for name in ("pyproject.toml", "uv.lock"):
         shutil.copy(ROOT / name, root / name)
     files = {
-        "code": root / "src/bdbvhubrenewal/evaluation/a.py",
-        "report": root / "src/bdbvhubrenewal/reporting/report.py",
+        "code": root / "packages/bdbvhub/src/bdbvhub/a.py",
+        "report": root / "packages/bdbvhub/src/bdbvhub/reporting/report.py",
         "data": root / "data/target.csv",
         "sources": root / "data/sources.json",
         "raw": root / "data/raw/x.csv",
@@ -49,34 +49,37 @@ def test_backtest_digest_follows_what_a_backtest_reads(
         before = after
 
 
-def _reporting_imports(path: Path) -> set[str]:
+SOURCES = sorted(ROOT.glob("packages/*/src"))
+
+
+def _module(rel: str) -> str:
+    """The dotted module of a source file path."""
+    parts = Path(rel).with_suffix("").parts
+    return ".".join(parts[3:] if parts[0] == "packages" else parts[1:])
+
+
+def _imports(path: Path) -> set[str]:
     found = set()
     for node in ast.walk(ast.parse(path.read_text())):
-        names = []
         if isinstance(node, ast.ImportFrom) and node.module:
-            names = [node.module]
+            found.add(node.module)
+            found |= {f"{node.module}.{a.name}" for a in node.names}
         elif isinstance(node, ast.Import):
-            names = [a.name for a in node.names]
-        found |= {
-            n.rsplit(".", 1)[1]
-            for n in names
-            if n.startswith("bdbvhubrenewal.reporting.")
-        }
+            found |= {a.name for a in node.names}
     return found
 
 
 def test_backtest_code_never_imports_report_only_modules() -> None:
-    src = ROOT / "src" / "bdbvhubrenewal"
-    report_only = {Path(p).stem for p in REPORT_ONLY}
+    report_only = {_module(p): Path(p).stem for p in REPORT_ONLY}
     assert report_only
-    for path in sorted(src.rglob("*.py")):
+    for path in sorted(p for s in SOURCES for p in s.rglob("*.py")):
         rel = path.relative_to(ROOT).as_posix()
         if rel in REPORT_ONLY:
             continue
-        used = _reporting_imports(path) & report_only
+        used = {report_only[m] for m in _imports(path) if m in report_only}
         # The `report` and `live-checkpoint` commands, which no backtest
         # runs.
-        if rel == "src/bdbvhubrenewal/cli.py":
+        if rel == "packages/bdbvhub/src/bdbvhub/cli.py":
             used -= {"report", "live_checkpoint_page"}
         assert not used, f"{rel} imports {used}"
 
@@ -85,7 +88,7 @@ def _ran(run: object) -> set[str]:
     """Run a call and return the package files whose functions it ran."""
     import sys
 
-    src = (ROOT / "src" / "bdbvhubrenewal").as_posix()
+    src = tuple(s.as_posix() for s in SOURCES)
     seen: set[str] = set()
 
     def profile(frame, event, arg):  # type: ignore[no-untyped-def]
@@ -109,11 +112,11 @@ def test_model_code_covers_what_its_forecasts_run(
     daily: pd.DataFrame,
     config: BacktestConfig,
 ) -> None:
-    from bdbvhubrenewal.data import load_daily_zones, load_health_zones
-    from bdbvhubrenewal.data.zones import hub_zones
-    from bdbvhubrenewal.evaluation.digest import model_code
-    from bdbvhubrenewal.evaluation.zones import zone_forecasts
-    from bdbvhubrenewal.forecasters import get_model
+    from bdbvhub.data.tidy import load_daily_zones, load_health_zones
+    from bdbvhub.data.zones import hub_zones
+    from bdbvhub.models import get_model
+    from bdbvhub.store.digest import model_code
+    from bdbvhub.zones import zone_forecasts
     from nowcasteval import backtest as bt
     from nowcasteval.nowcast import forecast_releases
 
@@ -146,7 +149,7 @@ def test_model_code_covers_what_its_forecasts_run(
 
 
 def test_model_code_leaves_out_other_models() -> None:
-    from bdbvhubrenewal.evaluation.digest import model_code
+    from bdbvhub.store.digest import model_code
 
     code = set(model_code("randomwalk", ROOT))
     assert (
@@ -164,7 +167,7 @@ def test_model_code_leaves_out_other_models() -> None:
 
 
 def test_a_fit_key_holds_the_zone_split_only_where_its_model_calls_it() -> None:
-    from bdbvhubrenewal.evaluation.store import fit_code
+    from bdbvhub.store.store import fit_code
 
     zones = "packages/nowcastbaselines/src/nowcastbaselines/zones.py"
     # The province-level models split their zones in their own forecast
@@ -191,7 +194,7 @@ def test_fit_code_covers_what_a_stored_fit_runs(
     daily: pd.DataFrame,
     config: BacktestConfig,
 ) -> None:
-    from bdbvhubrenewal.evaluation import store
+    from bdbvhub.store import store
 
     tasks = store.origin_tasks(target, delays, config, daily)
     task = tasks[sorted(tasks)[-1]]
@@ -219,9 +222,9 @@ def test_model_code_follows_imports_into_workspace_packages(
 ) -> None:
     # The packages move (WP2b) puts modules under packages/<name>/src, so
     # the walk resolves each top-level package to its own source folder.
-    from bdbvhubrenewal.evaluation.digest import model_code
+    from bdbvhub.store.digest import model_code
 
-    for folder in ("src", "packages"):
+    for folder in ("packages",):
         shutil.copytree(
             ROOT / folder,
             tmp_path / folder,

@@ -17,8 +17,9 @@ import pandas as pd
 import pytest
 from jax import monitoring
 
-from bdbvhubrenewal.forecasters import ForecastTask, get_model
+from bdbvhub.models import get_model
 from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastutils.base import ForecastTask
 
 PINNED = {
     "randomwalk": "fe2c1691ad12ac90",

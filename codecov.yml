@@ -1,4 +1,4 @@
-# Coverage for the package (src/) and the submission CI (ci/), one flag
+# Coverage for the packages (packages/) and the submission CI (ci/), one flag
 # each. Each workflow uploads only its own flag and runs only when its
 # files change, so carryforward keeps the last result for the other.
 codecov:
@@ -20,7 +20,7 @@ coverage:
 flags:
   package:
     paths:
-      - src/
+      - packages/
     carryforward: true
   ci:
     paths:

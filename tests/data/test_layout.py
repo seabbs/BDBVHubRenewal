@@ -20,7 +20,7 @@ GENERIC = (
     "nowcastutils.base",
 )
 
-HUB_ZONES = "bdbvhubrenewal.data.zones"
+HUB_ZONES = "bdbvhub.data.zones"
 
 
 def _file(module: str) -> Path:
@@ -78,7 +78,7 @@ def test_generic_helpers_live_in_generic_modules() -> None:
 
 
 def test_hub_release_labels_live_with_the_hub_data() -> None:
-    hub = _defs("bdbvhubrenewal.data.tidy")
+    hub = _defs("bdbvhub.data.tidy")
     assert {"ORIGINAL_AS_OF", "release_id"} <= hub
     labels = {"ORIGINAL_AS_OF", "release_id"}
     assert not labels & _defs("nowcastutils.releases")
@@ -104,10 +104,10 @@ def test_zone_levels_and_weekly_counts_are_generic() -> None:
     assert "weekly_counts" in _defs("nowcastutils.snapshots")
     moved = {"is_zone", "province_of", "weekly_zone_counts"}
     assert not moved & _defs(HUB_ZONES)
-    root = _file("bdbvhubrenewal").parent
+    root = _file("bdbvhub").parent
     for path in root.rglob("*.py"):
         module = ".".join(
-            ("bdbvhubrenewal", *path.relative_to(root).with_suffix("").parts)
+            ("bdbvhub", *path.relative_to(root).with_suffix("").parts)
         ).removesuffix(".__init__")
         names = _imports_from(module, HUB_ZONES)
         assert not names & moved, (module, names & moved)
@@ -131,7 +131,7 @@ def test_renewal_code_reads_no_hub_delay_or_places() -> None:
         "nowcastrenewal.forecaster",
         "nowcastrenewal.zones",
     ):
-        assert "bdbvhubrenewal.data.delays" not in _imported(module), module
-        loaders = _imports_from(module, "bdbvhubrenewal.data")
+        assert "bdbvhub.data.delays" not in _imported(module), module
+        loaders = _imports_from(module, "bdbvhub.data.tidy")
         assert "load_locations" not in loaders, module
     assert "zone_places" in _defs(HUB_ZONES)

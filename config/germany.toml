@@ -1,6 +1,6 @@
 # German COVID-19 hospitalisation nowcast benchmark (Wolffram et al. 2023,
 # PLOS Comp Biol, doi:10.1371/journal.pcbi.1011394). Read by
-# `bdbvhubrenewal.evaluation.germany.load_germany_config`.
+# `nowcastgermany.evaluation.load_germany_config`.
 # `bdbvhubrenewal germany-fetch` downloads the files below at these commits
 # into data/raw/germany/, which is not committed. The data come from the
 # Robert Koch Institute (CC BY 4.0) through the hub.

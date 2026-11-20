@@ -5,7 +5,6 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import NATIONAL
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcasteval.nowcast import rolling_truth
 from nowcasteval.pairing import (
@@ -14,6 +13,7 @@ from nowcasteval.pairing import (
     variant_forecasts,
     variant_scores,
 )
+from nowcastutils.base import NATIONAL
 
 
 @pytest.fixture(scope="module")

@@ -239,8 +239,8 @@ def test_there_is_no_clock_shift() -> None:
 def test_no_walk_spread_anywhere_raises(snap24, monkeypatch) -> None:
     # If no place, pool or country has a walk variance above 0, there is
     # no spread to fall back on, so the model gives no forecast.
-    from bdbvhubrenewal.forecasters import ModelUnavailableError
     from nowcastbaselines import chain
+    from nowcastutils.base import ModelUnavailableError
 
     def flat(reported, *_):
         n = reported.shape[0]
@@ -319,8 +319,8 @@ def test_downward_revisions_move_onto_earlier_releases(snap24) -> None:
 def test_no_nowcast_is_below_the_reported_count_at_11_01(
     daily: pd.DataFrame, daily_zones: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.data import load_health_zones  # noqa: F401
-    from bdbvhubrenewal.data.zones import hub_zones
+    from bdbvhub.data.tidy import load_health_zones  # noqa: F401
+    from bdbvhub.data.zones import hub_zones
 
     data = Path(__file__).resolve().parents[1] / "fixtures" / "data"
     zones = hub_zones(data / "hub-config" / "tasks.json")

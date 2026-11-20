@@ -4,7 +4,7 @@ import pytest
 from jax import random
 from numpyro.infer import Predictive, init_to_median
 
-from bdbvhubrenewal.data.delays import hub_delay_pmf
+from bdbvhub.data.delays import hub_delay_pmf
 from nowcastrenewal.model import MAIN, ModelConfig, build_model, model_args
 from nowcastrenewal.model.inputs import vintage_from_tables
 from nowcastrenewal.model.model import LADDER, incubation_period, seed_lead
@@ -172,7 +172,7 @@ def test_main_is_the_last_ladder_step():
 
 
 def test_real_data_kernels_are_finite(table):
-    from bdbvhubrenewal.data import load_delays, load_target
+    from bdbvhub.data.tidy import load_delays, load_target
 
     from .conftest import MAIN_REPO_DATA
 

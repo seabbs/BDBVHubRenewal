@@ -5,7 +5,7 @@ Run the package from the shell with the `bdbvhubrenewal` command. See [Getting s
 
 The [CLI guide](../development/cli.md) explains what each command writes and how they fit together.
 
-::: bdbvhubrenewal.cli
+::: bdbvhub.cli
     options:
       members:
         - main

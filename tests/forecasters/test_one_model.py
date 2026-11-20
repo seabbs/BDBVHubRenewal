@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import ForecastTask, get_model
+from bdbvhub.models import get_model
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastfoundation import forecaster as foundation
 from nowcastfoundation import series_bias
@@ -24,6 +24,7 @@ from nowcastfoundation.forecaster import (
     layout_block,
     week_rows,
 )
+from nowcastutils.base import ForecastTask
 
 # Two Saturdays, 2026-10-03 and 2026-10-10, in a fortnight of days.
 DAYS = [
@@ -231,7 +232,7 @@ def test_one_forecast_gives_daily_draws_from_the_count_rows_too(
 def test_german_7_day_totals_end_on_the_nowcast_date():
     # German tasks move every date to the next Saturday, so the weekly
     # total rows end on the nowcast date and every 7 days back.
-    from bdbvhubrenewal.data.germany import HORIZONS, _shift
+    from nowcastgermany.data import HORIZONS, _shift
 
     nowcast = "2021-11-17"  # a Wednesday
     shifted = pd.Timestamp(nowcast) + _shift(nowcast)

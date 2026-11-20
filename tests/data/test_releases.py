@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.tidy import ORIGINAL_AS_OF, release_id
+from bdbvhub.data.tidy import ORIGINAL_AS_OF, release_id
 from nowcastutils.releases import (
     latest_onset_days,
     release_cutoff,

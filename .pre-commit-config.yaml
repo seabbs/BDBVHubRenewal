@@ -21,19 +21,19 @@ repos:
         entry: uv run ruff check --fix
         language: system
         types: [python]
-        files: ^(src|packages|tests|workflow|scripts)/
+        files: ^(packages|tests|workflow|scripts)/
       - id: ruff-format
         name: ruff format
         entry: uv run ruff format
         language: system
         types: [python]
-        files: ^(src|packages|tests|workflow|scripts)/
+        files: ^(packages|tests|workflow|scripts)/
       - id: mypy
         name: mypy
-        entry: uv run mypy src packages/nowcastutils/src packages/nowcasteval/src packages/nowcastbaselines/src packages/nowcastfoundation/src packages/nowcastrenewal/src
+        entry: uv run mypy packages/nowcastutils/src packages/nowcasteval/src packages/nowcastbaselines/src packages/nowcastfoundation/src packages/nowcastrenewal/src packages/nowcastgermany/src packages/bdbvhub/src
         language: system
         types: [python]
-        files: ^(src|packages)/
+        files: ^packages/
         pass_filenames: false
       - id: ruff-ci
         name: ruff (ci/)

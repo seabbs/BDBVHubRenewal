@@ -9,10 +9,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import ForecastTask, get_model
+from bdbvhub.models import get_model
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcasteval.marginals import forecast_quantiles
 from nowcastfoundation import forecaster as foundation
+from nowcastutils.base import ForecastTask
 
 LEVELS = (0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)
 

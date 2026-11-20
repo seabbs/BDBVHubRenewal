@@ -10,8 +10,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.germany import load_germany_config
-from bdbvhubrenewal.evaluation.germany_store import (
+from nowcastfoundation.checkpoint import GERMANY_UNIT
+from nowcastgermany.evaluation import load_germany_config
+from nowcastgermany.store import (
     STORED_MODELS,
     choose_checkpoint,
     development_rows,
@@ -19,7 +20,6 @@ from bdbvhubrenewal.evaluation.germany_store import (
     release_tag,
     write_stored,
 )
-from nowcastfoundation.checkpoint import GERMANY_UNIT
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = load_germany_config(ROOT / "config" / "germany.toml")
@@ -227,7 +227,7 @@ def test_the_store_script_refuses_a_partial_label(tmp_path: Path) -> None:
 def test_the_load_command_writes_the_chosen_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhubrenewal import cli
+    from bdbvhub import cli
     from nowcastfoundation import forecaster as foundation
 
     store = tmp_path / "store"
@@ -268,7 +268,7 @@ def test_the_load_command_writes_the_chosen_checkpoint(
 def test_the_load_command_writes_nothing_without_a_stored_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhubrenewal import cli
+    from bdbvhub import cli
     from nowcastfoundation import forecaster as foundation
 
     monkeypatch.setattr(foundation, "finetuned_releases", lambda: RELEASES)
@@ -319,7 +319,7 @@ def test_only_the_live_run_s_checkpoints_are_shown() -> None:
 def test_the_load_command_shows_the_live_run_with_its_label(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhubrenewal import cli
+    from bdbvhub import cli
     from nowcastfoundation import forecaster as foundation
 
     releases = [

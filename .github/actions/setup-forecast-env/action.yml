@@ -48,7 +48,7 @@ runs:
       with:
         path: ~/.cache/jax
         key: >-
-          jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}${{ hashFiles('uv.lock', 'src/**') }}
+          jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}${{ hashFiles('uv.lock', 'packages/*/src/**') }}
         restore-keys: |
           jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}
           jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-
@@ -58,7 +58,7 @@ runs:
       with:
         path: ~/.cache/jax
         key: >-
-          jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}${{ hashFiles('uv.lock', 'src/**') }}
+          jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}${{ hashFiles('uv.lock', 'packages/*/src/**') }}
         restore-keys: |
           jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-${{ inputs.jax-scope && format('{0}-', inputs.jax-scope) || '' }}
           jax-${{ runner.os }}-${{ steps.cpu.outputs.id }}-

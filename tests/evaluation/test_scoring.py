@@ -321,7 +321,7 @@ def test_score_forecasts_gives_log_crps() -> None:
 
 def test_german_quantile_scores_stay_wis() -> None:
     # The German benchmark scores quantile forecasts, so it keeps WIS.
-    from bdbvhubrenewal.evaluation import germany
+    from nowcastgermany import evaluation as germany
 
     assert "wis" in germany.SCORE_COLUMNS
     assert "crps" not in germany.SCORE_COLUMNS

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import get_model
+from bdbvhub.models import get_model
 from nowcastbaselines.chain import delay_summary
 from nowcastbaselines.randomwalk import RandomWalkNowcast
 from nowcasteval.backtest import (

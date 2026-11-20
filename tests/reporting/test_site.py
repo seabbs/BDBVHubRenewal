@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.evaluation import zones
-from bdbvhubrenewal.evaluation.hubcompare import load_comparison_config
-from bdbvhubrenewal.reporting import report
-from bdbvhubrenewal.reporting.site import load_site_config, site_baseline
+from bdbvhub import zones
+from bdbvhub.compare import load_comparison_config
+from bdbvhub.reporting import report
+from bdbvhub.reporting.site import load_site_config, site_baseline
 from nowcasteval import checks, nowcast_plots, plots, scoresummary
 
 ROOT = Path(__file__).parents[2]
@@ -80,12 +80,14 @@ def test_comparisons_zones_and_history_use_randomwalknowcast() -> None:
 
 
 def test_no_table_filter_defaults_to_randomwalk() -> None:
-    source = (ROOT / "src/bdbvhubrenewal/reporting/report.py").read_text()
+    source = (
+        ROOT / "packages/bdbvhub/src/bdbvhub/reporting/report.py"
+    ).read_text()
     assert '{"baseline": "randomwalk"}' not in source
 
 
 def test_the_site_shows_one_chronos_model() -> None:
-    from bdbvhubrenewal.reporting.site import site_models
+    from bdbvhub.reporting.site import site_models
 
     names = [
         "randomwalk",
@@ -122,7 +124,7 @@ def test_the_pages_list_only_shown_models() -> None:
 
 
 def test_hidden_models_leave_the_germany_page(tmp_path: Path) -> None:
-    from bdbvhubrenewal.reporting import germany
+    from nowcastgermany import reporting as germany
 
     pd.DataFrame(
         {
@@ -151,7 +153,7 @@ def test_hidden_models_leave_the_comparison_rows() -> None:
 def test_hidden_models_leave_the_store_note(tmp_path: Path) -> None:
     import json
 
-    from bdbvhubrenewal.reporting.store_note import write_store_note
+    from bdbvhub.reporting.store_note import write_store_note
 
     def row(model: str) -> dict:
         return {

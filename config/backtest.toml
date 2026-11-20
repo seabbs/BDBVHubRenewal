@@ -1,4 +1,4 @@
-# Backtest settings. Read by `bdbvhubrenewal.backtest.load_config`.
+# Backtest settings. Read by `nowcasteval.backtest.load_config`.
 
 [forecast]
 # Weeks in each forecast, as horizons in weeks from the reference date.
@@ -42,7 +42,7 @@ truth_level = 0.98
 [sampler]
 # NUTS settings of leave-one-province-out fits only. Stored backtest
 # fits use each model's sampler table in ci/policy.toml
-# (bdbvhubrenewal.evaluation.store). Settings in BDBV_RENEWAL_SAMPLER win
+# (bdbvhub.store.store). Settings in BDBV_RENEWAL_SAMPLER win
 # over these.
 num_chains = 2
 num_warmup = 500

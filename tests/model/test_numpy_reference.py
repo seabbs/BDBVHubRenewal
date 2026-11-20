@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bdbvhubrenewal.data.delays import hub_delay_pmf
+from bdbvhub.data.delays import hub_delay_pmf
 from nowcastrenewal.model import censored_pmf, generation_interval
 
 from .numpy_reference import (

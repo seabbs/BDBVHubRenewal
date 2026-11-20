@@ -47,7 +47,7 @@ tasks:
   test:
     desc: Run the tests with coverage
     cmds:
-      - uv run pytest -q --cov=bdbvhubrenewal
+      - uv run pytest -q --cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal --cov=nowcastgermany --cov=bdbvhub
 
 
   test-slow:
@@ -66,16 +66,16 @@ tasks:
   lint:
     desc: Lint, check formatting and type-check
     cmds:
-      - uv run ruff check src packages tests workflow scripts
-      - uv run ruff format --check src packages tests workflow scripts
-      - uv run mypy src packages/*/src
+      - uv run ruff check packages tests workflow scripts
+      - uv run ruff format --check packages tests workflow scripts
+      - uv run mypy packages/*/src
 
 
   format:
     desc: Format and fix lint where safe
     cmds:
-      - uv run ruff format src packages tests workflow scripts
-      - uv run ruff check --fix src packages tests workflow scripts
+      - uv run ruff format packages tests workflow scripts
+      - uv run ruff check --fix packages tests workflow scripts
 
 
   getting-started:

@@ -74,7 +74,7 @@ def _data_dir() -> Path:
 
 
 def _daily_zones() -> pd.DataFrame:
-    from bdbvhubrenewal.data import load_daily_zones
+    from bdbvhub.data.tidy import load_daily_zones
 
     return load_daily_zones(_data_dir())
 
@@ -95,7 +95,7 @@ def task_zones(task: ForecastTask) -> tuple[str, ...]:
     tuple of str
         Zone codes, sorted.
     """
-    from bdbvhubrenewal.data.zones import hub_zones
+    from bdbvhub.data.zones import hub_zones
     from nowcastutils.hierarchy import province_of
 
     tasks_json = _data_dir() / "hub-config" / "tasks.json"
@@ -244,7 +244,7 @@ def zone_bvd_rows(
         path.write_bytes(body)
     est = pd.read_csv(path)
     if names is None:
-        from bdbvhubrenewal.data import load_health_zones
+        from bdbvhub.data.tidy import load_health_zones
 
         names = load_health_zones(_data_dir())
     hub = names.drop_duplicates("location")
@@ -500,7 +500,7 @@ class ZoneRenewalModel(RenewalModel):
         digest = hashlib.sha256(mine.to_csv(index=False).encode())
         digest.update(repr(task_zones(task)).encode())
         if model_config(self.variant).bvd:
-            from bdbvhubrenewal.data import load_health_zones
+            from bdbvhub.data.tidy import load_health_zones
 
             names = load_health_zones(_data_dir())
             digest.update(names.to_csv(index=False).encode())

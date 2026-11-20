@@ -71,11 +71,11 @@ class ForecastTask:
         (`nowcastutils.releases.release_cutoff`).
     target : pandas.DataFrame
         The target table rows of this vintage only (columns as in
-        `bdbvhubrenewal.data.tidy_target`), for the country and
+        `bdbvhub.data.tidy.tidy_target`), for the country and
         provinces.
     delays : pandas.DataFrame or None
         Delay line data available at this vintage (see
-        `bdbvhubrenewal.data.tidy_delays`), or None if none was published.
+        `bdbvhub.data.tidy.tidy_delays`), or None if none was published.
     locations : tuple of str
         Provinces to forecast.
     target_end_dates : tuple of str
@@ -114,14 +114,14 @@ class ForecastTask:
         if there are none.
     zone_history : pandas.DataFrame or None
         Health-zone target rows of every release on or before `vintage`
-        (`bdbvhubrenewal.data.load_health_zones`). None if there are none.
+        (`bdbvhub.data.tidy.load_health_zones`). None if there are none.
         Only models with `reads_zones` set have it in their fit key.
     zone_daily_history : pandas.DataFrame or None
         Daily health-zone onsets of every release on or before `vintage`,
         as `daily_history`. None if there are none. Keyed as
         `zone_history`.
     zone_codes : tuple of str
-        The hub's zone codes (`bdbvhubrenewal.data.zones.hub_zones`).
+        The hub's zone codes (`bdbvhub.data.zones.hub_zones`).
         Keyed as `zone_history`.
     imputation_delay : numpy.ndarray or None
         The daily pmf of the delay the data provider subtracts from a
@@ -280,7 +280,7 @@ def register_model(
     Examples
     --------
     >>> from dataclasses import dataclass
-    >>> from bdbvhubrenewal.forecasters import register_model
+    >>> from nowcastutils.base import register_model
     >>> @dataclass
     ... class Flat:
     ...     name: str = "flat"
@@ -315,7 +315,7 @@ def get_model(name: str) -> ForecastModel:
 
     Examples
     --------
-    >>> from bdbvhubrenewal.forecasters import get_model, list_models
+    >>> from bdbvhub.models import get_model, list_models
     >>> [spec.name for spec in list_models()]
     ['randomwalk', 'randomwalknowcast', 'renewal', 'renewalbvd', 'renewalsp']
     >>> model = get_model("randomwalknowcast")
@@ -336,7 +336,7 @@ def list_models() -> list[ModelSpec]:
 
     Examples
     --------
-    >>> from bdbvhubrenewal.forecasters import list_models
+    >>> from bdbvhub.models import list_models
     >>> for spec in list_models():
     ...     print(spec.name, spec.description)
     """

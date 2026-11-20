@@ -21,6 +21,8 @@ dependencies = [
   "nowcastbaselines",
   "nowcastfoundation",
   "nowcastrenewal",
+  "nowcastgermany",
+  "bdbvhub",
 ]
 keywords = [
   "epidemiology",
@@ -53,13 +55,6 @@ Homepage = "https://samabbott.co.uk/bdbv-hub-modelling/"
 Documentation = "https://samabbott.co.uk/bdbv-hub-modelling/"
 Repository = "https://github.com/seabbs/bdbv-hub-modelling"
 Issues = "https://github.com/seabbs/bdbv-hub-modelling/issues"
-
-[project.scripts]
-bdbvhubrenewal = "bdbvhubrenewal.cli:main"
-
-[build-system]
-requires = ["uv_build>=0.8,<0.14"]
-build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
@@ -95,6 +90,10 @@ paper = [
 
 [tool.uv]
 default-groups = ["dev"]
+# The workspace root holds no code of its own: the packages are in
+# packages/, and `bdbvhub` installs the `bdbvhub` and `bdbvhubrenewal`
+# commands.
+package = false
 
 [[tool.uv.index]]
 name = "pytorch-cu126"
@@ -108,12 +107,11 @@ nowcasteval = { workspace = true }
 nowcastbaselines = { workspace = true }
 nowcastfoundation = { workspace = true }
 nowcastrenewal = { workspace = true }
+bdbvhub = { workspace = true }
+nowcastgermany = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
-
-[tool.uv.build-backend]
-module-name = "bdbvhubrenewal"
 
 [tool.ruff]
 line-length = 80
@@ -145,12 +143,12 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = [
-  "bdbvhubrenewal",
   "nowcastutils",
   "nowcasteval",
   "nowcastbaselines",
   "nowcastfoundation",
   "nowcastrenewal",
+  "nowcastgermany",
   "bdbvhub",
 ]
 
@@ -163,7 +161,7 @@ convention = "numpy"
 # Ported from the hub validation bundle, whose checks are named after
 # hubValidations' and are documented in docs/submission/hub-spec.md.
 # The small config classes and helpers carry no docstrings.
-"src/bdbvhubrenewal/submission/validate.py" = ["D101", "D102", "D103"]
+"packages/bdbvhub/src/bdbvhub/submission/validate.py" = ["D101", "D102", "D103"]
 # Method signatures follow PyRenew's, and maths names keep their capitals.
 "packages/nowcastrenewal/src/nowcastrenewal/model/**" = ["ARG002", "N803", "N806", "PTH123"]
 "packages/nowcastrenewal/src/nowcastrenewal/latent/**" = ["ARG002", "N803", "N806"]
@@ -187,7 +185,15 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["bdbvhubrenewal"]
+source = [
+  "nowcastutils",
+  "nowcasteval",
+  "nowcastbaselines",
+  "nowcastfoundation",
+  "nowcastrenewal",
+  "nowcastgermany",
+  "bdbvhub",
+]
 branch = true
 
 [tool.coverage.report]
@@ -198,7 +204,7 @@ skip_covered = true
 python_version = "3.13"
 strict = true
 warn_unreachable = true
-files = ["src"]
+files = ["packages/*/src"]
 
 [[tool.mypy.overrides]]
 # matplotlib's date locators and formatters are untyped.

@@ -357,7 +357,7 @@ def german_tasks_dir(
     import hashlib
     import inspect
 
-    from bdbvhubrenewal.data import germany as dg
+    from nowcastgermany import data as dg
     from nowcastutils import base, dates
 
     h = hashlib.sha256()
@@ -374,8 +374,8 @@ def german_tasks_dir(
 
 def germany_unit(cache: Path, label: str) -> None:
     """Nowcast each German development date, own quantiles with truth."""
-    from bdbvhubrenewal.data.germany import hub_triangle
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
+    from nowcastgermany.data import hub_triangle
 
     _pin(label)
     config = de.load_germany_config("config/germany.toml")
@@ -478,7 +478,7 @@ def _with_precision(
 
 def germany_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
     """Return the German development half's rule rows."""
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     config = de.load_germany_config("config/germany.toml")
     parts = []

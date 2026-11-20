@@ -1,0 +1,25 @@
+[project]
+name = "nowcastgermany"
+version = "0.1.0"
+description = "The German hospitalisation nowcasting hub as a case study: its data as tasks, the benchmark, its store and its page"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Sam Abbott", email = "sam.abbott@lshtm.ac.uk" }]
+requires-python = ">=3.13"
+dependencies = [
+  "numpy>=1.26,<3",
+  "pandas>=2.1,<4",
+  "scipy>=1.11,<2",
+  "nowcastutils",
+  "nowcasteval",
+  "nowcastfoundation",
+]
+
+[tool.uv.sources]
+nowcastutils = { workspace = true }
+nowcasteval = { workspace = true }
+nowcastfoundation = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.8,<0.14"]
+build-backend = "uv_build"

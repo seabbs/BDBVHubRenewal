@@ -186,17 +186,17 @@ def check_sources(sources: tuple[str, ...]) -> None:
 
 
 def check_package(root: Path) -> None:
-    """Raise unless `bdbvhubrenewal` is imported from `root`'s src.
+    """Raise unless `nowcastfoundation` is imported from `root`'s packages.
 
     A venv linked from another worktree imports that worktree's package,
     whose blocks may differ from this one's.
     """
-    import bdbvhubrenewal
+    import nowcastfoundation
 
-    where = Path(bdbvhubrenewal.__file__).resolve()
-    if not where.is_relative_to((Path(root) / "src").resolve()):
+    where = Path(nowcastfoundation.__file__).resolve()
+    if not where.is_relative_to((Path(root) / "packages").resolve()):
         raise RuntimeError(
-            f"bdbvhubrenewal is imported from {where}, not this worktree "
+            f"nowcastfoundation is imported from {where}, not this worktree "
             f"({Path(root).resolve()})"
         )
 

@@ -135,8 +135,8 @@ nowcasts:
 evidence:
   # Scores of the final run's checkpoints on the case studies (ckpt-scores).
   # Followed at the branch head, never pinned: each run shows the live
-  # run's newest scored checkpoints (bdbvhubrenewal.reporting.
-  # live_checkpoint), as preliminary.
+  # run's newest scored checkpoints (nowcastfoundation.live_checkpoint),
+  # as preliminary.
   checkpoint_scores:
     branch: checkpoint-scoring
     path: evidence/checkpoint-scores.csv

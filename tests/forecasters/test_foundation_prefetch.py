@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.zones import ZoneData, hub_zones
-from bdbvhubrenewal.forecasters import get_model
+from bdbvhub.data.zones import ZoneData, hub_zones
+from bdbvhub.models import get_model
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastfoundation import forecaster as foundation
 from nowcastfoundation import series_bias

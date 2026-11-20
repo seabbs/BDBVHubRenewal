@@ -8,10 +8,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import ForecastTask, get_model
+from bdbvhub.models import get_model
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastrenewal import forecaster as rn
 from nowcastrenewal import zones as zr
+from nowcastutils.base import ForecastTask
 from nowcastutils.hierarchy import is_zone, province_of
 
 pytest.importorskip("pyrenew")
@@ -236,11 +237,11 @@ def test_zone_code_keys_the_models_that_run_it(
 ) -> None:
     import shutil
 
-    from bdbvhubrenewal.evaluation import store
+    from bdbvhub.store import store
 
     for name in ("pyproject.toml", "uv.lock"):
         shutil.copy(ROOT / name, tmp_path / name)
-    for folder in ("src", "packages"):
+    for folder in ("packages",):
         shutil.copytree(
             ROOT / folder,
             tmp_path / folder,

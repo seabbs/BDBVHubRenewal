@@ -10,7 +10,10 @@ A release's cut-off is its latest onset day.
 from nowcastutils.releases import latest_onset_days
 
 cutoffs = latest_onset_days(daily)
-assert cutoffs.to_dict() == {"2026-03-07": "2026-03-07", "2026-03-14": "2026-03-14"}
+assert cutoffs.to_dict() == {
+    "2026-03-07": "2026-03-07",
+    "2026-03-14": "2026-03-14",
+}
 ```
 
 ## Read the location hierarchy from the codes

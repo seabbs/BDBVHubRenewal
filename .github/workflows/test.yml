@@ -8,7 +8,6 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/**'
       - 'packages/**'
       - 'tests/**'
       - 'config/**'
@@ -21,7 +20,6 @@ on:
       - '.github/actions/setup-forecast-env/**'
   pull_request:
     paths:
-      - 'src/**'
       - 'packages/**'
       - 'tests/**'
       - 'config/**'
@@ -61,7 +59,7 @@ jobs:
           jax-scope: test
       - name: Tests
         run: >-
-          uv run pytest -q --durations=50 --cov=bdbvhubrenewal --cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal
+          uv run pytest -q --durations=50 --cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal --cov=nowcastgermany --cov=bdbvhub
           --cov-report=term-missing
           --cov-report=xml
       - name: Upload coverage to Codecov

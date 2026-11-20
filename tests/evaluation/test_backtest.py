@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import get_model
+from bdbvhub.models import get_model
 from nowcasteval.backtest import (
     BacktestConfig,
     development_tasks,
@@ -216,7 +216,8 @@ def test_score_tasks_scores_vintage_matched_rows() -> None:
 def test_each_scored_week_is_the_truth_of_its_own_week() -> None:
     import datetime as dt
 
-    from bdbvhubrenewal.forecasters import ForecastTask, FoundationModel
+    from nowcastfoundation.forecaster import FoundationModel
+    from nowcastutils.base import ForecastTask
 
     # Weekly totals rise by a known step and each week is reported one
     # week on, so the last week and the weeks ahead are forecast. A week
@@ -531,7 +532,7 @@ def test_backtest_sampler_comes_from_the_config(
 def test_scenarios_are_scored_final_and_as_of(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    from bdbvhubrenewal.data import load_health_zones
+    from bdbvhub.data.tidy import load_health_zones
     from nowcasteval.backtest import run_scenarios
 
     data = DATA
@@ -570,7 +571,7 @@ def test_scenarios_are_scored_final_and_as_of(
 def test_tasks_carry_the_daily_releases_up_to_their_vintage(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.data.tidy import load_daily
+    from bdbvhub.data.tidy import load_daily
 
     daily = load_daily()
     real = target.loc[target["kind"] == "real"]
@@ -613,7 +614,7 @@ def test_skipped_origins_stay_in_the_later_tasks(
 def test_development_tasks_pass_the_daily_releases(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.data.tidy import load_daily
+    from bdbvhub.data.tidy import load_daily
 
     tasks = development_tasks(
         target, delays, BacktestConfig(), daily=load_daily(),
@@ -622,7 +623,7 @@ def test_development_tasks_pass_the_daily_releases(
 
 
 def test_simulated_tasks_carry_daily_releases(config: BacktestConfig) -> None:
-    from bdbvhubrenewal.data.tidy import load_daily
+    from bdbvhub.data.tidy import load_daily
 
     lags = cutoff_lags(load_daily())
     tasks = recovery_tasks(config, lags=lags)
@@ -648,7 +649,7 @@ def test_recovery_run_by_date_chunk_matches_one_run(
 ) -> None:
     from dataclasses import replace
 
-    from bdbvhubrenewal.cli import chunk
+    from bdbvhub.cli import chunk
 
     models = [get_model("flat")]
     whole = run_recovery(models, config)
@@ -672,7 +673,7 @@ def test_recovery_run_by_date_chunk_matches_one_run(
 def test_scenarios_run_by_date_match_one_run(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    from bdbvhubrenewal.data import load_health_zones
+    from bdbvhub.data.tidy import load_health_zones
     from nowcasteval.backtest import run_scenarios
 
     zones = load_health_zones(DATA)
@@ -732,7 +733,7 @@ def test_scenarios_forecast_apart_by_model_score_as_one_run(
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
-    from bdbvhubrenewal.data import load_health_zones
+    from bdbvhub.data.tidy import load_health_zones
     from nowcasteval.backtest import (
         run_scenarios,
         scenario_forecasts,
@@ -773,7 +774,7 @@ def test_sample_counts_come_from_the_config(
     # The models run here draw `[samples] backtest`; the fit store and the
     # submission keep `[forecast] n_samples`, so their fit keys do not
     # move with it.
-    from bdbvhubrenewal.evaluation import store
+    from bdbvhub.store import store
     from nowcasteval.backtest import for_scoring, tasks_for_scoring
 
     text = (ROOT / "config" / "backtest.toml").read_text()
@@ -798,7 +799,7 @@ def test_sample_counts_come_from_the_config(
 def test_tasks_carry_the_imputation_delay_and_places(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    from bdbvhubrenewal.data.delays import hub_delay_pmf
+    from bdbvhub.data.delays import hub_delay_pmf
 
     task = make_tasks(
         target.loc[target["vintage"] == "2026-10-09"], delays, config
