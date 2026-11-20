@@ -217,14 +217,11 @@ rule round_ready:
         mark_ready(input, output, params, wildcards)
 
 
-# Refuses to upload into a release of another grid's batches: its notes
-# name the grid (`Grid r7.`), and unmarked releases are an earlier grid's
-# (flowlib.grids.release_grid).
+# Refuses to upload into the release of an earlier grid's round
+# (`retired_rounds`, flowlib.grids).
 GRID_GUARD = """
-        notes=$(gh release view {params.tag} -R {params.repo} --json body -q .body)
-        found=$(printf '%s\\n' "$notes" | sed -n 's/.*Grid \\(r[0-9][0-9]*\\)\\..*/\\1/p' | head -n 1)
-        if [ "${{found:-unmarked}}" != "{params.grid}" ]; then
-            echo "{params.tag} holds grid ${{found:-unmarked}}'s batches, not {params.grid}'s: not uploading"
+        if [ "{params.owner}" = retired ]; then
+            echo "{params.tag} holds an earlier grid's batches: not uploading"
             exit 1
         fi
 """
@@ -246,21 +243,23 @@ rule release_batch:
     params:
         repo=SIM["repo"],
         tag="sims-r{round}",
-        grid=grid_name(),
+        owner=lambda wc: grids.owner(
+            int(wc.round), config["grid_rounds"], config.get("retired_rounds")
+        ),
         counts=rules.simulate_batch.output.counts,
         settings=rules.simulate_batch.output.settings,
     shell:
         """
         exec >{log} 2>&1
-        gh release view {params.tag} -R {params.repo} >/dev/null 2>&1 \
-            || gh release create {params.tag} -R {params.repo} --prerelease \
-                --title "Simulations, round {wildcards.round}" \
-                --notes "Fine-tuning simulations of round {wildcards.round}, one batch per asset, with their manifest rows. Grid {params.grid}." \
-                >/dev/null 2>&1 \
-            || gh release view {params.tag} -R {params.repo} >/dev/null
         """
         + GRID_GUARD
         + """
+        gh release view {params.tag} -R {params.repo} >/dev/null 2>&1 \
+            || gh release create {params.tag} -R {params.repo} --prerelease \
+                --title "Simulations, round {wildcards.round}" \
+                --notes "Fine-tuning simulations of round {wildcards.round}, one batch per asset, with their manifest rows." \
+                >/dev/null 2>&1 \
+            || gh release view {params.tag} -R {params.repo} >/dev/null
         gh release upload {params.tag} -R {params.repo} --clobber \
             {params.counts} {params.settings} {input.record}
         """
@@ -282,7 +281,9 @@ rule release_qc:
         repo=SIM["repo"],
         tag="sims-r{round}",
         named=f"{ROUNDS_DIR}/r{{round}}/qc/excluded-r{{round}}.csv",
-        grid=grid_name(),
+        owner=lambda wc: grids.owner(
+            int(wc.round), config["grid_rounds"], config.get("retired_rounds")
+        ),
     shell:
         """
         exec >{log} 2>&1
@@ -332,10 +333,10 @@ rule simulate:
 
 rule release:
     input:
-        # Never another grid's round: its release holds that grid's batches.
+        # Never an earlier grid's round: its release holds that grid's
+        # batches.
         lambda wc: grids.check_release(
-            config["rounds"], grid_name(), config["grid_rounds"],
-            config.get("retired_rounds"),
+            config["rounds"], config["grid_rounds"], config.get("retired_rounds")
         )
         or [],
         [

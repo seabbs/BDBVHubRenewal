@@ -80,7 +80,7 @@ Each machine reruns its task as releases land, in its coordinator run (`task now
 ## 1. Simulate (`rules/simulate.smk`)
 
 Round r is `batches` batches of `batch` outbreaks, seeds from 30000 + 100 r, each with exactly one observation draw.
-Each outbreak draws its settings independently from the grid (`simulate.grid_file`, `config/finetune/grids/r7.yaml`), and a round is used whole for training or as the held-out round.
+Each outbreak draws its settings independently from the grid (`simulate.grid_file`, `config/finetune/grid.yaml`), and a round is used whole for training or as the held-out round.
 The engine is the R package `packages/nowcastfoundation/r`, run by `workflow/scripts/simulate.R`.
 
 - `epinowcast_lib`: installs the epinowcast the simulator is pinned to (`epinowcast_sha` in the grid config) from GitHub into `ROOT/rlib/epinowcast-<sha>`, once a machine, at nice 19 under `JOB_PREFIX`. Its dependencies must already be in R's libraries.
@@ -102,7 +102,7 @@ One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into
 Segment N resumes from the state kept with the prefix before and stops once `n<N>` is saved (`--until N`).
 The state carries the learning-rate schedule, the step, the batch position and torch's random state, so the segments in turn are the run that never stopped.
 
-- `seed_list`: the training seeds in order, the rounds' in seed order or a fixed `seed_file`. A run takes its grid's rounds (`grid_rounds`): r7 validates on round 33, trains on 34 to 37 and tests on 38. Rounds 9 to 32 belong to the earlier grids (`retired_rounds`) and are never simulated again. No two grids share a round, as a round sets its seeds and its release `sims-r<N>`. The `release` target refuses another grid's round or a retired one, and each upload refuses a release whose notes name another grid (unmarked releases are r5's).
+- `seed_list`: the training seeds in order, the rounds' in seed order or a fixed `seed_file`. A run takes the grid's rounds (`grid_rounds`): it validates on round 33, trains on 34 to 37 and tests on 38. Rounds 9 to 32 belong to earlier versions of the grid (`retired_rounds`) and are never simulated again, as a round sets its seeds and its release `sims-r<N>`. When the grid changes, its rounds join `retired_rounds` and it takes new ones. The `release` target and each upload refuse a retired round.
 - `fetch_batch`: a batch into `<RUN>/sims/`, hard linked from this machine's rounds, copied from the rounds host's (`remote`, `REMOTE` and `REMOTE_ROOT`) or downloaded from its release (`release`; `sims_from`, or `SIMS_FROM` in `config/local.env`).
 - The batches a machine without the rounds can have are listed afresh each time a run plans (`listed_batches` in rules/common.smk, recorded in `<RUN>/available-batches.txt`): those the rounds host's manifests list (mirrored with its QC exclusions in `<RUN>/rounds/`), or those released. A segment is planned only once its batches are listed, counting the training seeds up to the first batch not yet listed, and nothing trains before the whole validation round is listed.
 - `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks after QC exclusions, one spare, and the validation round's batches. A finished checkpoint is final and is never retrained.

@@ -52,7 +52,7 @@ test_that("endemic and controlled paths follow a smooth weekly walk", {
 
 for (window in c("early", "established", "endemic")) {
   test_that(paste("a", window, "window opens as it should"), {
-    grid <- r7()
+    grid <- test_grid()
     set.seed(4)
     d <- draw_design(grid)
     d$strata <- "places"
@@ -85,7 +85,7 @@ for (window in c("early", "established", "endemic")) {
 }
 
 test_that("every cell gives finite onsets over its whole range", {
-  grid <- r7()
+  grid <- test_grid()
   set.seed(10)
   for (g in 0:299) {
     d <- draw_design(grid)
@@ -104,7 +104,7 @@ test_that("every cell gives finite onsets over its whole range", {
 })
 
 test_that("layer values vary across strata as their structure says", {
-  grid <- r7()
+  grid <- test_grid()
   set.seed(9)
   for (structure in c("shared", "pooled", "independent")) {
     a <- stratum_values(grid, structure, 6L, "ascertainment", probability = TRUE)

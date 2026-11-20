@@ -98,7 +98,7 @@ def test_batches_already_simulated_are_kept(tmp_path):
 
 def _enw_lib(tmp_path):
     """The pinned epinowcast's library under the machine's ROOT."""
-    grid = "config/finetune/grids/r7.yaml"
+    grid = "config/finetune/grid.yaml"
     return tmp_path / "rlib" / f"epinowcast-{simulator.epinowcast_sha(grid)}"
 
 
@@ -1012,15 +1012,15 @@ def test_one_unit_runs_before_the_release_list_exists(tmp_path):
     assert jobs["score_germany"] == 1
 
 
-# Each grid has its own rounds (flowlib.grids).
+# The grid's rounds, never an earlier version's (flowlib.grids).
 
 
-def test_r7_release_of_a_retired_round_is_refused(tmp_path):
-    with pytest.raises(AssertionError, match="round 9 is grid retired's"):
+def test_release_of_a_retired_round_is_refused(tmp_path):
+    with pytest.raises(AssertionError, match="round 9 is an earlier grid's"):
         dry(tmp_path, "release", config={"rounds": [9]})
 
 
-def test_r7_simulates_its_held_out_round_33(tmp_path):
+def test_the_grid_simulates_its_held_out_round_33(tmp_path):
     jobs = dry(tmp_path, "simulate", config={"rounds": [33]})
     assert jobs["simulate_batch"] == 40
 
@@ -1079,4 +1079,4 @@ def test_a_round_s_batch_runs_the_grid(tmp_path):
     text = " ".join("".join(blocks).replace("\\\n", " ").split())
     shell = text[text.index("workflow/scripts/simulate.R") - 400 :]
     assert "ENW_CELLS" not in shell
-    assert "simulate.R config/finetune/grids/r7.yaml 20 " in shell
+    assert "simulate.R config/finetune/grid.yaml 20 " in shell

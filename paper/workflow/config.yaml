@@ -27,7 +27,7 @@ n_samples: 100
 synthetic:
   # The grid config the grid tables and SI notes are read from (the
   # main workflow's `simulate.grid_file`), and the held-out set's design.
-  grid_file: ../config/finetune/grids/r7.yaml
+  grid_file: ../config/finetune/grid.yaml
   grid: r5
   simulations_per_seed: 21
   draw: 1

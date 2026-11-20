@@ -106,8 +106,8 @@ with gaps. Each block is a whole simulated system (`whole_system`), or
 its country alone.
 """
 
-GRID = "r7"
-"""The training grid by default (`use_design`)."""
+GRID_FILE = Path(__file__).parents[1] / "config" / "finetune" / "grid.yaml"
+"""The grid file the simulations are drawn from (`use_grid`)."""
 
 SOURCE_SHARES = dict(BLOCK_DESIGN["source_shares"])
 """Share of blocks of each layout (`BLOCK_DESIGN`)."""
@@ -123,26 +123,20 @@ SOURCES = tuple(SOURCE_SHARES)
 """Sources blocks are cut from, drawn at `SOURCE_SHARES`."""
 
 
-def use_design(grid: str) -> str:
-    """Set the training grid: its parents, with the one block design.
-
-    Returns
-    -------
-    str
-        The grid.
+def use_grid(grid_file: Path | str = GRID_FILE) -> None:
+    """Set the parents from the grid file (`grid_parents`).
 
     Raises
     ------
-    ValueError
-        For a grid with no file (`config/finetune/grids/<grid>.yaml`), so a
-        typo is not silently trained.
+    FileNotFoundError
+        If the grid file is missing, so a wrong path is not silently
+        trained with the even parent mix.
     """
     global PARENTS
-    if not (GRIDS / f"{grid}.yaml").exists():
-        known = sorted(p.stem for p in GRIDS.glob("*.yaml"))
-        raise ValueError(f"grid {grid!r} has no grid file; known: {known}")
-    PARENTS = grid_parents(grid)
-    return grid
+    path = Path(grid_file)
+    if not path.is_file():
+        raise FileNotFoundError(f"no grid file at {path}")
+    PARENTS = grid_parents(path)
 
 
 def native_cadence(source: str) -> str:
@@ -243,8 +237,11 @@ def max_series(budget_gb: float) -> int:
 ENGINE = "packages/nowcastfoundation/r"
 """The simulator engine, whose R files and description are hashed."""
 
+GRID_NAME = "config/finetune/grids/r7.yaml"
+"""The grid file's name in `code_sha256`: its path when checkpoints were
+first hashed, kept so moving it changes no checkpoint's hash (`CODE`)."""
+
 SIMULATOR = (
-    "config/finetune/grids/r7.yaml",
     "workflow/scripts/simulate.R",
     f"{ENGINE}/DESCRIPTION",
     *(
@@ -262,9 +259,11 @@ SIMULATOR = (
         )
     ),
 )
-"""The simulator's files: the grid, the rule's wrapper and the engine."""
+"""The simulator's files beside the grid: the rule's wrapper and the
+engine."""
 
 CODE = {
+    GRID_NAME: "config/finetune/grid.yaml",
     **{path: path for path in SIMULATOR},
     "scripts/finetune_chronos.py": "scripts/finetune_chronos.py",
     "src/bdbvhubrenewal/forecasters/finetune.py": (
@@ -438,17 +437,14 @@ their sum, more than their sum (cases with no place), or reported through
 a later stream (`finetune.country_counts`). A block of some of the
 places is also not their sum. Parent means belongs to, not sums to."""
 
-GRIDS = Path(__file__).parents[1] / "config" / "finetune" / "grids"
-"""The grid files (`config/finetune/grids/<grid>.yaml`)."""
-
 PARENTS: dict | None = None
 """The grid's parents, from its file's `aggregation` (`grid_parents`), or
-None for a grid with no file, whose parents are `PARENT_MIX` drawn evenly
-with `finetune.PARENT_DRAWS`."""
+None before `use_grid` or for a grid with no `aggregation`, whose parents
+are `PARENT_MIX` drawn evenly with `finetune.PARENT_DRAWS`."""
 
 
-def grid_parents(grid: str) -> dict | None:
-    """Return a grid's parents from its file, or None if it has none.
+def grid_parents(path: Path) -> dict | None:
+    """Return the grid file's parents, or None if it sets none.
 
     The share of blocks with places whose country is their exact sum,
     has unallocated cases, or is reported later (`aggregation.parents`,
@@ -457,10 +453,7 @@ def grid_parents(grid: str) -> dict | None:
     """
     import yaml
 
-    path = GRIDS / f"{grid}.yaml"
-    if not path.exists():
-        return None
-    config = yaml.safe_load(path.read_text())
+    config = yaml.safe_load(Path(path).read_text())
     aggregation = config.get("aggregation")
     if aggregation is None:
         return None

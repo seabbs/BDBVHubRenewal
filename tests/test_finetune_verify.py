@@ -101,12 +101,12 @@ def test_foundation_functions_are_read_from_code_paths(tmp_path):
     assert problems(tmp_path, lambda _, path: files[path]) == []
 
 
-R6 = Path(__file__).parent / "fixtures" / "checkpoints"
+RELEASED = Path(__file__).parent / "fixtures" / "checkpoints"
 
 
 @pytest.mark.parametrize("name", ["r6-n250", "r6-n500"])
-def test_r6_checkpoints_give_their_hash(name):
-    settings = json.loads((R6 / name / "settings.json").read_text())
+def test_released_checkpoints_give_their_hash(name):
+    settings = json.loads((RELEASED / name / "settings.json").read_text())
     assert settings_problems(settings) == []
 
 
@@ -114,6 +114,7 @@ def test_the_code_names_are_the_paths_first_hashed():
     import finetune_chronos as ft
 
     assert set(ft.CODE) == {
+        ft.GRID_NAME,
         *ft.SIMULATOR,
         "scripts/finetune_chronos.py",
         "src/bdbvhubrenewal/forecasters/finetune.py",

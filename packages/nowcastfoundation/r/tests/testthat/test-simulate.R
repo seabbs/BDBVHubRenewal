@@ -6,7 +6,7 @@ test_that("a batch simulates outbreaks through epinowcast", {
   skip_if_not(nzchar(lib) && dir.exists(file.path(lib, "epinowcast")),
     "needs the pinned epinowcast in ENW_LIB")
   withr::local_libpaths(lib, action = "prefix")
-  grid <- r7()
+  grid <- test_grid()
   model <- suppressMessages(epinowcast::enw_model(threads = FALSE))
   out <- simulate_batch(grid, 99902L, 2L, model = model, weeks = 8L)
   expect_equal(nrow(out$settings), 2L,
@@ -22,7 +22,7 @@ test_that("independent strata share the outbreak's dates", {
   skip_if_not(nzchar(lib) && dir.exists(file.path(lib, "epinowcast")),
     "needs the pinned epinowcast in ENW_LIB")
   withr::local_libpaths(lib, action = "prefix")
-  grid <- r7()
+  grid <- test_grid()
   set.seed(13)
   d <- draw_design(grid, weeks = 8L)
   d$strata <- "places"; d$n_places <- 3L; d$n_ages <- 1L
@@ -40,7 +40,7 @@ test_that("a draw reporting fewer than min_cases is drawn again", {
   skip_if_not(nzchar(lib) && dir.exists(file.path(lib, "epinowcast")),
     "needs the pinned epinowcast in ENW_LIB")
   withr::local_libpaths(lib, action = "prefix")
-  grid <- r7()
+  grid <- test_grid()
   grid$floors$min_cases <- 1e12
   grid$tries <- 2L
   grid$designs <- 1L

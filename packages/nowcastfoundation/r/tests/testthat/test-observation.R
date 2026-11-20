@@ -9,7 +9,7 @@ test_that("onsets follow infections by the incubation delay", {
 })
 
 test_that("onsets are ascertained infections after the incubation delay", {
-  grid <- r7()
+  grid <- test_grid()
   set.seed(6)
   d <- draw_design(grid)
   d$strata <- "places"
@@ -28,7 +28,7 @@ test_that("onsets are ascertained infections after the incubation delay", {
 })
 
 test_that("observation is NB1 four times as often as Poisson", {
-  grid <- r7()
+  grid <- test_grid()
   expect_equal(unlist(grid$factors$observation), c(negbin1d = 4, poisson = 1))
   expect_equal(grid$distributions$sqrt_phi$dist, "halfnormal")
   expect_equal(grid$distributions$sqrt_phi$scale, 0.25)
