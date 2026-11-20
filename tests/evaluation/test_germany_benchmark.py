@@ -499,3 +499,38 @@ def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
     dates = ["2021-10-04", "2021-10-05", "2021-10-06"]
     de.germany_forecasts(["randomwalknowcast"], pd.DataFrame(), dates, 10, 1)
     assert events == [e for d in dates for e in (("build", d), ("forecast", d))]
+
+
+def test_forecasts_carry_the_90_interval_beside_the_hub_levels(
+    forecasts: pd.DataFrame,
+) -> None:
+    from bdbvhubrenewal.evaluation.germany import (
+        FORECAST_LEVELS,
+        QUANTILE_LEVELS,
+    )
+
+    assert set(FORECAST_LEVELS) == {*QUANTILE_LEVELS, 0.05, 0.95}
+    assert set(forecasts["quantile"].round(6)) == set(FORECAST_LEVELS)
+
+
+def test_scores_add_90_coverage_and_keep_wis_on_the_hub_levels(
+    forecasts: pd.DataFrame, scores: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.evaluation.germany import QUANTILE_LEVELS
+
+    hub = forecasts[forecasts["quantile"].round(6).isin(QUANTILE_LEVELS)]
+    on_hub = score_germany(hub, truth_delay=10)
+    keys = ["model", "origin", "location", "target_end_date"]
+    both = scores.merge(on_hub, on=keys, suffixes=("", "_hub"))
+    assert len(both) == len(scores)
+    np.testing.assert_allclose(both["wis"], both["wis_hub"])
+    # The 90% interval is the 5% and 95% quantiles.
+    wide = forecasts.pivot_table(
+        index=keys, columns="quantile", values="value"
+    ).reset_index()
+    got = scores.merge(wide, on=keys).merge(
+        forecasts[[*keys, "truth"]].drop_duplicates(keys), on=keys
+    )
+    inside = (got[0.05] <= got["truth"]) & (got["truth"] <= got[0.95])
+    np.testing.assert_array_equal(got["coverage_90"], inside.astype(float))
+    assert on_hub["coverage_90"].isna().all()
