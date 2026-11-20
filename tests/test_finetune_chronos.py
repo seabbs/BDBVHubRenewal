@@ -262,40 +262,6 @@ def test_a_block_that_runs_out_once_is_retried():
     assert zeroed == [1]
 
 
-def test_a_block_that_never_fits_is_skipped_after_one_retry():
-    from finetune_stream import accumulate
-
-    calls: list[list[int]] = []
-    skipped: list[int] = []
-
-    def backward(part, _share):
-        calls.append(list(part))
-        raise RuntimeError("CUDA out of memory")
-
-    value = accumulate([7], backward, lambda: None, skipped.append)
-    assert np.isnan(value)
-    assert skipped == [7]
-    assert calls == [[7], [7]]
-
-
-def test_blocks_left_after_a_skip_share_the_whole_gradient():
-    from finetune_stream import accumulate
-
-    shares: dict[int, float] = {}
-
-    def backward(part, share):
-        if 9 in part:
-            raise RuntimeError("CUDA out of memory")
-        for i in part:
-            shares[i] = share / len(part)
-        return 0.5
-
-    accumulate([1, 2, 3, 9], backward, shares.clear, print)
-    # The three blocks used weigh a third each, as a batch of three would.
-    assert sorted(shares) == [1, 2, 3]
-    assert sum(shares.values()) == pytest.approx(1.0)
-
-
 def _checkpoint(tmp_path):
     ckpt = tmp_path / "finetuned-ckpt"
     ckpt.mkdir()
@@ -1173,10 +1139,10 @@ def test_a_batch_that_fits_is_not_cleared_first():
         return 0.5
 
     # The step before cleared the gradients and freed memory.
-    assert accumulate([1, 2], backward, lambda: zeroed.append(1), print) == 0.5
+    assert accumulate([1, 2], backward, lambda: zeroed.append(1)) == 0.5
     assert zeroed == []
     # Each retry after running out of memory starts from clear gradients.
-    assert accumulate([1, 2, 3], backward, lambda: zeroed.append(1), print)
+    assert accumulate([1, 2, 3], backward, lambda: zeroed.append(1))
     assert zeroed == [1]
 
 
@@ -1249,7 +1215,7 @@ def test_steps_in_a_row_do_not_sum_gradients():
         for _ in range(2):
             if clear_between:
                 optimiser.zero_grad()
-            value = accumulate([1, 2], backward, optimiser.zero_grad, print)
+            value = accumulate([1, 2], backward, optimiser.zero_grad)
             finite_step(params, optimiser, value)
         return [p.detach().clone() for p in params]
 
