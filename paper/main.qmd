@@ -187,6 +187,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - $D$ is part of the scoring rule, not a choice tuned on the data.
 - The SI compares the samples directly with the fair CRPS.
 - We score Chronos-2 on its own quantiles, the random walks on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.
+- Chronos-2's submitted trajectories come from its quantiles through a copula, and the SI scores them with and without it (Correlated trajectories).
 - The fine-tuned models use the final run's last checkpoint, at 3,200 simulations (`{{< meta results.finetuned >}}`), trained on simulations only.
 - Key references: [@bdbv_modeling_hub_2026; @Viboud2018; @funkAssessingPerformanceRealtime2019].
 :::
