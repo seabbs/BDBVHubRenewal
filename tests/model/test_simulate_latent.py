@@ -340,3 +340,34 @@ def test_the_fitted_models_do_not_import_the_simulator() -> None:
     for model in store.stored_models():
         code = store.fit_code(model, root)
         assert not any("simulate_latent" in f for f in code), model
+
+
+def test_any_error_in_one_simulation_is_recorded_and_the_batch_goes_on(
+    grid: dict[str, Any],
+) -> None:
+    # As the R batch's tryCatch, which redraws a simulation on any error.
+    draws = _draws()
+    broken = draws["simulations"][1]
+    broken["values"] = {
+        k: v for k, v in broken["values"].items() if k != "amplitude"
+    }
+    broken["design"] = {**broken["design"], "place_rt": "independent"}
+    long, values = sl.simulate_batch(grid, draws)
+    assert values["s1"]["error"].startswith("KeyError")
+    assert values["s0"]["error"] is None
+    assert set(long["id"]) == {"s0"}
+
+
+def test_each_simulation_records_its_generation_time(
+    grid: dict[str, Any],
+) -> None:
+    draws = _draws()
+    _, values = sl.simulate_batch(grid, draws)
+    sim = draws["simulations"][0]
+    gt = sl.gt_pmf(
+        sim["values"]["gt_mean"],
+        sim["design"]["gt_family"],
+        sim["values"]["gt_cv"],
+    )
+    np.testing.assert_allclose(values["s0"]["gt"], gt)
+    assert values["s0"]["n_gt"] == len(gt)
