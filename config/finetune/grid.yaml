@@ -1,9 +1,10 @@
 # The grid of the fine-tuning simulations: the simulator engine
 # (packages/nowcastfoundation/r) reads every factor, sampling distribution,
 # share and floor from here, and the paper's grid tables and figures read
-# the same file. Four layers: infections; observation (infection to
-# reference event, ascertainment, count noise); reporting delays; and the
-# reporting system (report days, shocks, revisions).
+# the same file. Five layers: infections; strata (places, ages and how they
+# relate); observation (infection to reference event, ascertainment, count
+# noise); reporting delays; and the reporting system (report days, shocks,
+# revisions).
 #
 # - `factors`: the categorical settings, each a categorical distribution
 #   over its levels (weights; a level with weight k is k times as likely
@@ -41,7 +42,7 @@ floors:
   # A draw reporting fewer cases than this (over its draws' mean) is drawn
   # again, as are draws that error.
   min_cases: 10
-# No sim QC thresholds (Sam, lead 13:25): a draw is drawn again only if it
+# No sim QC thresholds: a draw is drawn again only if it
 # errors or reports fewer than `floors$min_cases` cases. That cases never
 # exceed a stratum's population (without variants) is a simulator test.
 shares:
@@ -133,7 +134,7 @@ factors:
     parametric: 1
     non_parametric: 1
     both: 1
-  # Weekday effects are rare and mostly small (lead 13:24): on counts by
+  # Weekday effects are rare and mostly small: on counts by
   # reference date in a third, on the delay by reference weekday in a
   # third, and on reports (daily reporting only) in half.
   reference_dow:
@@ -200,7 +201,7 @@ factors:
     periodic: 1
     walk: 1
     slowdown: 1
-  # Report days (lead 13:25): every day in half (with a report-date weekday
+  # Report days: every day in half (with a report-date weekday
   # effect in half of these, `report_dow`), Monday to Friday in a quarter,
   # two or three fixed days a week in 15% and one day a week in 10% (days
   # drawn).
