@@ -50,8 +50,7 @@ The cut-off is the latest onset day, which can be earlier than the true last rep
 The chain ladder treats reporting speed as fixed by age and step, but speed and backlogs vary between releases.
 The observation model is learnt from the earlier releases, which may be few.
 Counts include the hub's imputed onsets, which are re-drawn as cases gain onsets, so changes between releases mix reporting with imputation.
-Places are sampled independently, so a shock to a whole release is not shared, and the national band is a sum of independent provincial bands.
-So it pairs its province draws within each week by a copula fitted to its own errors ([Correlated trajectories](evaluation.md#correlated-trajectories)).
+It pairs its province draws within each week by a copula fitted to its own errors ([Correlated trajectories](evaluation.md#correlated-trajectories)).
 The walk has no drift, and its spread comes from 8 weekly changes, net of a delta-method Poisson noise term that assumes no extra dispersion in the reported counts.
 
 [^bnc-paper]: Johnson KE, Tang M, Tyszka E, Nemcova B, Wolffram D, Ergas R, Reich NG, Funk S, Mellor J, Bracher J, Abbott S (2025). Baseline nowcasting methods for handling delays in epidemiological data. Wellcome Open Research. [doi:10.12688/wellcomeopenres.25027.2](https://doi.org/10.12688/wellcomeopenres.25027.2).

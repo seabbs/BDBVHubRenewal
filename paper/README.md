@@ -100,7 +100,7 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
 - Any machine with Python 3.12 and uv.
   `--cores N` runs independent steps in parallel.
 - A development run on dummy data takes about a minute.
-- The German benchmark's development half takes about an hour on a laptop, and its held-out half as long again.
+- The German benchmark's development half takes about an hour, and its held-out half as long again.
   CI runs each half in parallel blocks of dates, the held-out half only for a dispatched `paper` run and never cached.
 - Cloning the Ebola hub takes about a minute.
 - Fine-tuning uses CUDA, MPS or the CPU, whichever is available (#192).
