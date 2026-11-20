@@ -44,10 +44,10 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
   - Time series foundation models forecast new series with no training on them.
   - They are now used widely in operational forecast hubs, for influenza, COVID-19 and RSV, mostly zero-shot, among them Chronos-2, TimesFM and Moirai [@flusight_hub; @placeholder; @respicast_si_hub; @Ansari2025; @Das2024a; @Woo2024].
   - Some hub models fine-tune a foundation model on real surveillance data [@dhauser_fluchronos; @fluxengine_atlas].
-  - Neural networks built for epidemic forecasting include DEFSI and EpiDeep [@placeholder], GLEAM-AI, a surrogate trained on simulations [@nu_ucsd_gleam_ai], Mantis, trained on mechanistic simulations [@Dudley2026], the UMass axial transformer, pretrained on simulated seasons [@umass_axial], and ACCIDDA-Chromantis, delay-aware networks trained on real revisions [@accidda_chromantis].
-  - Mantis and the axial model use simulations to teach transmission dynamics for forecasting.
+  - Neural networks built for epidemic forecasting include DEFSI and EpiDeep [@placeholder], GLEAM-AI, a surrogate trained on simulations [@nu_ucsd_gleam_ai], the UMass axial transformer, pretrained on simulated seasons [@umass_axial], and ACCIDDA-Chromantis, delay-aware networks trained on real revisions [@accidda_chromantis].
+  - Mantis is a forecasting model for infectious diseases trained on mechanistic simulations, which it uses to teach transmission dynamics, as the axial model also does [@Dudley2026; @umass_axial].
   - Synthetic data can instead teach a model reporting delays and surveillance quirks, such as right truncation, changing delays, mixed reporting cadences and places that nest, set in realistic renewal epidemics.
-  - Training on domain-specific synthetic data has precedent: KernelSynth for Chronos [@Ansari2024], ForecastPFN [@Dooley2023], prior-fitted networks [@Muller2022; @Hollmann2025], and Mantis for outbreaks [@Dudley2026].
+  - Training on domain-specific synthetic data has precedent: KernelSynth for Chronos [@Ansari2024], ForecastPFN [@Dooley2023], and prior-fitted networks [@Muller2022; @Hollmann2025].
   - Key references: [@mcgough2020nowcasting; @gunther2021nowcasting; @Wolffram2023; @Ansari2024; @Das2024a; @Woo2024; @Rasul2023; @Garza2023; @Aksu2024; @Shchur2025; @Kalahasti2026; @Dudley2025].
 - **What we did.**
   - We fine-tuned Chronos-2, a general time series foundation model, on simulated outbreaks rather than training a model from scratch.
@@ -334,10 +334,12 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Hub models built on zero-shot foundation models correct for delays before the model sees the data, while our model learns the delays itself [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
   - Hub models fine-tuned on real surveillance data state no delay handling [@dhauser_fluchronos; @fluxengine_atlas].
   - Mantis and the UMass axial model use simulations to teach transmission dynamics, while we use them to teach reporting delays and keep the foundation model's own forecasting [@Dudley2026; @umass_axial].
+  - Mantis simulates single populations, with one final series per outbreak, no releases or revisions and delays as a weighted kernel over days rather than double interval censored distributions, while our grid simulates linked places and age groups, their releases and revisions, and the model nowcasts them jointly [@Dudley2026].
+  - Mantis is evaluated retrospectively and does not state that its test sets were fixed before its simulators were built, while we fixed our test sets in advance, the German held-out half, the BDBV data and a fresh simulated test round, and submitted to the Ebola hub in real time [@Dudley2026].
 - **Strengths and weaknesses.**
   - We used one foundation model, one source of synthetic data and two case studies.
   - We did not compare with epinowcast, or, for the synthetic study, with the model that generated the data.
-  - We did not compare directly with a custom neural network trained for this task.
+  - We did not compare directly with Mantis or other custom neural networks trained for this task [@Dudley2026].
     The ACCIDDA-Chromantis hub submission is one such model, with delay-aware networks trained on real revisions, and appears in the Ebola case study only as one of the hub teams' forecasts [@accidda_chromantis; @bdbv_modeling_hub_2026].
   - The Ebola case study is held out from model development but not blind.
     We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.
@@ -354,6 +356,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Key references: [@Kalahasti2026; @Meyer2025].
 - **Domain knowledge through synthetic data.**
   - Domain knowledge enters through the simulations.
+  - Simulators for nowcasting need the surveillance process modelled correctly, with releases and revisions and double interval censored delays, and this is where epidemiological knowledge adds value over generic large-scale simulation [@Charniga2024; @abbottprimarycensored].
   - Whether this improves the forecasts is to be filled in from the results.
   - Key references: [@Dudley2026; @Dudley2025; @Dooley2023; @Hollmann2025; @Ansari2025].
 - **Against the literature.**
@@ -370,7 +373,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
 - **Further work.**
   - Other foundation models.
   - More case studies.
-  - A comparison with custom neural networks.
+  - A direct comparison with Mantis, and fine-tuning Mantis on our simulations for nowcasting, as reporting delays, revisions and surveillance quirks are not in its training simulations [@Dudley2026].
   - Testing the fine-tuned model as an emulator of epinowcast.
   - Fine-tuning with other epidemiological features as covariates, such as distances between locations or mobility.
   - Training on the count not yet reported instead of the total count.
