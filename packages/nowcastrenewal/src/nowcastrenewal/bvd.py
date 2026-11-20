@@ -844,7 +844,7 @@ MODEL_ROW_COLUMNS: Final = (
     "ref_log_mean",
     "ref_log_sd",
 )
-"""Columns of `model_rows`, as `bdbvhubrenewal.model.inputs.bvd_rows`."""
+"""Columns of `model_rows`, as `nowcastrenewal.model.inputs.bvd_rows`."""
 
 
 def model_rows(release: BvdRelease) -> pd.DataFrame:

@@ -15,6 +15,15 @@ test_that("a batch simulates outbreaks through epinowcast", {
   expect_setequal(unique(out$latent$outbreak), out$settings$outbreak)
   expect_true(all(c("infections", "onsets", "r", "reff", "date") %in% names(out$latent)))
   expect_true(all(out$counts$reference_date <= out$counts$report_date))
+  # Each stratum's population is recorded with its location, for the QC.
+  for (k in seq_len(nrow(out$settings))) {
+    where <- strsplit(out$settings$stratum_location[k], ";")[[1]]
+    size <- strsplit(as.character(out$settings$stratum_population[k]), ";")[[1]]
+    expect_equal(length(where), length(size))
+    seen <- unique(out$counts[outbreak == out$settings$outbreak[k] |
+      startsWith(outbreak, paste0(out$settings$outbreak[k], "-")), location])
+    expect_true(all(seen %in% where))
+  }
 })
 
 test_that("independent strata share the outbreak's dates", {
@@ -33,6 +42,11 @@ test_that("independent strata share the outbreak's dates", {
   skip_if(is.null(run$out), "no outbreak in this draw")
   first <- run$out$latent[, .(start = min(date), end = max(date)), by = location]
   expect_equal(data.table::uniqueN(first$start), 1L)
+  # Each active (not quiet) place, with its population.
+  where <- run$out$values$stratum_location
+  expect_true(all(where %in% sprintf("P%02d", 1:3)))
+  expect_setequal(where, unique(run$out$counts$location))
+  expect_length(run$out$values$stratum_population, length(where))
 })
 
 test_that("a draw reporting fewer than min_cases is drawn again", {
@@ -49,4 +63,56 @@ test_that("a draw reporting fewer than min_cases is drawn again", {
     simulate_batch(grid, 99903L, 1L, model = model, weeks = 8L),
     "no design in 1"
   )
+})
+
+test_that("the reporting delay varies by reference weekday when drawn", {
+  lib <- Sys.getenv("ENW_LIB")
+  skip_if_not(nzchar(lib) && dir.exists(file.path(lib, "epinowcast")),
+    "needs the pinned epinowcast in ENW_LIB")
+  withr::local_libpaths(lib, action = "prefix")
+  grid <- test_grid()
+  ctx <- list(model = suppressMessages(epinowcast::enw_model(threads = FALSE)),
+    draws = 1L, debug = FALSE, expected_scale = grid$constants$expected_scale)
+  spread <- function(dow) {
+    set.seed(21)
+    d <- draw_design(grid, weeks = 12L)
+    d$strata <- "single"; d$n_places <- 1L; d$n_ages <- 1L
+    d$window <- "established"; d$trajectory <- "flat"
+    d$delay_form <- "parametric"; d$delay_family <- "lognormal"
+    d$delay_change <- "static"; d$report_days <- "daily"; d$shocks <- "none"
+    d$report_weekdays <- "all"; d$revisions <- "no"; d$reference_dow <- "no"
+    d$imports <- "none"; d$delay_dow <- dow; d$report_dow <- "no"
+    d$observation <- "poisson"
+    v <- draw_values(grid, d)
+    v$level <- 2000; v$ascertainment <- 0.5; v$dow_sd <- 1e-6
+    v$delay_dow_sd <- 0.4
+    out <- simulate_outbreak(grid, d, v, ctx)$counts
+    out[, delay := as.integer(report_date - reference_date)]
+    by_day <- out[, .(mean = sum(delay * count) / sum(count)),
+      by = .(dow = weekdays(reference_date))]
+    max(by_day$mean) / min(by_day$mean)
+  }
+  expect_gt(spread("yes"), 1.2)
+  expect_lt(spread("no"), 1.1)
+})
+
+test_that("a weekly reporter's releases fall on its one weekday", {
+  lib <- Sys.getenv("ENW_LIB")
+  skip_if_not(nzchar(lib) && dir.exists(file.path(lib, "epinowcast")),
+    "needs the pinned epinowcast in ENW_LIB")
+  withr::local_libpaths(lib, action = "prefix")
+  grid <- test_grid()
+  ctx <- list(model = suppressMessages(epinowcast::enw_model(threads = FALSE)),
+    draws = 1L, debug = FALSE, expected_scale = grid$constants$expected_scale)
+  set.seed(22)
+  d <- draw_design(grid, weeks = 10L)
+  d$strata <- "single"; d$n_places <- 1L; d$n_ages <- 1L
+  d$window <- "established"; d$shocks <- "none"; d$revisions <- "no"
+  d$observation <- "poisson"
+  d$report_days <- "weekly"; d$report_weekdays <- "Wednesday"
+  v <- draw_values(grid, d)
+  v$level <- 1000; v$ascertainment <- 0.5
+  out <- simulate_outbreak(grid, d, v, ctx)$counts
+  expect_gt(sum(out$count), 0)
+  expect_equal(unique(weekdays(out$report_date)), "Wednesday")
 })

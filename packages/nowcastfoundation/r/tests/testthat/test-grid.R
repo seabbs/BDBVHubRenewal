@@ -6,10 +6,16 @@ test_that("categorical settings are drawn at the grid's shares", {
   expect_equal(share("window", "early"), 0.25, tolerance = 0.03)
   expect_equal(share("window", "endemic"), 0.35, tolerance = 0.03)
   expect_equal(share("delay_change", "static"), 0.4, tolerance = 0.03)
-  expect_equal(share("bunching", "yes"), 0.15, tolerance = 0.05)
+  expect_equal(share("report_days", "daily"), 0.5, tolerance = 0.03)
+  expect_equal(share("report_days", "weekdays"), 0.25, tolerance = 0.03)
+  expect_equal(share("report_days", "fixed_days"), 0.15, tolerance = 0.03)
+  expect_equal(share("report_days", "weekly"), 0.1, tolerance = 0.03)
   expect_equal(share("revisions", "yes"), 0.3, tolerance = 0.03)
   expect_equal(share("observation", "poisson"), 0.2, tolerance = 0.03)
   expect_false(any(c("process", "gt_shape") %in% names(grid$factors)))
+  # One report-days factor (lead 13:25): no separate reporting or bunching.
+  expect_false(any(c("reporting", "bunching") %in% names(grid$factors)))
+  expect_false(any(grepl("^bunch", c(names(grid$distributions), names(grid$counts)))))
 })
 
 test_that("every distribution is named, has a layer and a reason", {
@@ -110,25 +116,14 @@ test_that("every factor has a layer and aggregates are drawn from the grid", {
   expect_equal(grid$distributions[[a$parent_lag_days]]$dist, "lognormal")
 })
 
-test_that("a draw failing the sim QC is redrawn, with the grid's thresholds", {
+test_that("a draw is redrawn only when it fails or reports too few cases", {
   grid <- test_grid()
-  expect_named(grid$qc, c("max_cases_per_stratum", "max_weekly_jump", "max_mean_delay_days"))
-  day <- data.table::as.IDate("2026-01-05")
-  counts <- function(ref, delay, n, loc = "P01") {
-    data.table::data.table(location = loc, reference_date = day + ref,
-      report_date = day + ref + delay, count = n)
-  }
-  ok <- counts(0:27, 2L, 20L)
-  expect_true(is.na(qc_reason(ok, grid)))
-  # A thousand-fold rise in one week.
-  jump <- rbind(counts(0:6, 1L, 1L), counts(7:13, 1L, 5000L))
-  expect_match(qc_reason(jump, grid), "rise")
-  # A mean delay past the limit.
-  slow <- counts(0:27, 60L, 20L)
-  expect_match(qc_reason(slow, grid), "delay")
-  # Too many cases per stratum with cases.
-  big <- counts(0:27, 2L, 30000L)
-  expect_match(qc_reason(big, grid), "per stratum")
+  # No sim QC thresholds (Sam, lead 13:25): size, weekly rises and mean
+  # delays are left as drawn.
+  expect_null(grid$qc)
+  expect_false(exists("qc_reason", envir = asNamespace("nowcastfoundation")))
+  expect_true(is.na(redraw_reason(grid$floors$min_cases, grid)))
+  expect_match(redraw_reason(grid$floors$min_cases - 1, grid), "fewer than")
 })
 
 test_that("strata of one outbreak can share its length and calendar offset", {
@@ -138,4 +133,52 @@ test_that("strata of one outbreak can share its length and calendar offset", {
   expect_equal(d$weeks, 11L)
   d$offset <- 4L
   expect_equal(draw_values(grid, d)$offset, 4L)
+})
+
+test_that("the reporting delay may vary by reference weekday", {
+  grid <- test_grid()
+  expect_setequal(names(grid$factors$delay_dow), c("no", "yes"))
+  expect_equal(grid$factor_layers$delay_dow, "delays")
+  d <- grid$distributions$delay_dow_sd
+  expect_equal(d$layer, "delays")
+  expect_true(nzchar(d$why))
+  set.seed(3)
+  v <- draw_values(grid, draw_design(grid))
+  expect_gt(v$delay_dow_sd, 0)
+})
+
+test_that("weekday effects are rare and mostly small (lead 13:24)", {
+  grid <- test_grid()
+  share <- function(f) {
+    w <- unlist(grid$factors[[f]])
+    unname(w["yes"] / sum(w))
+  }
+  expect_equal(share("report_dow"), 1 / 2)
+  expect_equal(share("reference_dow"), 1 / 3)
+  expect_equal(share("delay_dow"), 1 / 3)
+  expect_equal(grid$factor_layers$report_dow, "reporting")
+  for (k in c("dow_sd", "reference_dow_sd")) {
+    d <- grid$distributions[[k]]
+    expect_equal(c(d$dist, d$median, d$sdlog), c("lognormal", 0.12, 0.5))
+  }
+  d <- grid$distributions$delay_dow_sd
+  expect_equal(c(d$dist, d$median, d$sdlog), c("lognormal", 0.08, 0.5))
+})
+
+test_that("each report-days level reports on its weekdays", {
+  grid <- test_grid()
+  week <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+    "Saturday", "Sunday")
+  set.seed(8)
+  seen <- list()
+  for (i in 1:400) {
+    d <- draw_design(grid)
+    on <- strsplit(d$report_weekdays, ";")[[1]]
+    seen[[d$report_days]] <- c(seen[[d$report_days]], length(on))
+    if (d$report_days == "daily") expect_equal(on, "all")
+    if (d$report_days == "weekdays") expect_equal(on, week[1:5])
+    if (d$report_days != "daily") expect_true(all(on %in% week))
+  }
+  expect_setequal(unique(seen$fixed_days), 2:3)
+  expect_equal(unique(seen$weekly), 1L)
 })

@@ -68,8 +68,6 @@ from bdbvhubrenewal.data.zones import (
     load_zone_data,
 )
 from bdbvhubrenewal.evaluation import store, store_archive
-from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
-from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
 from bdbvhubrenewal.submission.fitting import (
     get_config,
     run_fit,
@@ -107,6 +105,8 @@ from nowcasteval.nowcast import (
     stored_delays,
 )
 from nowcastfoundation.simulate import SCENARIO_RT_SCALE
+from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
+from nowcastrenewal.zones import ZONES_FILE
 from nowcastutils.base import (
     NATIONAL,
     ForecastModel,
@@ -791,7 +791,7 @@ def _fit(args: argparse.Namespace) -> int:
     try:
         config = get_config(args.config)
         sampler = json.loads(args.sampler_json or "{}")
-        from bdbvhubrenewal.forecasters.renewal import sampler_settings
+        from nowcastrenewal.forecaster import sampler_settings
 
         host_devices(int(sampler_settings(sampler)["num_chains"]))
         task, _ = _task(args)
@@ -822,7 +822,7 @@ def _models(names: Sequence[str] | None) -> list[str]:
 
 
 def _backtest(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.forecasters.renewal import sampler_settings
+    from nowcastrenewal.forecaster import sampler_settings
 
     config = bt.load_config(args.config)
     bt.apply_sampler(config)
@@ -1566,7 +1566,7 @@ def _fit_store_archive(args: argparse.Namespace) -> int:
 
 
 def _nowcast(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.forecasters.renewal import sampler_settings
+    from nowcastrenewal.forecaster import sampler_settings
 
     # A renewal model given by --model is fitted here.
     host_devices(int(sampler_settings()["num_chains"]))
@@ -1866,7 +1866,7 @@ def _metadata(args: argparse.Namespace) -> int:
 
 
 def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
-    from bdbvhubrenewal.data import bvd
+    from nowcastrenewal import bvd
 
     config = bt.load_config(args.backtest_config)
     vintages = args.vintages

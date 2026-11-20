@@ -6,7 +6,7 @@ import numpyro.infer.util
 import pytest
 from pyrenew.deterministic import DeterministicVariable
 
-from bdbvhubrenewal.model.composition_noise import (
+from nowcastrenewal.model.composition_noise import (
     DirichletMultinomialNoise,
     MultinomialNoise,
 )

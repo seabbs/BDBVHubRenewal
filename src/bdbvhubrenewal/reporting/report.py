@@ -33,7 +33,6 @@ from bdbvhubrenewal.data import (
     newly_missing,
     release_updates,
 )
-from bdbvhubrenewal.data.bvd import BVD_REPO, bvd_for_vintage
 from bdbvhubrenewal.data.delays import delay_summary
 from bdbvhubrenewal.data.tidy import COHERENCE_STREAMS
 from bdbvhubrenewal.data.zone_map import (
@@ -55,7 +54,6 @@ from bdbvhubrenewal.evaluation.store import (
     samplers,
     stored_models,
 )
-from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 from bdbvhubrenewal.reporting.explorer import (
     explorer_data,
     explorer_html,
@@ -134,6 +132,8 @@ from nowcasteval.scoresummary import (
 from nowcasteval.scoring import summarise_scores
 from nowcasteval.tables import filter_table, markdown_table, sortable_table
 from nowcastfoundation.simulate import simulate_outbreak
+from nowcastrenewal.bvd import BVD_REPO, bvd_for_vintage
+from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
 from nowcastutils.base import NATIONAL, ForecastTask, get_model, list_models
 from nowcastutils.dates import reference_date_for_vintage
 from nowcastutils.snapshots import weekly_counts

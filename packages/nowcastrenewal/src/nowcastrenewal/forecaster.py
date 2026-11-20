@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """The PyRenew renewal model behind the repository's interfaces.
 
-The model itself (JAX, NumPyro, PyRenew) is in `bdbvhubrenewal.model`.
+The model itself (JAX, NumPyro, PyRenew) is in `nowcastrenewal.model`.
 It is imported lazily, so this module and the registry work without the
 `model` extra.
 This module owns everything around it:
@@ -59,8 +59,8 @@ from nowcastutils.forecast import Forecast
 from nowcastutils.hierarchy import is_zone
 
 if TYPE_CHECKING:
-    from bdbvhubrenewal.data.bvd import BvdRelease
-    from bdbvhubrenewal.model import ModelConfig, Vintage
+    from nowcastrenewal.bvd import BvdRelease
+    from nowcastrenewal.model import ModelConfig, Vintage
 
 __all__ = [
     "CENTRED_RT_MIN_CASES",
@@ -185,9 +185,9 @@ def engine() -> ModuleType:
     Returns
     -------
     module
-        `bdbvhubrenewal.model`.
+        `nowcastrenewal.model`.
     """
-    from bdbvhubrenewal import model
+    from nowcastrenewal import model
 
     return model
 
@@ -203,7 +203,7 @@ class Variant:
     description : str
         One line for tables and docs.
     base : str
-        `MAIN` or `BVD`, the configuration in `bdbvhubrenewal.model`.
+        `MAIN` or `BVD`, the configuration in `nowcastrenewal.model`.
     overrides : mapping
         `ModelConfig` fields to change.
     per_province : bool
@@ -277,7 +277,7 @@ def model_config(variant: Variant) -> ModelConfig:
 
     Returns
     -------
-    bdbvhubrenewal.model.ModelConfig
+    nowcastrenewal.model.ModelConfig
         Its base configuration with the overrides applied.
     """
     base: ModelConfig = getattr(engine(), variant.base)
@@ -300,7 +300,7 @@ def fit_config(variant: Variant, data: Vintage) -> ModelConfig:
 
     Returns
     -------
-    bdbvhubrenewal.model.ModelConfig
+    nowcastrenewal.model.ModelConfig
         `model_config(variant)`, centred only where the data allow.
     """
     config = model_config(variant)
@@ -367,7 +367,7 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
     ----------
     model : pyrenew.model.MultiSignalModel
         From `build_model`.
-    data : bdbvhubrenewal.model.Vintage
+    data : nowcastrenewal.model.Vintage
         The inputs.
     sampler : mapping
         The full sampler table (`sampler_settings`), with an optional
@@ -440,7 +440,7 @@ def bvd_release(
     """Return the BVDOutbreakSize release chosen for a task's vintage.
 
     The newest release that existed at the vintage's cut-off and whose
-    joint fit passed the R-hat gate (`bdbvhubrenewal.data.bvd`).
+    joint fit passed the R-hat gate (`nowcastrenewal.bvd`).
 
     Parameters
     ----------
@@ -452,10 +452,10 @@ def bvd_release(
 
     Returns
     -------
-    bdbvhubrenewal.data.bvd.BvdRelease or None
+    nowcastrenewal.bvd.BvdRelease or None
         The release with its choice, or None if none qualifies.
     """
-    from bdbvhubrenewal.data import bvd
+    from nowcastrenewal import bvd
 
     data_dir = Path(os.environ.get("BDBV_DATA_DIR") or "data")
     cache = Path(cache_dir) if cache_dir is not None else data_dir / "bvd"
@@ -477,10 +477,10 @@ def bvd_rows(
     Returns
     -------
     pandas.DataFrame or None
-        `bdbvhubrenewal.data.bvd.model_rows` of the release chosen for the
+        `nowcastrenewal.bvd.model_rows` of the release chosen for the
         vintage, or None if none qualifies.
     """
-    from bdbvhubrenewal.data import bvd
+    from nowcastrenewal import bvd
 
     release = bvd_release(task, cache_dir)
     return None if release is None else bvd.model_rows(release)
@@ -491,7 +491,7 @@ def bvd_record(release: BvdRelease | None) -> dict[str, Any]:
 
     Parameters
     ----------
-    release : bdbvhubrenewal.data.bvd.BvdRelease or None
+    release : nowcastrenewal.bvd.BvdRelease or None
         From `bvd_release`.
 
     Returns
@@ -562,7 +562,7 @@ def vintage_inputs(
     ----------
     task : ForecastTask
         The task.
-    config : bdbvhubrenewal.model.ModelConfig
+    config : nowcastrenewal.model.ModelConfig
         The model configuration.
     table : pandas.DataFrame, optional
         The places (populations and centres). Defaults to the task's
@@ -573,10 +573,10 @@ def vintage_inputs(
 
     Returns
     -------
-    bdbvhubrenewal.model.Vintage
+    nowcastrenewal.model.Vintage
         The model inputs.
     """
-    from bdbvhubrenewal.model.inputs import vintage_from_tables
+    from nowcastrenewal.model.inputs import vintage_from_tables
     from nowcastutils.releases import release_pairs
 
     pairs = None
@@ -610,7 +610,7 @@ def samples_table(
     ----------
     task : ForecastTask
         The task.
-    data : bdbvhubrenewal.model.Vintage
+    data : nowcastrenewal.model.Vintage
         The fitted inputs.
     draws : mapping
         `forecast_trajectories` output, with `province`
@@ -676,7 +676,7 @@ def report_cutoffs(task: ForecastTask, data: Any) -> dict[int, str]:
     ----------
     task : ForecastTask
         The task.
-    data : bdbvhubrenewal.model.Vintage
+    data : nowcastrenewal.model.Vintage
         The fitted inputs.
 
     Returns
@@ -762,7 +762,7 @@ def ppc_rows(
 
     Parameters
     ----------
-    data : bdbvhubrenewal.model.Vintage
+    data : nowcastrenewal.model.Vintage
         The fitted inputs.
     insample : mapping
         Draws of the vintage counts by stream (`known`, `imputed` or
@@ -863,7 +863,7 @@ def delay_summary(
     """
     import jax.numpy as jnp
 
-    from bdbvhubrenewal.model.hazard_delay import hazard_to_pmf
+    from nowcastrenewal.model.hazard_delay import hazard_to_pmf
 
     days = pd.date_range(first_day, periods=last_day + 1, freq="D")
     # The last day of each onset week (to Saturday) up to the vintage.
@@ -1123,7 +1123,7 @@ class RenewalRun:
     ----------
     variant : Variant
         The variant.
-    data : bdbvhubrenewal.model.Vintage
+    data : nowcastrenewal.model.Vintage
         The model inputs.
     draws : dict
         `forecast_trajectories` output.
@@ -1243,7 +1243,7 @@ class RenewalModel:
         """
         # Imported from its module, not the package, so that the fit key
         # (`evaluation.store.fit_code`) follows the builder.
-        from bdbvhubrenewal.model.zones import build_model
+        from nowcastrenewal.model.zones import build_model
 
         pr = engine()
         data = vintage_inputs(task, model_config(self.variant))

@@ -1025,16 +1025,11 @@ def test_the_grid_simulates_its_held_out_round_33(tmp_path):
     assert jobs["simulate_batch"] == 40
 
 
-def test_the_sim_qc_checks_fixed_thresholds_from_the_config(tmp_path):
+def test_the_sim_qc_runs_with_no_thresholds(tmp_path):
     blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
     qc = next(b for b in blocks if re.match(r"(local)?rule sim_qc:", b))
     assert "scripts/sim_qc.py" in qc
-    grid = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())[
-        "simulate"
-    ]["grid_file"]
-    limits = yaml.safe_load((ROOT / grid).read_text())["qc"]
-    for key, value in limits.items():
-        assert f"--{key.replace('_', '-')} {value}" in qc
+    assert "--max-" not in qc
 
 
 def _done_round(root, r, batches=40):

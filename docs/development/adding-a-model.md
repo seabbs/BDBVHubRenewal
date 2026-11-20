@@ -4,7 +4,7 @@ Adding a model to the registry, so every evaluation includes it.
 { .page-subtitle }
 
 A model is a class with a `name` and a `forecast(task)` method.
-`task` is a [`ForecastTask`][nowcastutils.base.ForecastTask]: the target rows and delay data of one vintage, the provinces and weeks to forecast, the number of samples and a seed.
+`task` is a [`ForecastTask`](../../nowcastutils/reference/#nowcastutils.base.ForecastTask): the target rows and delay data of one vintage, the provinces and weeks to forecast, the number of samples and a seed.
 `forecast` returns one row per location, week and sample, with columns `location`, `target_end_date`, `sample` and `value`.
 
 ```python
@@ -33,7 +33,7 @@ For the leave-one-province-out check, set `supports_mask = True` and drop the pr
 
 ## Renewal variants
 
-A new renewal variant is one entry in `VARIANTS` in [`forecasters.renewal`][bdbvhubrenewal.forecasters.renewal].
+A new renewal variant is one entry in `VARIANTS` in [`forecasters.renewal`][nowcastrenewal.forecaster].
 It names a base `ModelConfig` and the fields it changes.
 Fitted variants are not run by the docs build or the smoke tests.
 The [fit store](cli.md#fit-store) fits them once a variant is on `main`.

@@ -1,7 +1,6 @@
-# nowcasteval
+# Reference
 
-Score forecasts, run backtests and compare models. See the [nowcasteval page](../packages/nowcasteval.md) for worked examples.
-{ .page-subtitle }
+The nowcasteval API.
 
 ::: nowcasteval
     options:

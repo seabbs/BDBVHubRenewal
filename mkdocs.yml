@@ -51,9 +51,6 @@ nav:
           - Submission log: submission/rounds/index.md
   - Packages:
       - packages/index.md
-      - nowcastutils: packages/nowcastutils.md
-      - nowcasteval: packages/nowcasteval.md
-      - nowcastbaselines: packages/nowcastbaselines.md
       - Setup: setup.md
       - Getting started: getting-started.ipynb
       - Development:
@@ -62,9 +59,6 @@ nav:
           - CLI: development/cli.md
       - API reference:
           - reference/index.md
-          - nowcastutils: reference/nowcastutils.md
-          - nowcasteval: reference/nowcasteval.md
-          - nowcastbaselines: reference/nowcastbaselines.md
           - Data: reference/data.md
           - Models:
               - Forecasters: reference/forecasters.md
@@ -172,12 +166,19 @@ markdown_extensions:
 plugins:
   - search
   # Pages that moved or were removed, so their old addresses still work.
+  # Package pages moved to each package's own site.
   - redirects:
       redirect_maps:
         model-development/model-building.md: renewal/methods.md
         model-development/log.md: renewal/index.md
         model-development/score-history.md: backtest.md
-        reference/baselinenowcast.md: reference/nowcastbaselines.md
+        reference/baselinenowcast.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastbaselines/reference/
+        packages/nowcastutils.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastutils/
+        packages/nowcasteval.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcasteval/
+        packages/nowcastbaselines.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastbaselines/
+        reference/nowcastutils.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastutils/reference/
+        reference/nowcasteval.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcasteval/reference/
+        reference/nowcastbaselines.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastbaselines/reference/
   - mkdocs-jupyter:
       # Only the executed notebook. The .py source would also render to
       # getting-started/ and replace it with a page without outputs.
@@ -189,7 +190,7 @@ plugins:
       default_handler: python
       handlers:
         python:
-          paths: [src, packages/nowcastutils/src, packages/nowcasteval/src, packages/nowcastbaselines/src, packages/nowcastfoundation/src]
+          paths: [src, packages/nowcastutils/src, packages/nowcasteval/src, packages/nowcastbaselines/src, packages/nowcastfoundation/src, packages/nowcastrenewal/src]
           options:
             docstring_style: numpy
             docstring_section_style: table

@@ -115,14 +115,82 @@ def test_the_code_names_are_the_paths_first_hashed():
 
     assert set(ft.CODE) == {
         ft.GRID_NAME,
-        *ft.SIMULATOR,
+        *ft.SIMULATOR[1:],
         "scripts/finetune_chronos.py",
         "src/bdbvhubrenewal/forecasters/finetune.py",
     }
-    # Every engine file is hashed.
-    engine = Path(__file__).parents[1] / ft.ENGINE / "R"
-    hashed = {p for p in ft.SIMULATOR if p.startswith(ft.ENGINE + "/R/")}
-    assert hashed == {f"{ft.ENGINE}/R/{p.name}" for p in engine.glob("*.R")}
     root = Path(__file__).parents[1]
     for path in (*ft.CODE.values(), ft.FOUNDATION_PATH):
         assert (root / path).exists(), path
+
+
+def test_every_engine_file_is_hashed_by_glob(tmp_path, monkeypatch):
+    import finetune_chronos as ft
+
+    engine = Path(__file__).parents[1] / ft.ENGINE / "R"
+    hashed = {p for p in ft.SIMULATOR if p.startswith(ft.ENGINE + "/R/")}
+    assert hashed == {f"{ft.ENGINE}/R/{p.name}" for p in engine.glob("*.R")}
+    # A new engine file is hashed without listing it.
+    (tmp_path / ft.ENGINE / "R").mkdir(parents=True)
+    for name in ("a.R", "new.R"):
+        (tmp_path / ft.ENGINE / "R" / name).write_text("")
+    monkeypatch.setattr(ft, "ROOT", tmp_path)
+    files = ft.simulator_files("g.yaml")
+    assert files[0] == "g.yaml"
+    assert f"{ft.ENGINE}/R/new.R" in files
+
+
+def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
+    monkeypatch, tmp_path
+):
+    import shutil
+
+    import finetune_chronos as ft
+
+    assert ft.SIMULATOR[0] == ft.workflow_grid_file() == ft.GRID_FILE_PATH
+    monkeypatch.setattr(ft, "SIMULATOR", ft.SIMULATOR)
+    monkeypatch.setattr(ft, "CODE", ft.CODE)
+    # use_grid sets the run's parents globally: put them back after.
+    monkeypatch.setattr(ft, "PARENTS", ft.PARENTS)
+    ft.use_grid(ft.GRID_FILE)
+    assert ft.SIMULATOR[0] == ft.GRID_FILE_PATH
+    assert ft.CODE[ft.GRID_NAME] == ft.GRID_FILE_PATH
+    # Another grid file is hashed under its own path.
+    other = tmp_path / "other.yaml"
+    shutil.copy(ft.GRID_FILE, other)
+    ft.use_grid(other)
+    assert ft.SIMULATOR[0] == str(other)
+    assert ft.CODE[str(other)] == str(other)
+    assert ft.GRID_NAME not in ft.CODE
+
+
+def test_the_grid_hashes_the_names_it_was_first_hashed_with():
+    """The glob and the frozen grid name give the names checkpoints hashed."""
+    import finetune_chronos as ft
+
+    engine = "packages/nowcastfoundation/r"
+    first = {
+        "config/finetune/grids/r7.yaml",
+        "workflow/scripts/simulate.R",
+        f"{engine}/DESCRIPTION",
+        *(
+            f"{engine}/R/{name}.R"
+            for name in (
+                "delays",
+                "design",
+                "grid",
+                "infections",
+                "nowcastfoundation-package",
+                "observation",
+                "reporting",
+                "simulate",
+                "utils",
+            )
+        ),
+    }
+    names = set(ft.code_files(ft.simulator_files(ft.GRID_FILE_PATH)))
+    trainer = {
+        "scripts/finetune_chronos.py",
+        "src/bdbvhubrenewal/forecasters/finetune.py",
+    }
+    assert names - trainer == first

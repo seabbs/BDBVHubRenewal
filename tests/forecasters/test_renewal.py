@@ -18,9 +18,9 @@ from bdbvhubrenewal.forecasters import (
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters import renewal as rn
 from bdbvhubrenewal.submission.hub import model_abbr_for
 from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastrenewal import forecaster as rn
 from nowcastutils.forecast import Forecast
 
 pytest.importorskip("pyrenew")
@@ -382,7 +382,7 @@ def test_bvd_variant_reads_the_release_for_its_vintage(
 ) -> None:
     import shutil
 
-    from bdbvhubrenewal.data import bvd
+    from nowcastrenewal import bvd
 
     fixtures = Path(__file__).resolve().parents[1] / "data" / "bvd"
     releases = bvd.parse_releases(
@@ -472,9 +472,9 @@ def test_chain_method_defaults_to_vectorized(
 def test_inputs_carry_the_release_pairs_of_earlier_files(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.forecasters.renewal import vintage_inputs
-    from bdbvhubrenewal.model import MAIN
     from nowcasteval.backtest import BacktestConfig, make_tasks
+    from nowcastrenewal.forecaster import vintage_inputs
+    from nowcastrenewal.model import MAIN
 
     tasks = {
         t.vintage: t
@@ -551,7 +551,7 @@ def test_forecast_records_a_summary_of_each_fit(
 def test_delay_summary_reads_shares_and_medians_by_onset_week() -> None:
     import datetime as dt
 
-    from bdbvhubrenewal.forecasters.renewal import delay_summary
+    from nowcastrenewal.forecaster import delay_summary
 
     draws, dmax, days = 200, 20, 21
     # A constant hazard of 0.5 on every delay, shifted later in the last

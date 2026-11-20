@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import numpyro
 import pytest
 
-from bdbvhubrenewal.model.rt_observation import RtPseudoObservation
+from nowcastrenewal.model.rt_observation import RtPseudoObservation
 
 ARGS = {
     "day": 7,

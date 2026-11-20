@@ -1,0 +1,33 @@
+[project]
+name = "nowcastrenewal"
+version = "0.1.0"
+description = "Renewal-model nowcasts and forecasts: the PyRenew renewal model, its forecasters and the BVDOutbreakSize inputs"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Sam Abbott", email = "sam.abbott@lshtm.ac.uk" }]
+requires-python = ">=3.13"
+dependencies = [
+  "jax>=0.12.0",
+  "numpy>=1.26,<3",
+  "pandas>=2.1,<4",
+  "scipy>=1.11,<2",
+  "nowcastutils",
+  "nowcasteval",
+  "nowcastbaselines",
+]
+
+[project.optional-dependencies]
+# The PyRenew renewal model (`nowcastrenewal.model`), pinned by SHA.
+# The forecasters and the registry import without it.
+model = [
+  "pyrenew @ git+https://github.com/CDCgov/PyRenew@2441cb327d6e563eab0495540cb7467a102c234f",
+]
+
+[tool.uv.sources]
+nowcastutils = { workspace = true }
+nowcasteval = { workspace = true }
+nowcastbaselines = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.8,<0.14"]
+build-backend = "uv_build"

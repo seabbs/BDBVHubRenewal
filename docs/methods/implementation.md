@@ -6,7 +6,7 @@ How the [models](model.md) are built in code, computed and sampled.
 ## Code
 
 The model extends [PyRenew](https://github.com/CDCgov/PyRenew), pinned to a commit, and runs in JAX with NumPyro.
-Its code is in [`bdbvhubrenewal.model`][bdbvhubrenewal.model] and the variants are in [`forecasters.renewal`][bdbvhubrenewal.forecasters.renewal].
+Its code is in [`nowcastrenewal.model`][nowcastrenewal.model] and the variants are in [`forecasters.renewal`][nowcastrenewal.forecaster].
 The model is configured by `ModelConfig`.
 
 ## PyRenew and what is built here
@@ -43,7 +43,7 @@ PyRenew has no delay that varies with time, no Dirichlet-multinomial count and n
 
 ## Baseline models
 
-The baselines are in [`forecasters.randomwalk`][nowcastbaselines.randomwalk] and [`forecasters.chain`][nowcastbaselines.chain], on a JAX port of baselinenowcast 0.2.2 in [`nowcastbaselines.baselinenowcast`][nowcastbaselines.baselinenowcast].
+The baselines are in [`nowcastbaselines.randomwalk`](../../nowcastbaselines/reference/#nowcastbaselines.randomwalk) and [`nowcastbaselines.chain`](../../nowcastbaselines/reference/#nowcastbaselines.chain), on a JAX port of baselinenowcast 0.2.2 in [`nowcastbaselines.baselinenowcast`](../../nowcastbaselines/reference/#nowcastbaselines.baselinenowcast).
 The port is checked against fixtures from the R package, and has one named extension, the chain ladder of release snapshots, which skips unobserved cells and fits one daily delay shared by pairs of any gap.
 The models use the port's chain ladder on snapshots.
 The observation model is in `forecasters.obs`, and fits and draws its new reports with the port's `fit_by_horizon`, `fit_nb` and `sample_nb`.

@@ -87,7 +87,7 @@ The engine is the R package `packages/nowcastfoundation/r`, run by `workflow/scr
 - `simulate_batch`: one batch of the engine through `workflow/scripts/simulate.R`, under `JOB_PREFIX` at nice 19, once there is memory, disk and load to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one, and its whole command runs with that library and the system's tools ahead of PATH (R puts the system libraries on `LD_LIBRARY_PATH`, under which a bash from another prefix fails).
 - `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
-- `sim_qc`: the sim QC (`scripts/sim_qc.py`), a check against fixed plausibility thresholds (`simulate.qc`: cases per stratum, a week-on-week jump with no reporting shock, mean delay), whose exclusions (`qc/excluded.csv`, with reason and evidence) the trainer skips. Nothing is deleted.
+- `sim_qc`: the sim QC (`scripts/sim_qc.py`), a record of each round (no thresholds since Sam's 13:25 decision: it records each simulation's summaries and an empty exclusion list; rounds checked before keep theirs), whose exclusions (`qc/excluded.csv`, with reason and evidence) the trainer skips. Nothing is deleted.
 - `round_ready`: the seed list and `READY`, last.
 - `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
 - `release_batch`, `release_qc`, `release`: opt-in, each batch and the round's QC exclusions to its round's release.

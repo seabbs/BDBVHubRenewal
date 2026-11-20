@@ -132,11 +132,18 @@ def use_grid(grid_file: Path | str = GRID_FILE) -> None:
         If the grid file is missing, so a wrong path is not silently
         trained with the even parent mix.
     """
-    global PARENTS
+    global PARENTS, SIMULATOR, CODE
     path = Path(grid_file)
     if not path.is_file():
         raise FileNotFoundError(f"no grid file at {path}")
     PARENTS = grid_parents(path)
+    # The run's own grid file is hashed.
+    try:
+        name = str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        name = str(path)
+    SIMULATOR = simulator_files(name)
+    CODE = code_files(SIMULATOR)
 
 
 def native_cadence(source: str) -> str:
@@ -241,35 +248,62 @@ GRID_NAME = "config/finetune/grids/r7.yaml"
 """The grid file's name in `code_sha256`: its path when checkpoints were
 first hashed, kept so moving it changes no checkpoint's hash (`CODE`)."""
 
-SIMULATOR = (
-    "workflow/scripts/simulate.R",
-    f"{ENGINE}/DESCRIPTION",
-    *(
-        f"{ENGINE}/R/{name}.R"
-        for name in (
-            "delays",
-            "design",
-            "grid",
-            "infections",
-            "nowcastfoundation-package",
-            "observation",
-            "reporting",
-            "simulate",
-            "utils",
-        )
-    ),
-)
-"""The simulator's files beside the grid: the rule's wrapper and the
-engine."""
+GRID_FILE_PATH = "config/finetune/grid.yaml"
+"""The grid file's path from the repository root, hashed as `GRID_NAME`."""
 
-CODE = {
-    GRID_NAME: "config/finetune/grid.yaml",
-    **{path: path for path in SIMULATOR},
-    "scripts/finetune_chronos.py": "scripts/finetune_chronos.py",
-    "src/bdbvhubrenewal/forecasters/finetune.py": (
-        "packages/nowcastfoundation/src/nowcastfoundation/finetune.py"
-    ),
-}
+WRAPPER = "workflow/scripts/simulate.R"
+"""The simulate rule's wrapper around the engine."""
+
+ROOT = Path(__file__).parents[1]
+"""The repository root, which the hashed paths are relative to."""
+
+
+def simulator_files(grid_file: str) -> tuple[str, ...]:
+    """Return the simulator's files: the grid, the wrapper and the engine.
+
+    The engine is its description and every R file (`ENGINE/R/*.R`,
+    found by glob so a new file is hashed without listing it).
+    """
+    engine = sorted(p.name for p in (ROOT / ENGINE / "R").glob("*.R"))
+    return (
+        grid_file,
+        WRAPPER,
+        f"{ENGINE}/DESCRIPTION",
+        *(f"{ENGINE}/R/{name}" for name in engine),
+    )
+
+
+def workflow_grid_file() -> str:
+    """Return the workflow's grid file (`simulate.grid_file`)."""
+    import yaml
+
+    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    return str(config["simulate"]["grid_file"])
+
+
+def code_files(simulator: tuple[str, ...]) -> dict[str, str]:
+    """Return `CODE` for a simulator's files.
+
+    The grid file (`GRID_FILE_PATH`) is named `GRID_NAME`, its path when
+    checkpoints were first hashed.
+    """
+    return {
+        **{
+            GRID_NAME if path == GRID_FILE_PATH else path: path
+            for path in simulator
+        },
+        "scripts/finetune_chronos.py": "scripts/finetune_chronos.py",
+        "src/bdbvhubrenewal/forecasters/finetune.py": (
+            "packages/nowcastfoundation/src/nowcastfoundation/finetune.py"
+        ),
+    }
+
+
+SIMULATOR = simulator_files(workflow_grid_file())
+"""The simulator's files, with the workflow's grid until a run sets its
+own (`use_grid`)."""
+
+CODE = code_files(SIMULATOR)
 """Files the checkpoint depends on, hashed into its settings: each
 file's name in `code_sha256`, then where it is now.
 

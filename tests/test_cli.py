@@ -243,8 +243,8 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
     import argparse
 
     from bdbvhubrenewal.cli import _task
-    from bdbvhubrenewal.forecasters.renewal import vintage_inputs
-    from bdbvhubrenewal.model import MAIN
+    from nowcastrenewal.forecaster import vintage_inputs
+    from nowcastrenewal.model import MAIN
 
     args = argparse.Namespace(
         vintage="latest",
@@ -271,9 +271,9 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
 
     from bdbvhubrenewal.cli import _stored
     from bdbvhubrenewal.data import load_target
-    from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
     from nowcasteval.backtest import run_forecasts
     from nowcasteval.scoring import energy_scores
+    from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
 
     args = argparse.Namespace(
         data=str(DATA), results=str(tmp_path), store=str(tmp_path / "none")
@@ -1115,7 +1115,7 @@ def test_a_stored_forecast_takes_the_zones_of_its_fit_directory(
     # zones file. The table takes those zones, as the submission does from
     # the fit directory (#366).
     from bdbvhubrenewal import cli
-    from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
+    from nowcastrenewal.zones import ZONES_FILE
     from nowcastutils.forecast import Forecast
 
     zones = pd.DataFrame(

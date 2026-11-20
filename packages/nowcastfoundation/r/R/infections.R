@@ -324,7 +324,11 @@ latent_onsets <- function(grid, n, gt, strata, design, v) {
   pmfs <- lapply(v$incubation_mean[strata$.group], incubation_pmf,
     cv = grid$constants$incubation_cv
   )
-  onsets <- sweep(convolve_rows(run$infections, pmfs), 2, asc, `*`)
+  # An established or endemic stratum ran at its level before the span
+  # too, so its onsets open at that level rather than ramping up from zero
+  # over the incubation period; an early outbreak had no infections before.
+  before <- if (early) NULL else start[1L, ]
+  onsets <- sweep(convolve_rows(run$infections, pmfs, before), 2, asc, `*`)
   list(
     onsets = onsets,
     infections = run$infections,
