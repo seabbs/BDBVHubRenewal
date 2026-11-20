@@ -204,6 +204,6 @@ def test_the_heldout_set_is_the_runs_test_round() -> None:
         f"rounds/r{r}/sims"
     )
     assert cfg["synthetic"]["grid"] == grid
-    assert Path(cfg["synthetic"]["grid_file"]).name == Path(
-        sim["grid_file"]
-    ).name
+    assert (
+        Path(cfg["synthetic"]["grid_file"]).name == Path(sim["grid_file"]).name
+    )

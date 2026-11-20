@@ -362,7 +362,6 @@ def test_factors_include_every_factor_of_the_held_out_grid() -> None:
     assert set(synthetic.FACTORS) >= set(grid["factors"])
 
 
-
 def _draws(counts: pd.DataFrame, n: int) -> pd.DataFrame:
     """Return `counts` as `n` draws of one r3 simulation."""
     return pd.concat(
