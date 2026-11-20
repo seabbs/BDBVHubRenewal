@@ -8,9 +8,9 @@ from numpyro.infer import init_to_median
 
 from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.data.zones import zone_places
-from bdbvhubrenewal.model import MAIN, build_model, model_args
-from bdbvhubrenewal.model.inputs import vintage_from_tables
-from bdbvhubrenewal.model.zones import (
+from nowcastrenewal.model import MAIN, build_model, model_args
+from nowcastrenewal.model.inputs import vintage_from_tables
+from nowcastrenewal.model.zones import (
     ZoneInfections,
     build_zone_model,
     nested_basis,
@@ -226,7 +226,7 @@ def test_zone_model_shares_province_parts(zone_vintage):
 
 
 def test_zone_bvd_groups_map_by_province(outbreak, sim_tables):
-    from bdbvhubrenewal.model.inputs import bvd_inputs
+    from nowcastrenewal.model.inputs import bvd_inputs
 
     rows = pd.DataFrame(
         {
@@ -253,7 +253,7 @@ def test_zone_bvd_groups_map_by_province(outbreak, sim_tables):
 def test_mean_anchored_walk_starts_at_its_mean_level():
     from pyrenew.randomvariable import DistributionalVariable
 
-    from bdbvhubrenewal.model.zones import MeanAnchoredWalk
+    from nowcastrenewal.model.zones import MeanAnchoredWalk
 
     walk = MeanAnchoredWalk(
         DistributionalVariable("sd", numpyro.distributions.HalfNormal(0.3)),

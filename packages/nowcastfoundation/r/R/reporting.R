@@ -10,18 +10,6 @@ slowdown_window <- function(counts, v) {
   c(start, start + 7L * v$slow_weeks - 1L)
 }
 
-# Report dates held by bunching: from each share `bunch_at` of the way
-# through, the next `bunch_len` dates that report (`report` 1 in
-# `structural`) in every stratum.
-bunch_dates <- function(structural, v) {
-  days <- sort(unique(structural[report == 1L, report_date]))
-  start <- min(structural$date) + round(v$bunch_at * v$weeks * 7)
-  held <- unlist(lapply(seq_along(start), function(i) {
-    head(days[days >= start[i]], v$bunch_len[i])
-  }))
-  sort(unique(as.IDate(held)))
-}
-
 # Revisions (layer 4) on counts by report date (`mean`, as
 # `simulate_outbreak` builds them), with each stratum's rates: cases reported in error (a Poisson
 # share `revise_over` of each count) stay in the releases for

@@ -43,10 +43,16 @@ as_formula <- function(intercept, terms) {
   as.formula(paste("~", paste(terms, collapse = " + ")))
 }
 
-# Standard deviations of a module's random effects, named by effect.
+# Standard deviations of a module's random effects, named by effect. An
+# interaction's effects (`day_of_week__placeP01`, one per level of the
+# second factor) take the first factor's.
 effect_sds <- function(rdesign, sds) {
-  effects <- colnames(rdesign)[-1]
-  array(as.numeric(unlist(sds[effects])))
+  effects <- sub("__.*", "", colnames(rdesign)[-1])
+  out <- sds[effects]
+  if (any(vapply(out, is.null, TRUE))) {
+    stop("no sd for effect ", paste(effects[vapply(out, is.null, TRUE)], collapse = ", "))
+  }
+  array(as.numeric(unlist(out)))
 }
 
 # Stan data as JSON, as cmdstanr writes it from a list (`process_data`):

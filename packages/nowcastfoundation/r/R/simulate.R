@@ -95,6 +95,17 @@ simulate_outbreak <- function(grid, design, v, ctx) {
   stratum_terms <- c(
     if (place_delays) "(1 | place)", if (multi_age) "(1 | age)"
   )
+  # The delay by reference weekday: one pattern, or one per place where
+  # places' delays are independent.
+  if (design$delay_dow == "yes") {
+    stratum_terms <- c(stratum_terms, if (
+      multi_place && design$delay_places == "independent"
+    ) {
+      "(1 | day_of_week:place)"
+    } else {
+      "(1 | day_of_week)"
+    })
+  }
   hazard <- design$delay_form != "parametric"
   family <- if (parametric) design$delay_family else "none"
   hazard_terms <- c("rw(delay)", "(1 | delay)")
@@ -120,7 +131,10 @@ simulate_outbreak <- function(grid, design, v, ctx) {
   reference <- drop_builder_frame(reference)
   rd <- reference$data
   delay <- delay_parameters(family, v, max_delay)
-  stratum_sd <- list(place = v$delay_place_sd, age = v$delay_age_sd)
+  stratum_sd <- list(
+    place = v$delay_place_sd, age = v$delay_age_sd,
+    day_of_week = v$delay_dow_sd
+  )
   parameters <- list()
   set_change <- function(prefix, cols) {
     beta <- rnorm(length(cols))
@@ -145,7 +159,8 @@ simulate_outbreak <- function(grid, design, v, ctx) {
       # independent place moves both alike.
       spread <- if (design$delay_places == "independent") 1 else 0.5
       parameters$refp_sd_beta_sd <- effect_sds(rd$refp_rdesign, list(
-        place = spread * v$delay_place_sd, age = v$delay_age_sd / 2
+        place = spread * v$delay_place_sd, age = v$delay_age_sd / 2,
+        day_of_week = v$delay_dow_sd / 2
       ))
     }
     if (family != "exponential") {
@@ -174,14 +189,15 @@ simulate_outbreak <- function(grid, design, v, ctx) {
     parameters$expl_beta_sd <- array(v$reference_dow_sd)
   }
 
-  # Report date: day-of-week effects, or reports on given weekdays.
+  # Report date: every day (with a weekday effect, or none), or reports on
+  # given weekdays only.
   gc()
   structural <- NULL
   report_terms <- NULL
-  if (design$reporting == "daily") {
-    report_terms <- "(1 | day_of_week)"
+  if (design$report_days == "daily") {
+    if (design$report_dow == "yes") report_terms <- "(1 | day_of_week)"
   } else {
-    on <- strsplit(design$report_days, ";")[[1]]
+    on <- strsplit(design$report_weekdays, ";")[[1]]
     structural <- epinowcast::enw_structural_reporting_metadata(pobs)
     structural[, report := as.integer(weekdays(report_date) %in% on)]
     structural <- structural[, .(.group, date, report_date, report)]
@@ -199,15 +215,6 @@ simulate_outbreak <- function(grid, design, v, ctx) {
         report := 0L
       ]
     }
-  }
-  if (design$bunching == "yes") {
-    if (is.null(structural)) {
-      structural <- epinowcast::enw_structural_reporting_metadata(pobs)
-      structural[, report := 1L]
-    }
-    held <- bunch_dates(structural, v)
-    structural[report_date %in% held, report := 0L]
-    v$bunch_dates <- as.character(held)
   }
   report <- epinowcast::enw_report(
     non_parametric = as_formula(FALSE, report_terms),
@@ -285,9 +292,8 @@ simulate_outbreak <- function(grid, design, v, ctx) {
 }
 
 # Simulate one design: up to five draws of its values, each kept if it
-# runs, reports at least `min_cases` (`redraw_reason`) and passes the sim
-# QC (`qc_reason`). Returns the outbreak (or NULL) and a failure row per
-# failed try.
+# runs and reports at least `min_cases` (`redraw_reason`). Returns the
+# outbreak (or NULL) and a failure row per failed try.
 simulate_cell <- function(grid, design, ctx, id = NA_character_) {
   if (design$strata_link == "independent" &&
       design$n_places * design$n_ages > 1) {
@@ -300,12 +306,7 @@ simulate_cell <- function(grid, design, ctx, id = NA_character_) {
     reason <- if (inherits(res, "error")) {
       conditionMessage(res)
     } else {
-      first <- res$counts[draw == 1L]
-      reason <- redraw_reason(sum(res$counts$count) / ctx$draws, grid)
-      population <- stats::setNames(
-        res$values$stratum_population, res$values$stratum_location
-      )
-      if (is.na(reason)) qc_reason(first, grid, population) else reason
+      redraw_reason(sum(res$counts$count) / ctx$draws, grid)
     }
     if (is.na(reason)) {
       return(list(out = res, failures = failures))
@@ -491,43 +492,4 @@ redraw_reason <- function(size, grid) {
   } else {
     NA_character_
   }
-}
-
-#' Why a simulation fails the sim QC, if it does
-#'
-#' The checks of scripts/sim_qc.py on one draw's counts, with the grid's
-#' thresholds (`grid$qc`): more cases in a stratum than its population,
-#' the largest week-on-week rise in weekly cases by reference date (weeks
-#' from Monday), and the mean reporting delay.
-#'
-#' @param counts One draw's counts: `location`, `reference_date`,
-#'   `report_date` and `count`.
-#' @param grid A grid (`read_grid`).
-#' @param population Each stratum's population, named by location, or
-#'   `NULL` to skip the size check.
-#' @return The reason, or `NA` if the simulation passes.
-#' @export
-qc_reason <- function(counts, grid, population = NULL) {
-  q <- grid$qc
-  w <- counts$count
-  if (!is.null(population)) {
-    cases <- tapply(w, counts$location, sum)
-    if (any(cases > population[names(cases)], na.rm = TRUE)) {
-      return("cases in a stratum above its population")
-    }
-  }
-  ref <- counts$reference_date
-  week <- ref - (as.integer(format(ref, "%u")) - 1L)
-  weekly <- tapply(w, week, sum)
-  growth <- diff(log(as.numeric(weekly[order(names(weekly))]) + 1))
-  if (length(growth) && max(growth) > log(q$max_weekly_jump)) {
-    return(sprintf(
-      "weekly cases rise more than %s-fold in one week", q$max_weekly_jump
-    ))
-  }
-  delay <- as.integer(counts$report_date - ref)
-  if (sum(delay * w) / sum(w) > q$max_mean_delay_days) {
-    return(sprintf("mean reporting delay over %s days", q$max_mean_delay_days))
-  }
-  NA_character_
 }

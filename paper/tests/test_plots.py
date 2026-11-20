@@ -474,3 +474,9 @@ def test_wis_parts_stack_and_fill_as_the_shared_map() -> None:
         (hatches[p] is None) == (WIS_PART_FILLS[p] == "solid")
         for p in WIS_PART_STACK
     )
+
+
+def test_nowcast_panels_show_50_and_90_percent_bands() -> None:
+    from paperfigs.plots import NOWCAST_LEVELS
+
+    assert NOWCAST_LEVELS == (0.05, 0.25, 0.5, 0.75, 0.95)

@@ -7,7 +7,7 @@ from numpyro.handlers import seed, trace
 from pyrenew.deterministic import DeterministicVariable
 from pyrenew.latent.temporal_processes import TemporalProcess
 
-from bdbvhubrenewal.model import NonCentredRandomWalk
+from nowcastrenewal.model import NonCentredRandomWalk
 
 
 def test_is_a_temporal_process():

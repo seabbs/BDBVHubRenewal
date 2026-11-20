@@ -15,10 +15,10 @@ import jax
 import numpy as np
 import pytest
 
-from bdbvhubrenewal.forecasters.renewal import ppc_rows
-from bdbvhubrenewal.model import MAIN, build_model, fit
-from bdbvhubrenewal.model.model import forecast_trajectories
 from nowcasteval.ppc import summarise_draws
+from nowcastrenewal.forecaster import ppc_rows
+from nowcastrenewal.model import MAIN, build_model, fit
+from nowcastrenewal.model.model import forecast_trajectories
 
 from .conftest import VINTAGE_DAYS, vintage_date
 

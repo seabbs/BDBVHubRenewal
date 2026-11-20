@@ -14,8 +14,8 @@ import pytest
 from jax import enable_x64
 
 from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.model import MAIN, build_model, model_args
-from bdbvhubrenewal.model.inputs import vintage_from_tables
+from nowcastrenewal.model import MAIN, build_model, model_args
+from nowcastrenewal.model.inputs import vintage_from_tables
 
 from .conftest import MAIN_REPO_DATA
 

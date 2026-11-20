@@ -95,7 +95,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - We report the final checkpoint, where the learning rate reaches zero, and select no checkpoint on real data.
 - Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
 - We compare the joint block with forecasting each level alone and with summing the lowest level (SI).
-- We compare lags capped at 4 weeks or 28 days with lags run to the truth delay (SI).
+- The number of lag series is the reporting delay's 99% point, estimated at the nowcast date from complete steps only, or as many as the history allows if that is fewer (SI).
 - We compare the model with attention biases with one fine-tuned without them (SI).
 - We fine-tune Chronos-2 on complete counts only, without delay series, and compare it with the ragged model (SI).
 - We fine-tune Chronos-2 on real data and compare it with the model fine-tuned on simulations (SI).
@@ -123,7 +123,7 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
   - In layer 1 we simulate infections by a renewal process with susceptible depletion in each place and age group, with R(t) following one of several transmission paths, shifts in R(t), immune escape, imports and mixing between strata.
   - In layer 2 we observe infections as reference events after a delay such as incubation, ascertain a share of them and add NB1 or Poisson noise.
   - In layer 3 we report them after a reporting delay that is static or changes over time, through epinowcast's observation model.
-  - In layer 4 we add the reporting system: report days, bunching, backlogs, outages, revisions, so a release can exceed the final count, and the release cadence.
+  - In layer 4 we add the reporting system: report days and weekday effects, backlogs, outages, revisions, so a release can exceed the final count, and the release cadence.
   - In layer 5 we set the strata and aggregation: places and age groups and how they nest, how places interact, how settings vary across strata, and aggregates that are exact sums of their strata or do not add up.
   - Layer 1 is the epidemic setting, and layers 2 to 5 are what fine-tuning teaches.
   - The workflow simulates outbreaks from the grid's config and writes every summary and figure, so a change to the grid regenerates them.
@@ -164,9 +164,10 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - We score only the hub's targets, and the SI adds our models' forecasts up to 4 weeks after the nowcast date.
 - Our models forecast weeks ending on Saturdays, so each nowcast date gives seven sets of forecasts, one for each weekday offset $k$ from 0 to 6.
 - For offset $k$, every date moves forward so that $k$ days before the nowcast date is a Saturday, and back again for scoring.
-- We score each model on its own quantiles at the hub's seven levels, and the weekly Chronos-2 models, which lack some, are interpolated linearly.
+- We score each model on its own quantiles at the hub's seven levels.
 - As @Wolffram2023 did, we replace one team's erroneous values by its nowcast of the day before, and fill another's missing 10% quantiles from a normal through its 2.5% and 25% quantiles.
-- We score models that give samples, and sums over days, on the quantiles of 1,000 draws with common random numbers.
+- Chronos-2 gives quantiles directly, which we interpolate linearly to the hub's levels, with no sampling.
+- We score the random walks, which give samples, on the quantiles of 1,000 draws with common random numbers.
 - One fine-tuned Chronos-2 model forecasts daily, 3-day and weekly data.
 - For both case studies, we also score our models' daily counts directly from the daily rows, against `randomwalknowcast` (SI).
 - We split the nowcast dates in half at 10 February 2022.
@@ -185,7 +186,8 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, with $D$ the 98% point of the hub data's reporting delay, taking the hub teams' quantiles from their samples.
 - $D$ is part of the scoring rule, not a choice tuned on the data.
 - The SI compares the samples directly with the fair CRPS.
-- We score our models on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.
+- We score Chronos-2 on its own quantiles, the random walks on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.
+- Chronos-2's submitted trajectories come from its quantiles through a copula, and the SI scores them with and without it (Correlated trajectories).
 - The fine-tuned models use the final run's last checkpoint, at 3,200 simulations (`{{< meta results.finetuned >}}`), trained on simulations only.
 - Key references: [@bdbv_modeling_hub_2026; @Viboud2018; @funkAssessingPerformanceRealtime2019].
 :::
@@ -241,7 +243,7 @@ Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: na
 ::: {#fig-synthetic-nowcasts}
 ![](build/figures/main/synthetic-nowcasts.png)
 
-Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workflow's seed, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's score relative to `randomwalknowcast`. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workflow's seed, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's score relative to `randomwalknowcast`. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic}
@@ -264,7 +266,7 @@ Held-out synthetic data: mean scores, coverage and number of forecasts of each m
 - We show national nowcasts against the other models.
 - We summarise the scores.
 - The SI compares the model fine-tuned on real data with the one fine-tuned on simulations (Real-data fine-tune against synthetic).
-- The SI compares capped lags with lags run to the truth delay (Foundation model setup).
+- The SI compares this lag count with a fixed cap of 4 weeks or 28 days (Foundation model setup).
 - The SI gives daily nowcasts for both case studies against `randomwalknowcast` (Daily nowcasts).
 - Key references: [@Wolffram2023; @amaralPostprocessingWeightedCombination2025].
 :::
@@ -272,7 +274,7 @@ Held-out synthetic data: mean scores, coverage and number of forecasts of each m
 ::: {#fig-germany-nowcasts}
 ![](build/figures/main/germany-nowcasts.png)
 
-German nowcast hub: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#fig-germany}
@@ -303,7 +305,7 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 ::: {#fig-ebola-nowcasts}
 ![](build/figures/main/ebola-nowcasts.png)
 
-Ebola: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola}

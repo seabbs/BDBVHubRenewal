@@ -4,7 +4,7 @@ import numpy as np
 import numpyro.distributions as dist
 import pytest
 
-from bdbvhubrenewal.model.distributions import ObservedCellsDirichletMultinomial
+from nowcastrenewal.model.distributions import ObservedCellsDirichletMultinomial
 
 
 @pytest.fixture

@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import ast
 import base64
+import copy
 import dataclasses
 import datetime as dt
 import functools
@@ -231,7 +232,7 @@ def build_model(name: str, sampler: Mapping[str, Any]) -> ForecastModel:
     ForecastModel
         The model. The environment is left as it was.
     """
-    from bdbvhubrenewal.forecasters.renewal import SAMPLER_ENV
+    from nowcastrenewal.forecaster import SAMPLER_ENV
 
     old = os.environ.pop(SAMPLER_ENV, None)
     try:
@@ -363,8 +364,47 @@ def _fit_functions(root: Path) -> list[str]:
         missing = sorted(set(names) - set(defs))
         if missing:
             raise ValueError(f"{rel} has no {missing}")
-        out += [_strip(ast.unparse(defs[name])) for name in names]
+        out += [_fit_source(defs[name]) for name in names]
     return out
+
+
+MOVED_MODULES: Final = {
+    "nowcastrenewal.forecaster": "bdbvhubrenewal.forecasters.renewal",
+}
+"""Moved modules (WP2b) by the name they had when the keys were set.
+
+The functions in `FIT_FUNCTIONS` are dumped whole, own-package imports
+included, so an import of a moved module is dumped by its old name and
+the keys hold. This goes at the next refit, when these dumps drop
+own-package imports as `_code_parts` does."""
+
+
+def _fit_source(node: ast.stmt) -> str:
+    """Dump a function in `FIT_FUNCTIONS`, moved modules by their old name.
+
+    Each run of imports is sorted by module name, so a move that puts an
+    import in a new place in isort's order keeps the dump.
+    """
+    node = copy.deepcopy(node)
+    for parent in ast.walk(node):
+        body = getattr(parent, "body", None)
+        if not isinstance(body, list):
+            continue
+        out: list[ast.stmt] = []
+        run: list[ast.ImportFrom] = []
+        for item in [*body, None]:
+            if isinstance(item, ast.ImportFrom):
+                module = item.module or ""
+                item.module = MOVED_MODULES.get(module, item.module)
+                run.append(item)
+                continue
+            run.sort(key=lambda s: s.module or "")
+            out += run
+            run = []
+            if item is not None:
+                out.append(item)
+        parent.body = out  # type: ignore[attr-defined]
+    return _strip(ast.unparse(node))
 
 
 def fit_code(model: str, root: Path | str = ".") -> list[str]:
@@ -526,11 +566,7 @@ def _bvd_tag(model: ForecastModel, task: ForecastTask) -> str | None:
     variant = getattr(model, "variant", None)
     if variant is None:
         return None
-    from bdbvhubrenewal.forecasters.renewal import (
-        bvd_record,
-        bvd_release,
-        model_config,
-    )
+    from nowcastrenewal.forecaster import bvd_record, bvd_release, model_config
 
     if not model_config(variant).bvd:
         return None
@@ -871,8 +907,8 @@ def fit_files(
     dict
         File name to base64 contents, or empty.
     """
-    from bdbvhubrenewal.forecasters.renewal import FIT_VARIANTS
     from bdbvhubrenewal.submission.fitting import get_config, write_records
+    from nowcastrenewal.forecaster import FIT_VARIANTS
 
     write = getattr(model, "write_fit_dir", None)
     names = [c for c, v in FIT_VARIANTS.items() if v == model.name]
@@ -1058,7 +1094,7 @@ def load(
     list of StoreStatus
         One per (model, origin), newest origin first.
     """
-    from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
+    from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
 
     out = Path(results)
     out.mkdir(parents=True, exist_ok=True)
@@ -1108,7 +1144,7 @@ def load(
 
 def _zone_samples(fit: StoredFit) -> pd.DataFrame:
     """Return a stored zone fit's final-count zone samples, else none."""
-    from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
+    from nowcastrenewal.zones import ZONES_FILE
 
     body = fit.files.get(ZONES_FILE)
     if body is None:

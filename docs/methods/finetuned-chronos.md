@@ -65,7 +65,7 @@ A dict of triangles, one per place with the same rows and delays, is forecast as
 ## Example
 
 ```python
---8<-- "chronos_ft.py"
+--8 < --"chronos_ft.py"
 ```
 
 The test suite runs this example with a stand-in for Chronos-2 (`tests/test_chronos_ft.py`).
