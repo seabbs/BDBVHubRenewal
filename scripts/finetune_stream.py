@@ -1500,7 +1500,7 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
     CHUNK = args.chunk
-    # The grid picks the block design; grids before r6 keep r5's blocks.
+    # The grid must have a grid file; the block design is the same for all.
     ft.use_design(args.grid)
     ft.SOURCES = tuple(args.sources or ft.SOURCE_SHARES)
     ft.check_sources(ft.SOURCES)
