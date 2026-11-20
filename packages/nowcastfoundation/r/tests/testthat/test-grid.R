@@ -116,31 +116,14 @@ test_that("every factor has a layer and aggregates are drawn from the grid", {
   expect_equal(grid$distributions[[a$parent_lag_days]]$dist, "lognormal")
 })
 
-test_that("a draw failing the sim QC is redrawn, with the grid's thresholds", {
+test_that("a draw is redrawn only when it fails or reports too few cases", {
   grid <- r7()
-  expect_named(grid$qc, c("max_weekly_jump", "max_mean_delay_days"))
-  day <- data.table::as.IDate("2026-01-05")
-  counts <- function(ref, delay, n, loc = "P01") {
-    data.table::data.table(location = loc, reference_date = day + ref,
-      report_date = day + ref + delay, count = n)
-  }
-  ok <- counts(0:27, 2L, 20L)
-  expect_true(is.na(qc_reason(ok, grid)))
-  # A thousand-fold rise in one week.
-  jump <- rbind(counts(0:6, 1L, 1L), counts(7:13, 1L, 5000L))
-  expect_match(qc_reason(jump, grid), "rise")
-  # A mean delay past the limit.
-  slow <- counts(0:27, 60L, 20L)
-  expect_match(qc_reason(slow, grid), "delay")
-  # No fixed cap on cases per stratum (#408 item 10): only more cases
-  # than a stratum's population is impossible.
-  big <- rbind(counts(0:27, 2L, 30000L), counts(0:27, 2L, 1L, "P02"))
-  expect_true(is.na(qc_reason(big, grid)))
-  expect_true(is.na(qc_reason(big, grid, c(P01 = 1e7, P02 = 100))))
-  expect_match(
-    qc_reason(big, grid, c(P01 = 1e5, P02 = 100)),
-    "cases in a stratum above its population"
-  )
+  # No sim QC thresholds (Sam, lead 13:25): size, weekly rises and mean
+  # delays are left as drawn.
+  expect_null(grid$qc)
+  expect_false(exists("qc_reason", envir = asNamespace("nowcastfoundation")))
+  expect_true(is.na(redraw_reason(grid$floors$min_cases, grid)))
+  expect_match(redraw_reason(grid$floors$min_cases - 1, grid), "fewer than")
 })
 
 test_that("strata of one outbreak can share its length and calendar offset", {
