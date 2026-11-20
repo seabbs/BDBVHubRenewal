@@ -42,8 +42,11 @@ test_that("independent strata share the outbreak's dates", {
   skip_if(is.null(run$out), "no outbreak in this draw")
   first <- run$out$latent[, .(start = min(date), end = max(date)), by = location]
   expect_equal(data.table::uniqueN(first$start), 1L)
-  expect_equal(run$out$values$stratum_location, sprintf("P%02d", 1:3))
-  expect_length(run$out$values$stratum_population, 3L)
+  # Each active (not quiet) place, with its population.
+  where <- run$out$values$stratum_location
+  expect_true(all(where %in% sprintf("P%02d", 1:3)))
+  expect_setequal(where, unique(run$out$counts$location))
+  expect_length(run$out$values$stratum_population, length(where))
 })
 
 test_that("a draw reporting fewer than min_cases is drawn again", {
@@ -79,12 +82,10 @@ test_that("the reporting delay varies by reference weekday when drawn", {
     d$delay_change <- "static"; d$reporting <- "daily"; d$shocks <- "none"
     d$bunching <- "no"; d$revisions <- "no"; d$reference_dow <- "no"
     d$imports <- "none"; d$delay_dow <- dow; d$report_dow <- "no"
+    d$observation <- "poisson"
     v <- draw_values(grid, d)
     v$level <- 2000; v$ascertainment <- 0.5; v$dow_sd <- 1e-6
-    v$delay_dow_sd <- 1
-    v$variant_at <- v$variant_escape <- v$variant_r <- v$variant_days <- numeric(0)
-    v$shift_at <- v$shift_size <- v$shift_days <- numeric(0)
-    v$shift_reactive <- v$shift_up <- logical(0)
+    v$delay_dow_sd <- 0.4
     out <- simulate_outbreak(grid, d, v, ctx)$counts
     out[, delay := as.integer(report_date - reference_date)]
     by_day <- out[, .(mean = sum(delay * count) / sum(count)),

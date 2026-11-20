@@ -95,6 +95,17 @@ simulate_outbreak <- function(grid, design, v, ctx) {
   stratum_terms <- c(
     if (place_delays) "(1 | place)", if (multi_age) "(1 | age)"
   )
+  # The delay by reference weekday: one pattern, or one per place where
+  # places' delays are independent.
+  if (design$delay_dow == "yes") {
+    stratum_terms <- c(stratum_terms, if (
+      multi_place && design$delay_places == "independent"
+    ) {
+      "(1 | day_of_week:place)"
+    } else {
+      "(1 | day_of_week)"
+    })
+  }
   hazard <- design$delay_form != "parametric"
   family <- if (parametric) design$delay_family else "none"
   hazard_terms <- c("rw(delay)", "(1 | delay)")
@@ -120,7 +131,10 @@ simulate_outbreak <- function(grid, design, v, ctx) {
   reference <- drop_builder_frame(reference)
   rd <- reference$data
   delay <- delay_parameters(family, v, max_delay)
-  stratum_sd <- list(place = v$delay_place_sd, age = v$delay_age_sd)
+  stratum_sd <- list(
+    place = v$delay_place_sd, age = v$delay_age_sd,
+    day_of_week = v$delay_dow_sd
+  )
   parameters <- list()
   set_change <- function(prefix, cols) {
     beta <- rnorm(length(cols))
@@ -145,7 +159,8 @@ simulate_outbreak <- function(grid, design, v, ctx) {
       # independent place moves both alike.
       spread <- if (design$delay_places == "independent") 1 else 0.5
       parameters$refp_sd_beta_sd <- effect_sds(rd$refp_rdesign, list(
-        place = spread * v$delay_place_sd, age = v$delay_age_sd / 2
+        place = spread * v$delay_place_sd, age = v$delay_age_sd / 2,
+        day_of_week = v$delay_dow_sd / 2
       ))
     }
     if (family != "exponential") {
@@ -179,7 +194,7 @@ simulate_outbreak <- function(grid, design, v, ctx) {
   structural <- NULL
   report_terms <- NULL
   if (design$reporting == "daily") {
-    report_terms <- "(1 | day_of_week)"
+    if (design$report_dow == "yes") report_terms <- "(1 | day_of_week)"
   } else {
     on <- strsplit(design$report_days, ";")[[1]]
     structural <- epinowcast::enw_structural_reporting_metadata(pobs)

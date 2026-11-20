@@ -259,6 +259,7 @@ draw_values <- function(grid, design) {
   v$slow_weeks <- draw_count(grid, "slow_weeks")
   v$slow_mult <- ds("slow_mult")
   family <- if (design$delay_form == "non_parametric") "none" else design$delay_family
+  v$delay_dow_sd <- ds("delay_dow_sd")
   v$max_delay <- max_delay_for(delay_parameters(family, v)$q99)
 
   # Layer 4: the reporting system.
