@@ -306,6 +306,25 @@ def test_offloaded_evaluation_is_planned_after_each_segment(tmp_path):
     assert jobs["evaluate_checkpoint"] == 2
 
 
+def test_offloaded_step_evaluation_checks_every_due_step(tmp_path):
+    # So a segment whose snapshots were not copied in fails, not passes.
+    out = dry_run(
+        tmp_path,
+        "finetune",
+        config=OFFLOAD,
+        extra=["-p", "--quiet", "progress"],
+    )
+    assert out.returncode == 0, out.stderr + out.stdout
+    shipped = yaml.safe_load((ROOT / "workflow/config.yaml").read_text())
+    every = shipped["finetune"]["eval_every"]
+    text = out.stdout + out.stderr
+    steps = [
+        ln for ln in text.splitlines() if "evaluate_offloaded.py steps" in ln
+    ]
+    assert steps
+    assert all(f"--eval-every {every}" in ln for ln in steps)
+
+
 def test_local_evaluation_plans_no_evaluation_rules(tmp_path):
     jobs = dry(tmp_path, "finetune", config=FT)
     assert not any(k.startswith("evaluate") for k in jobs)
