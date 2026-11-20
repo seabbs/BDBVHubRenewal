@@ -131,13 +131,11 @@ def test_memory_budget_sets_checkpointing_and_block_size():
     assert memory_gb(most, True) <= budget < memory_gb(most + 1, True)
 
 
-def test_skipped_blocks_are_listed_for_the_release():
-    from finetune_stream import skipped_lines
+def test_the_trainer_has_no_way_to_skip_a_block():
+    import finetune_stream
 
-    skipped = [{"outbreak": "5043-0013", "step": 3700, "series": 897}]
-    assert skipped_lines(skipped) == [
-        "# skipped 5043-0013 at step 3700, 897 series"
-    ]
+    # Skipping blocks biases training: none is ever left out.
+    assert not hasattr(finetune_stream, "skipped_lines")
 
 
 def test_no_batch_holds_more_series_than_the_budget_allows():
@@ -214,13 +212,10 @@ def test_a_split_batch_starts_from_clear_gradients():
     from finetune_stream import accumulate
 
     grads: list[int] = []
-    skipped: list[int] = []
 
     def backward(part, _share):
         if len(part) > 2:
             grads.append(-1)  # a partial backward before running out
-            raise RuntimeError("MPS backend out of memory")
-        if 9 in part:
             raise RuntimeError("MPS backend out of memory")
         grads.extend(part)
         return 0.5
@@ -228,20 +223,29 @@ def test_a_split_batch_starts_from_clear_gradients():
     def zero():
         grads.clear()
 
-    value = accumulate([1, 2, 3, 4, 9], backward, zero, skipped.append)
-    # The partial backward is cleared; every block but the one too large
-    # for memory is used once.
-    assert sorted(grads) == [1, 2, 3, 4]
-    assert skipped == [9]
+    value = accumulate([1, 2, 3, 4, 9], backward, zero)
+    # The partial backward is cleared; every block is used once.
+    assert sorted(grads) == [1, 2, 3, 4, 9]
     assert value == 0.5
 
 
-def test_a_block_that_runs_out_once_is_retried_before_it_is_skipped():
+def test_a_block_too_large_for_memory_stops_the_run():
+    from finetune_stream import accumulate
+
+    def backward(part, _share):
+        if 9 in part:
+            raise RuntimeError("CUDA out of memory")
+        return 0.5
+
+    with pytest.raises(RuntimeError, match="too large for memory"):
+        accumulate([1, 9], backward, lambda: None)
+
+
+def test_a_block_that_runs_out_once_is_retried():
     from finetune_stream import accumulate
 
     calls: list[list[int]] = []
     zeroed: list[int] = []
-    skipped: list[int] = []
 
     def backward(part, _share):
         calls.append(list(part))
@@ -251,9 +255,8 @@ def test_a_block_that_runs_out_once_is_retried_before_it_is_skipped():
             raise RuntimeError("CUDA out of memory")
         return 0.5
 
-    value = accumulate([7], backward, lambda: zeroed.append(1), skipped.append)
+    value = accumulate([7], backward, lambda: zeroed.append(1))
     assert value == 0.5
-    assert skipped == []
     # Memory is freed (`zero`) before the retry.
     assert calls == [[7], [7]]
     assert zeroed == [1]
@@ -1413,14 +1416,15 @@ def test_blocks_are_whole_systems_never_cut(monkeypatch):
         assert got
         # The whole system, or the country alone; never a subset.
         assert set(got) == {whole, (NATIONAL,)}
-        # A system over the series cap is skipped and said, not cut.
+        # A system over the series cap is still cut whole: no block is
+        # ever skipped for its size.
         monkeypatch.setattr(ft, "MAX_SERIES", 10)
         empty: list[str] = []
         blocks = outbreak_blocks(
             counts, places, np.random.default_rng(0), 3, empty=empty
         )
-        assert all(b["places"] == (NATIONAL,) for b in blocks)
-        assert any("over the series cap" in e for e in empty)
+        assert any(b["places"] == whole for b in blocks)
+        assert not any("series cap" in e for e in empty)
     finally:
         ft.PARENTS = None
 
