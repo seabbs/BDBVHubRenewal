@@ -79,6 +79,10 @@ for (window in c("early", "established", "endemic")) {
       expect_true(all(apply(first[, 1:2], 2, function(x) {
         diff(range(x)) < 1e-9 && x[1] > 0
       })))
+      # Running before the series too, so its onsets open at the level
+      # (ascertained), not from zero (the 33715-0016 ramp).
+      asc <- run$values$ascertainment[1:2]
+      expect_equal(run$onsets[1, 1:2], first[1, 1:2] * asc, tolerance = 1e-6)
     }
     expect_equal(nrow(run$latent), length(gt) + 100L)
   })
