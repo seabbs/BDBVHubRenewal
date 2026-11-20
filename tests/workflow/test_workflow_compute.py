@@ -262,3 +262,21 @@ def test_evaluation_is_a_group_a_host_can_place():
     for rule in ("evaluate_steps", "evaluate_checkpoint"):
         assert compute.RULE_GROUPS[rule] == "evaluate"
         assert rule in compute.GPU_RULES
+
+
+def test_a_job_on_a_worker_reads_nothing_from_the_session(tmp_path):
+    # ssh -tt gives the job a terminal; a job reading it (an interactive
+    # shell, which may attach tmux from its rc file) would wait forever.
+    w = compute.Worker("w", "local", str(tmp_path / "root"), str(tmp_path))
+    command = compute.job_command(
+        w, {"rule": "b", "wildcards": {}}, {"ROOT": str(tmp_path)}, "cat", []
+    )
+    got = subprocess.run(
+        compute.on(w, command),
+        input="from the session\n",
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert got.returncode == 0, got.stderr
+    assert got.stdout == ""
