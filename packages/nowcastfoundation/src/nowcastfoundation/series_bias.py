@@ -67,6 +67,11 @@ steps, so the chunks give the same outputs, and each chunk's mask is one
 contiguous tensor, which lets PyTorch's memory-efficient attention
 kernel run where the device has one."""
 
+CHECKPOINT_CHUNKS = True
+"""Whether, while training, each chunk's group attention is recomputed in
+backward (`torch.utils.checkpoint`), so autograd keeps only its inputs and
+not the chunk's mask plus bias; the gradients are the same."""
+
 _STATE: Final = "_series_bias_state"
 """Attribute of a model with the bias holding the next batch's rows."""
 
@@ -267,6 +272,7 @@ def attach(model: Any, pairs: Sequence[str] = PAIRS) -> None:
             hidden_states: Any, mask: Any, *args: Any, **kwargs: Any
         ) -> Any:
             import torch
+            from torch.utils.checkpoint import checkpoint
 
             rows = getattr(model, _STATE)["rows"]
             if rows is None:
@@ -283,17 +289,22 @@ def attach(model: Any, pairs: Sequence[str] = PAIRS) -> None:
             bias = bias[None].to(mask.dtype)
             steps = hidden_states.shape[0]
             size = max(1, CHUNK_ELEMENTS // bias[0].numel())
+
+            def run(hidden: Any, chunk: Any) -> Any:
+                return forward(hidden, chunk + bias, *args, **kwargs)
+
+            def part(t: int) -> Any:
+                hidden = hidden_states[t : t + size]
+                chunk = mask[t : t + size] if mask.shape[0] > 1 else mask
+                if CHECKPOINT_CHUNKS and torch.is_grad_enabled():
+                    # Backward rebuilds the chunk's mask plus bias rather
+                    # than keeping it.
+                    return checkpoint(run, hidden, chunk, use_reentrant=False)
+                return run(hidden, chunk)
+
             if size >= steps:
-                return forward(hidden_states, mask + bias, *args, **kwargs)
-            parts = [
-                forward(
-                    hidden_states[t : t + size],
-                    (mask[t : t + size] if mask.shape[0] > 1 else mask) + bias,
-                    *args,
-                    **kwargs,
-                )
-                for t in range(0, steps, size)
-            ]
+                return part(0)
+            parts = [part(t) for t in range(0, steps, size)]
             weights = [p.attn_weights for p in parts]
             return AttentionOutput(
                 hidden_states=torch.cat([p.hidden_states for p in parts]),
