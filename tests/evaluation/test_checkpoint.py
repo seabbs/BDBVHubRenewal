@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation import checkpoint as ck
+from nowcastfoundation import checkpoint as ck
 
 
 def test_german_dates_forecast_together_come_from_the_environment(

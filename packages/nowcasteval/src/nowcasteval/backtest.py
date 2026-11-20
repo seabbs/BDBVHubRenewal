@@ -12,7 +12,7 @@ There are two kinds of vintage:
 
 - **real**: published by the hub.
 - **simulated**: from a simulated outbreak with known parameters
-  (`bdbvhubrenewal.data.simulate`). Truth is the final simulated count.
+  (`nowcastfoundation.simulate`). Truth is the final simulated count.
 
 Every real vintage but the latest is backtested.
 `truth_changes` shows how much the truth moved between vintages.
@@ -36,7 +36,11 @@ import pandas as pd
 
 from bdbvhubrenewal.data.bvd import MAX_RHAT
 from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.data.simulate import (
+from bdbvhubrenewal.data.tidy import delays_for_vintage
+from bdbvhubrenewal.data.zones import ZoneData, hub_places
+from nowcasteval.nowcast import TRUTH_LEVEL
+from nowcasteval.scoring import energy_scores, score_forecasts
+from nowcastfoundation.simulate import (
     SCENARIO_RT_SCALE,
     SimulatedOutbreak,
     SimulationSettings,
@@ -44,10 +48,6 @@ from bdbvhubrenewal.data.simulate import (
     release_dates,
     simulate_outbreak,
 )
-from bdbvhubrenewal.data.tidy import delays_for_vintage
-from bdbvhubrenewal.data.zones import ZoneData, hub_places
-from nowcasteval.nowcast import TRUTH_LEVEL
-from nowcasteval.scoring import energy_scores, score_forecasts
 from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,

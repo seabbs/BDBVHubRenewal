@@ -22,8 +22,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.forecasters import foundation
-from bdbvhubrenewal.forecasters.finetune import (
+from nowcastfoundation import forecaster as foundation
+from nowcastfoundation.finetune import (
     AHEAD_WEEKS,
     BINNED,
     MIXED,
@@ -297,7 +297,7 @@ CODE = {
     **{path: path for path in SIMULATOR},
     "scripts/finetune_chronos.py": "scripts/finetune_chronos.py",
     "src/bdbvhubrenewal/forecasters/finetune.py": (
-        "src/bdbvhubrenewal/forecasters/finetune.py"
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune.py"
     ),
 }
 """Files the checkpoint depends on, hashed into its settings: each
@@ -311,7 +311,9 @@ here only. The paths go into the settings outside the hash
 TRAINER = "scripts/finetune_stream.py"
 """The trainer's name in `code_sha256` (its path is its own file)."""
 
-FOUNDATION_PATH = "src/bdbvhubrenewal/forecasters/foundation.py"
+FOUNDATION_PATH = (
+    "packages/nowcastfoundation/src/nowcastfoundation/forecaster.py"
+)
 """Where the module of `FOUNDATION_CODE` is now (`code_paths`
 `foundation`)."""
 

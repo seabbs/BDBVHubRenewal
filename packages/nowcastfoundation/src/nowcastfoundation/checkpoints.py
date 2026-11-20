@@ -24,8 +24,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.forecasters import foundation
-from bdbvhubrenewal.forecasters.foundation import Checkpoint, HubTriangle
+from nowcastfoundation import forecaster as foundation
+from nowcastfoundation.forecaster import Checkpoint, HubTriangle
 
 __all__ = ["FineTunedChronos", "forecast_triangle", "load"]
 

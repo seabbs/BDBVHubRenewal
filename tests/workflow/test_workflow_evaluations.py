@@ -109,7 +109,7 @@ def test_the_blocks_file_is_the_trainer_s():
     import finetune_stream as fs
     from flowlib import segments
 
-    from bdbvhubrenewal.evaluation import sidecar
+    from nowcastfoundation import sidecar
 
     assert sidecar.HELD_OUT_BLOCKS == fs.HELD_OUT_BLOCKS
     assert segments.EVAL_MODES == fs.EVAL_MODES

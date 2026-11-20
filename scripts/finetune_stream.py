@@ -47,8 +47,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.forecasters import series_bias
-from bdbvhubrenewal.forecasters.foundation import (
+from nowcastfoundation import series_bias
+from nowcastfoundation.forecaster import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
     SLOTS_PREFIX,
@@ -154,7 +154,7 @@ LORA_TARGETS = (
 
 BIAS_CODE = {
     "src/bdbvhubrenewal/forecasters/series_bias.py": (
-        "src/bdbvhubrenewal/forecasters/series_bias.py"
+        "packages/nowcastfoundation/src/nowcastfoundation/series_bias.py"
     ),
 }
 """The series bias's code and its parent rule, hashed into its settings,
@@ -181,7 +181,7 @@ def code_paths(bias: bool) -> dict[str, str]:
 def lora_config(bias: bool):
     """Return the LoRA config, saving the series bias if `bias`.
 
-    The bias (`bdbvhubrenewal.forecasters.series_bias`) trains beside the
+    The bias (`nowcastfoundation.series_bias`) trains beside the
     adapter as one of PEFT's `modules_to_save`, so it is saved in the
     adapter's files and published and loaded with it.
     """
@@ -1422,7 +1422,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
-    # The series bias (bdbvhubrenewal.forecasters.series_bias): learned
+    # The series bias (nowcastfoundation.series_bias): learned
     # group attention bias for same-place and parent-child pairs.
     parser.add_argument("--series-bias", action="store_true")
     parser.add_argument("--bias-lr", type=float, default=BIAS_LR)

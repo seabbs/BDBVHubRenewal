@@ -7,7 +7,7 @@ import importlib.util
 import numpy as np
 import pytest
 
-from bdbvhubrenewal.forecasters import foundation
+from nowcastfoundation import forecaster as foundation
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("torch") is None, reason="needs torch"

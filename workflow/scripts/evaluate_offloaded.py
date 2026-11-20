@@ -28,8 +28,8 @@ import finetune_evaluate as fe  # noqa: E402
 import finetune_stream as fs  # noqa: E402
 from flowlib import evaluations  # noqa: E402
 
-from bdbvhubrenewal.forecasters import series_bias  # noqa: E402
-from bdbvhubrenewal.forecasters.foundation import torch_device  # noqa: E402
+from nowcastfoundation import series_bias  # noqa: E402
+from nowcastfoundation.forecaster import torch_device  # noqa: E402
 
 
 def fresh(base, device: str):

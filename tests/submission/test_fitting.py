@@ -383,7 +383,7 @@ def test_chronos_track_metadata_is_the_committed_file(
 def test_nowcast_records_the_checkpoint_it_loaded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_checkpoint: str
 ) -> None:
-    from bdbvhubrenewal.forecasters import foundation
+    from nowcastfoundation import forecaster as foundation
 
     def zeros(groups, horizon, n, _seed, checkpoint=None):  # type: ignore[no-untyped-def]
         assert checkpoint.hash == fake_checkpoint
@@ -416,7 +416,7 @@ def test_nowcast_records_the_checkpoint_it_loaded(
 def test_chronos_metadata_names_the_release(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, write_release
 ) -> None:
-    from bdbvhubrenewal.forecasters import foundation
+    from nowcastfoundation import forecaster as foundation
 
     # The committed file names the release that was latest when written.
     root = tmp_path / "releases"

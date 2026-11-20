@@ -1,6 +1,6 @@
 """Fit the main configuration to a simulated vintage.
 
-The outbreak comes from `bdbvhubrenewal.data.simulate.simulate_outbreak`, a
+The outbreak comes from `nowcastfoundation.simulate.simulate_outbreak`, a
 case-level simulator independent of this model: Rt turns from about 1.6
 to 0.85 around day 120, the mean delay falls from 12 to 6 days and the
 missing-onset share rises then falls.

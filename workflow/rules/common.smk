@@ -17,7 +17,7 @@ from flowlib import (
     simulator,
 )
 
-from bdbvhubrenewal.evaluation.sidecar import HELD_OUT_BLOCKS, SIDECAR
+from nowcastfoundation.sidecar import HELD_OUT_BLOCKS, SIDECAR
 
 LOCAL = localconfig.read()
 HOST = LOCAL["HOST_NAME"]
@@ -365,7 +365,7 @@ def unit_env(wc, threads):
 GERMANY_UNIT = "germany-days"
 """The German units' cache folder, as `evaluation.checkpoint.GERMANY_UNIT`."""
 
-EVALUATE = "uv run --group chronos python -m bdbvhubrenewal.evaluation.checkpoint"
+EVALUATE = "uv run --group chronos python -m nowcastfoundation.checkpoint"
 
 
 def unit_rows(study):

@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal import chronos_ft
-from bdbvhubrenewal.forecasters import foundation
+from nowcastfoundation import checkpoints as chronos_ft
+from nowcastfoundation import forecaster as foundation
 
 _ADAPTER = {
     "adapter_config.json": b"{}",

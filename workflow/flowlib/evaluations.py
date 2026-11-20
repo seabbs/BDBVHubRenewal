@@ -18,7 +18,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from bdbvhubrenewal.evaluation.sidecar import RESULT_ONLY, SIDECAR, with_sidecar
+from nowcastfoundation.sidecar import RESULT_ONLY, SIDECAR, with_sidecar
 
 __all__ = [
     "checkpoint_settings",

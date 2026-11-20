@@ -57,10 +57,10 @@ from bdbvhubrenewal.data.germany import (
     nowcast_tasks,
 )
 from bdbvhubrenewal.forecasters import ForecastTask, get_model, list_models
-from bdbvhubrenewal.forecasters.foundation import FoundationModel, prefetch
 from nowcasteval.marginals import forecast_quantiles
 from nowcasteval.nowcast import rolling_truth
 from nowcasteval.scoring import relative_skill, score_quantiles
+from nowcastfoundation.forecaster import FoundationModel, prefetch
 
 log = logging.getLogger(__name__)
 

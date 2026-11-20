@@ -11,7 +11,7 @@ import pytest
 
 from bdbvhubrenewal.data.germany import read_triangle
 from bdbvhubrenewal.evaluation.germany import germany_forecasts
-from bdbvhubrenewal.forecasters import foundation
+from nowcastfoundation import forecaster as foundation
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("torch") is None, reason="needs torch"
@@ -103,7 +103,7 @@ def test_tasks_are_built_once_and_reused(
 
 
 def test_the_task_store_is_keyed_on_its_inputs(tmp_path: Path) -> None:
-    from bdbvhubrenewal.evaluation.checkpoint import german_tasks_dir
+    from nowcastfoundation.checkpoint import german_tasks_dir
 
     data = tmp_path / "triangle.csv"
     data.write_text("a\n")
@@ -121,7 +121,7 @@ def test_the_task_store_key_covers_the_code_the_tasks_depend_on(
     import dataclasses
     import inspect
 
-    from bdbvhubrenewal.evaluation import checkpoint as ck
+    from nowcastfoundation import checkpoint as ck
     from nowcastutils import base, dates
 
     data = tmp_path / "triangle.csv"

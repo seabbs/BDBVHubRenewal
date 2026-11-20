@@ -29,7 +29,7 @@ Pin a hash for reproducible work, and record the SHA-256 in `model.checkpoint.sh
 A process resolves `"latest"` once, so restart it to pick up a newer release.
 
 ```python
-from bdbvhubrenewal import chronos_ft
+from nowcastfoundation import checkpoints as chronos_ft
 
 model = chronos_ft.load("e8a1f5ae338b")
 model.checkpoint.hash, model.adapter

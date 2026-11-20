@@ -116,7 +116,7 @@ def test_zone_levels_and_weekly_counts_are_generic() -> None:
 def test_model_code_imports_no_hub_zone_module() -> None:
     for module in (
         "nowcastutils.base",
-        "bdbvhubrenewal.forecasters.foundation",
+        "nowcastfoundation.forecaster",
         "nowcastbaselines.zones",
         "bdbvhubrenewal.forecasters.renewal",
         "nowcasteval.nowcast",

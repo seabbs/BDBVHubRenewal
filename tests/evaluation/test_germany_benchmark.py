@@ -318,7 +318,7 @@ def test_asof_sums_are_the_data_each_nowcast_date_saw(
 def test_a_quantile_model_s_german_scores_do_not_depend_on_the_seed(
     triangle: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhubrenewal.forecasters import foundation
+    from nowcastfoundation import forecaster as foundation
 
     class Pipeline:
         quantiles = (0.01, 0.05, 0.1, 0.5, 0.9, 0.95, 0.99)
@@ -377,7 +377,7 @@ class _Extrapolate:
 def test_each_scored_row_is_the_sum_of_its_own_seven_days(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bdbvhubrenewal.forecasters import foundation
+    from nowcastfoundation import forecaster as foundation
 
     # Counts rise by a known step a day and are reported in full three
     # days on, so the last three days are forecast and a sum one day out

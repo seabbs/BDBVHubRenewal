@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.simulate import (
+from nowcastfoundation.simulate import (
     SimulationSettings,
     release_dates,
     simulate_outbreak,

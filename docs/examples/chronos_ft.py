@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal import chronos_ft
+from nowcastfoundation import checkpoints as chronos_ft
 
 # Twelve weeks of reports, each week's count spread over delays 0 to 3.
 rng = np.random.default_rng(1)
