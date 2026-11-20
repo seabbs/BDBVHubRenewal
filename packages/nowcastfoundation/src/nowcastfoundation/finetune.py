@@ -432,6 +432,44 @@ def draw_named(spec: dict[str, Any], rng: np.random.Generator) -> float:
     raise ValueError(f"no named distribution {dist!r}")
 
 
+def thin_reports(
+    counts: pd.DataFrame, keep: float, rng: np.random.Generator
+) -> np.ndarray:
+    """Return each row's count with cases kept with probability `keep`.
+
+    Each place and onset is thinned in report order. A report adds
+    Binomial(n, keep) kept cases. A revision removing n cases (a negative
+    row) removes them at random from the cases reported so far, so it
+    takes Hypergeometric(kept, not kept, n) kept ones. A place's kept
+    count, cumulated by report date, so stays between zero and its full
+    count, which the country keeps whole.
+    """
+    n = counts["count"].to_numpy(dtype=int)
+    kept: np.ndarray = rng.binomial(np.maximum(n, 0), keep)
+    keys = ["location", "reference_date"]
+    removes = counts.groupby(keys)["count"].transform("min").to_numpy() < 0
+    if not removes.any():
+        return kept
+    # Within a report date, additions come before removals.
+    rows = counts[removes].assign(_n=n[removes], _i=np.flatnonzero(removes))
+    rows = rows.sort_values(
+        [*keys, "report_date", "_n"], ascending=[True, True, True, False]
+    )
+    for _, group in rows.groupby(keys, sort=False):
+        have = got = 0
+        for i, d in zip(group["_i"], group["_n"], strict=True):
+            if d >= 0:
+                have += d
+                got += kept[i]
+                continue
+            take = min(-d, have)
+            out = rng.hypergeometric(got, have - got, take) if take else 0
+            kept[i] = -out
+            have -= take
+            got -= out
+    return kept
+
+
 def country_counts(
     counts: pd.DataFrame,
     parent: str,
@@ -458,10 +496,7 @@ def country_counts(
         return counts, counts
     if parent == "unallocated":
         keep = 1 - draw_named(draws["unallocated_share"], rng)
-        # Revisions remove reports (negative rows): thin their size too.
-        n = counts["count"].to_numpy(dtype=int)
-        kept = np.sign(n) * rng.binomial(np.abs(n), keep)
-        return counts.assign(count=kept), counts
+        return counts.assign(count=thin_reports(counts, keep, rng)), counts
     if parent == "late_parent":
         lag = max(1, int(draw_named(draws["parent_lag_days"], rng)))
         later = pd.to_datetime(counts["report_date"]) + pd.Timedelta(days=lag)
