@@ -282,8 +282,10 @@ Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quanti
 ::: {.callout-note title="Plan"}
 - Training and prediction choose the number of lag series by the same rule, for the zero-shot and fine-tuned models alike, and training draws no lag count.
 - Each block or task has one lag count.
-- We estimate the reporting delay's 99% point from the reference steps complete at the cut-off, from 28 days or 4 weeks to 112 days or 16 weeks before it, allowing for right truncation, and round it up to whole steps.
-- We pool the delay over the block's places, as a 99% point for each place is noisy where a place has few cases.
+- We estimate each place's reporting delay 99% point from the 28 days or 4 weeks of reference steps ending 112 days or 16 weeks before the cut-off, whose reports at every shorter delay are known by then, so right truncation does not bias it short.
+- The lag count is one more than that delay, so the lags include the delay at which 99% is reported.
+- The block takes the largest over its places, so no place's delay is cut short.
+- A place with few cases can only understate its delay, so it does not raise the count.
 - The estimate reads no release after the cut-off.
 - In training it reads the simulation's releases up to the cut-off, as prediction reads the real ones.
 - The lag count is the smaller of this estimate and the history available, keeping two steps of context before the longest lag.

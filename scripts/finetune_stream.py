@@ -573,7 +573,6 @@ def cut(
 
 def init_worker(
     max_series: int,
-    lags: dict[str, tuple[int, ...]],
     sources: tuple[str, ...],
     univariate: float = ft.UNIVARIATE_SHARE,
     draws: int | None = None,
@@ -585,7 +584,7 @@ def init_worker(
     """Give a cutting worker the trainer's block settings."""
     global DRAWS_PER_PASS, SUBSET_SEED
     ft.use_grid(grid_file)
-    ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
+    ft.MAX_SERIES, ft.SOURCES = max_series, sources
     ft.UNIVARIATE_SHARE = univariate
     ft.LOSS_HORIZON_DAYS = loss_days
     ft.QUIET_MIN_CASES = quiet_min_cases
@@ -1613,7 +1612,6 @@ def main() -> None:
         initializer=init_worker,
         initargs=(
             ft.MAX_SERIES,
-            ft.MAX_LAGS,
             ft.SOURCES,
             ft.UNIVARIATE_SHARE,
             DRAWS_PER_PASS,
@@ -1665,8 +1663,7 @@ def main() -> None:
                 for f in ft.FOUNDATION_CODE
             },
         },
-        "max_lags": {k: [min(v), max(v)] for k, v in ft.MAX_LAGS.items()},
-        "lag_cap": ft.LAG_CAP,
+        "lags": ft.LAG_RULE,
         "held_out_sha256": ft._sha256(out / "outbreaks-held-out.txt"),
         "n_validation": len(val),
         "chunk": CHUNK,

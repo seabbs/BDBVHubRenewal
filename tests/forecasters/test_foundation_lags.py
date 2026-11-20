@@ -56,31 +56,34 @@ def _triangle(last: int, share, final: float = 100.0) -> HubTriangle:
 
 def test_the_lag_count_is_the_delay_s_99_point_in_steps():
     assert LAG_QUANTILE == 0.99
-    # A tenth more of each count at each lag: complete at lag 9.
+    # A tenth more of each count at each lag: complete at lag 9, so
+    # lags 0 to 9, ten of them, include it.
     tri = _triangle(200, lambda _t, d: min(1.0, (d + 1) / 10))
-    assert lag_count(tri, "daily") == 9
+    assert lag_count(tri, "daily") == 10
 
 
 def test_only_steps_complete_at_the_cut_off_inform_it():
-    lo, hi = LAG_WINDOW["daily"]
+    window, back = LAG_WINDOW["daily"]
     last = 300
 
     def share(t, d):
         # Recent steps (and very old ones) report slowly; the window's
-        # steps are complete at lag 4.
-        if last - hi <= t <= last - lo:
+        # steps, complete by the cut-off, are complete at lag 4.
+        if last - back - window < t <= last - back:
             return min(1.0, (d + 1) / 5)
         return min(1.0, (d + 1) / 60)
 
-    assert lag_count(_triangle(last, share), "daily") == 4
+    assert lag_count(_triangle(last, share), "daily") == 5
 
 
-def test_releases_missing_at_some_lags_are_pooled_from_the_rest():
-    # Weekly releases of daily data: each step is seen at every 7th lag.
+def test_a_lag_no_release_fell_on_carries_the_lag_before():
+    # Weekly releases of daily data: each step is seen at every 7th lag,
+    # so a step is seen complete at the first release from lag 9, by lag
+    # 15 for every step.
     def share(t, d):
         return min(1.0, (d + 1) / 10) if (t + d) % 7 == 0 else np.nan
 
-    assert lag_count(_triangle(200, share), "daily") == 9
+    assert lag_count(_triangle(200, share), "daily") == 16
 
 
 def test_no_evidence_takes_as_many_lags_as_the_history_allows():

@@ -18,6 +18,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
+from typing import Final
 
 import numpy as np
 import pandas as pd
@@ -39,23 +40,13 @@ CONTEXT = 364
 """Steps of context in a block, left-padded with missing values."""
 
 
-MAX_LAGS = {
-    "weekly": tuple(range(2, 8)),
-    "daily": tuple(range(14, 50)),
-    "3day": tuple(range(5, 17)),
-    "daily+weekly": tuple(range(14, 50)),
-    "daily+rolling7": tuple(range(14, 50)),
-    "daily+3day": tuple(range(14, 50)),
-    "daily+rolling3": tuple(range(14, 50)),
-}
-"""Release lags $D$ the blocks are drawn from; daily blocks with period
-totals have daily lags."""
-
-LAG_CAP = (
-    "a block's drawn lag capped at the steps of history before its cut-off, "
-    "less two of context, so early cut-offs are kept"
+LAG_RULE: Final = (
+    "one lag count a block: the largest of its places' truncation-aware "
+    "99% delays from the steps complete at the cut-off, at most the "
+    "history before it (nowcastfoundation.forecaster.lag_count, as "
+    "forecasts use)"
 )
-"""How a drawn lag meets a short history (`outbreak_blocks`)."""
+"""How a block's release lags are set (`training_block`)."""
 
 
 DAYS_PER_STEP = {
@@ -179,7 +170,6 @@ def check_sources(sources: tuple[str, ...]) -> None:
             and s not in ROLLING
         )
         or s not in DAYS_PER_STEP
-        or s not in MAX_LAGS
     ]
     if bad:
         raise ValueError(f"sources {bad} are neither native nor binned")
@@ -656,8 +646,8 @@ def outbreak_blocks(
     `picks`, only those (source, slot) blocks are cut. A block's series
     count is drawn log-uniformly from 1 to `MAX_SERIES`,
     and its places (`choose_places`) are about that many series at its
-    lag, with the country first. A lag longer than the history before the
-    cut-off is capped to it (`LAG_CAP`). A block whose places have no release
+    lag, with the country first. Its release lags follow `LAG_RULE`, the
+    rule forecasts use. A block whose places have no release
     rows by its cut (strata with no cases) is skipped and, with `empty`,
     described there. Each block's releases run up to its cut at a cadence
     drawn for its source (`draw_cadence`), recorded as its `cadence`.
@@ -682,7 +672,6 @@ def outbreak_blocks(
         for j in range(cuts):
             if picks is not None and (source, j) not in picks:
                 continue
-            lag = int(rng.choice(MAX_LAGS[source]))
             width = DAYS_PER_STEP[source]
             # At least two steps of context before one lag.
             least = -(-3 * width // 7)
@@ -690,29 +679,21 @@ def outbreak_blocks(
                 continue
             share = (j + rng.random()) / cuts
             cut = least + int(share * (len(cutoffs) - least))
-            # As many lags as the history before the cut-off allows, with
-            # two steps of context before them.
+            # The most lags the history before the cut-off allows, with
+            # two steps of context: the block's lags are at most this.
             history = (
                 dt.date.fromisoformat(cutoffs[cut])
                 - dt.date.fromisoformat(first[:10])
             ).days // width
-            lag = min(lag, history - 2)
-            if lag < 1:
+            if history - 2 < 1:
                 continue
             places: tuple[str, ...] = (NATIONAL,)
             mix = "national"
-            # A place's rows: its counts, its lags and, with period totals,
-            # one more.
-            rows = lag + 1 + (source in MIXED or source in ROLLING)
+            # A place's rows at most: its counts, its lags and, with period
+            # totals, one more.
+            rows = history - 2 + 1 + (source in MIXED or source in ROLLING)
             if WHOLE_SYSTEM:
                 places, mix = whole_system(provinces, rng)
-                if len(places) * rows > MAX_SERIES:
-                    if empty is not None:
-                        empty.append(
-                            f"{source} cut {j}: {len(places)} places over "
-                            f"the series cap ({MAX_SERIES})"
-                        )
-                    continue
             elif len(provinces) > 1:
                 size = np.exp(rng.uniform(0, np.log(MAX_SERIES)))
                 fits = MAX_SERIES // rows - 1
@@ -739,7 +720,6 @@ def outbreak_blocks(
                 source,
                 places,
                 release_days(first, cutoffs[cut], cadence, option_rng),
-                max_lag=lag,
                 totals=any("-" in p for p in provinces),
                 parent=parent,
                 rng=parent_rng,
@@ -846,7 +826,10 @@ def _settings_hash(settings: dict) -> str:
 
 
 def real_blocks(
-    line_list: pd.DataFrame, cuts: list[str], last_week: str, lag: int
+    line_list: pd.DataFrame,
+    cuts: list[str],
+    last_week: str,
+    lag: int | None = None,
 ) -> list[dict]:
     """Return weekly validation blocks of a real outbreak's delay table.
 
