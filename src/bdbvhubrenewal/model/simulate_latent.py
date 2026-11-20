@@ -1003,40 +1003,44 @@ def simulate_batch(
     tuple
         The latent paths, long (`id`, `day`, `group`, `infections`,
         `onsets`, `r`, `reff`; group 0 the whole outbreak), and each
-        simulation's `n_gt`, `stratum_population`, `attack` and `error`
-        (None, or why it has no run).
+        simulation's `n_gt`, generation time pmf `gt`,
+        `stratum_population`, `attack` and `error` (None, or why it has
+        no run: any error in one simulation is recorded, as the R batch
+        redraws on any error).
     """
     frames: list[pd.DataFrame] = []
     out: dict[str, dict[str, Any]] = {}
     for sim in draws["simulations"]:
         sim_id = str(sim["id"])
         design, values = sim["design"], sim["values"]
-        gt = gt_pmf(values["gt_mean"], design["gt_family"], values["gt_cv"])
-        n_gt = len(gt)
-        strata = pd.DataFrame(sim["strata"])
-        stream = KeyStream(jax.random.key(int(sim["key"])))
         try:
+            gt = gt_pmf(values["gt_mean"], design["gt_family"], values["gt_cv"])
             latent = latent_onsets(
                 grid,
-                int(sim["n_days"]) - n_gt,
+                int(sim["n_days"]) - len(gt),
                 gt,
-                strata,
+                pd.DataFrame(sim["strata"]),
                 design,
                 values,
-                stream,
+                KeyStream(jax.random.key(int(sim["key"]))),
                 depletion,
             )
-        except ValueError as e:
+        except Exception as e:
+            # As the R batch, which redraws a simulation on any error.
             out[sim_id] = {
-                "n_gt": n_gt,
+                "n_gt": None,
+                "gt": None,
                 "stratum_population": None,
                 "attack": None,
-                "error": str(e),
+                "error": str(e)
+                if type(e) is ValueError
+                else f"{type(e).__name__}: {e}",
             }
             continue
         frames.append(_long(sim_id, latent))
         out[sim_id] = {
-            "n_gt": n_gt,
+            "n_gt": latent.n_gt,
+            "gt": gt.tolist(),
             "stratum_population": latent.stratum_population.tolist(),
             "attack": latent.attack,
             "error": None,
