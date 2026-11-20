@@ -113,3 +113,14 @@ def test_the_blocks_file_is_the_trainer_s():
 
     assert sidecar.HELD_OUT_BLOCKS == fs.HELD_OUT_BLOCKS
     assert segments.EVAL_MODES == fs.EVAL_MODES
+
+
+def test_a_segment_s_steps_are_its_snapshots_and_results(tmp_path):
+    evals = tmp_path / "evals"
+    for step in (0, 200, 400):
+        (evals / f"step-{step:07d}").mkdir(parents=True)
+    (evals / "step-0000600.json").write_text("{}")
+    (evals / "step-0000800.tmp").mkdir()
+    assert evaluations.segment_steps(tmp_path, -1, 200) == [0, 200]
+    assert evaluations.segment_steps(tmp_path, 200, 700) == [400, 600]
+    assert evaluations.segment_steps(tmp_path, 800, 900) == []

@@ -108,3 +108,31 @@ def test_a_checkpoint_with_no_base_loss_fails_clearly(tmp_path, fake):
     where = checkpoint_at(tmp_path / "train", 500, 31)
     with pytest.raises(SystemExit, match="base Chronos-2 loss"):
         mod.main(["checkpoint", str(where), "--device", "cpu"])
+
+
+def test_a_segment_with_no_snapshots_fails_rather_than_pass_unscored(
+    tmp_path, fake
+):
+    # Snapshots not copied to the worker (or not saved) must not let the
+    # segment's evaluation pass with nothing scored.
+    mod, calls = fake
+    train = tmp_path / "train"
+    (train / "evals").mkdir(parents=True)
+    first = checkpoint_at(train, 100, 484)
+    with pytest.raises(SystemExit, match=r"n100.*no step snapshots"):
+        mod.main(["steps", str(first), "--device", "cpu"])
+    assert calls["evals"] == []
+
+
+def test_a_segment_already_scored_passes_again(tmp_path, fake):
+    # A retry after every snapshot was scored (its copy back failed) has
+    # nothing left to score, but its results are there.
+    mod, calls = fake
+    train = tmp_path / "train"
+    snapshot(train, 0, ["start"])
+    first = checkpoint_at(train, 100, 484)
+    (train / "evals" / "step-0000000.json").write_text(
+        json.dumps({"step": 0, "held_out_loss": 0.4})
+    )
+    mod.main(["steps", str(first), "--device", "cpu"])
+    assert calls["evals"] == []
