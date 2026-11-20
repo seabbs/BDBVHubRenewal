@@ -11,10 +11,12 @@ import itertools
 from typing import Any
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 from pyrenew.deterministic import DeterministicVariable
 
+from nowcastrenewal.model.hazard_delay import hazard_to_pmf
 from nowcastrenewal.reporting.delays import (
     FAMILIES,
     DelayParameters,
@@ -61,8 +63,12 @@ ROWS = _rows()
 def epinowcast_hazards() -> list[dict[str, Any]]:
     """epinowcast's discretised logit hazards and log pmfs, one R run."""
     code = """
+    # A new target directory: functions are exposed only from a fresh
+    # build, not from epinowcast's cached model.
+    target <- tempfile("enw-fns-")
+    dir.create(target)
     suppressMessages(epinowcast::enw_stan_to_r(
-      "discretised_logit_hazard.stan", verbose = FALSE
+      "discretised_logit_hazard.stan", verbose = FALSE, target_dir = target
     ))
     lapply(seq_len(nrow(input)), function(i) {
       r <- input[i, ]
@@ -88,28 +94,60 @@ def epinowcast_hazards() -> list[dict[str, Any]]:
     return run_r(code, inputs, packages=["epinowcast", "cmdstanr"])
 
 
+def _ours(r: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
+    with jax.enable_x64(True):
+        lh = double_censored_logit_hazard(
+            r["family"], r["mu"], r["sigma"], r["dmax"]
+        )
+        lp = double_censored_log_pmf(
+            r["family"], r["mu"], r["sigma"], r["dmax"]
+        )
+    return np.asarray(lh), np.asarray(lp)
+
+
+def _survival_before(log_pmf: np.ndarray) -> np.ndarray:
+    p = np.exp(log_pmf)
+    return 1 - np.concatenate([[0.0], np.cumsum(p)[:-1]])
+
+
 @pytest.mark.parametrize("i", range(len(ROWS)))
 def test_double_censored_delays_match_epinowcast(
     i: int, epinowcast_hazards: list[dict[str, Any]]
 ) -> None:
+    # Where at least 1e-6 of the reports are still to come. Past that,
+    # epinowcast's hazards take differences of log cdfs near 0 and lose
+    # far more there (0.1 on the logit scale where 1e-9 is left); ours
+    # take them from the survival function
+    # (`test_the_hazards_give_the_pmf_to_full_precision`). The pmfs agree
+    # everywhere, as the tail holds almost no mass.
     r, want = ROWS[i], epinowcast_hazards[i]
-    with jax.enable_x64(True):
-        lh = np.asarray(
-            double_censored_logit_hazard(
-                r["family"], r["mu"], r["sigma"], r["dmax"]
-            )
-        )
-        lp = np.asarray(
-            double_censored_log_pmf(r["family"], r["mu"], r["sigma"], r["dmax"])
-        )
+    lh, lp = _ours(r)
     want_lh = np.array(
         [np.inf if x in (None, "Inf") else x for x in want["logit_hazard"]],
         dtype=float,
     )
     assert np.isposinf(lh[-1])
     assert np.isposinf(want_lh[-1])
-    np.testing.assert_allclose(lh[:-1], want_lh[:-1], rtol=1e-9, atol=1e-9)
-    np.testing.assert_allclose(lp, want["log_pmf"], rtol=1e-9, atol=1e-9)
+    sound = _survival_before(lp)[:-1] > 1e-6
+    np.testing.assert_allclose(
+        lh[:-1][sound], want_lh[:-1][sound], rtol=1e-9, atol=1e-9
+    )
+    want_lp = np.array(
+        [-np.inf if x in (None, "-Inf") else x for x in want["log_pmf"]],
+        dtype=float,
+    )
+    np.testing.assert_allclose(
+        np.exp(lp), np.exp(want_lp), rtol=1e-9, atol=1e-13
+    )
+
+
+def test_the_hazards_give_the_pmf_to_full_precision() -> None:
+    # The hazards and the pmf agree in the far tail too.
+    for r in ROWS:
+        lh, lp = _ours(r)
+        with jax.enable_x64(True):
+            p = np.asarray(hazard_to_pmf(jnp.asarray(lh[:-1])))
+        np.testing.assert_allclose(p, np.exp(lp), rtol=1e-10, atol=1e-300)
 
 
 def test_the_double_censored_pmf_sums_to_one() -> None:
@@ -129,7 +167,8 @@ def engine_pmfs() -> list[list[float]]:
     code = """
     source("packages/nowcastfoundation/r/R/delays.R")
     lapply(seq_len(length(input$family)), function(i) {
-      delay_parameters(input$family[i], input$values[[i]], input$dmax[i])$pmf
+      v <- as.list(input$values[i, , drop = FALSE])
+      delay_parameters(input$family[i], v, input$dmax[i])$pmf
     })
     """
     cases = [*CASES, {"family": "none", "values": {"delay_mean": 4.0}}]
@@ -170,3 +209,60 @@ def test_a_parametric_delay_component_returns_its_pmf() -> None:
 
 def test_the_families_are_the_grids() -> None:
     assert set(FAMILIES) == {"exponential", "lognormal", "gamma"}
+
+
+@pytest.fixture(scope="module")
+def primarycensored_pmfs() -> list[list[float]]:
+    """primarycensored's double censored pmfs: a uniform primary day,
+    daily secondary censoring, right truncated at the window."""
+    code = """
+    lapply(seq_len(nrow(input)), function(i) {
+      r <- input[i, ]
+      x <- 0:(r$dmax - 1)
+      pc <- function(p, ...) primarycensored::dpcens(
+        x, p, pwindow = 1, swindow = 1, D = r$dmax, ...
+      )
+      switch(r$family,
+        lognormal = pc(plnorm, meanlog = r$mu, sdlog = r$sigma),
+        gamma = pc(pgamma, shape = exp(r$mu), rate = r$sigma),
+        exponential = pc(pexp, rate = exp(-r$mu))
+      )
+    })
+    """
+    rows = [{k: r[k] for k in ("family", "mu", "sigma", "dmax")} for r in ROWS]
+    return run_r(code, rows, packages=["primarycensored"])
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "epinowcast's uniform interval approximation, p_d proportional to "
+        "F(d + 1) - F(d - 1), is not primarycensored's exact double "
+        "censored pmf: up to 0.09 apart on one delay for short delays "
+        "(lognormal median 1.4, sdlog 0.55); Sam decides which to keep"
+    ),
+)
+def test_double_censored_delays_match_primarycensored(
+    primarycensored_pmfs: list[list[float]],
+) -> None:
+    for r, want in zip(ROWS, primarycensored_pmfs, strict=True):
+        _, lp = _ours(r)
+        np.testing.assert_allclose(np.exp(lp), want, rtol=1e-8, atol=1e-8)
+
+
+def test_ci_runs_the_live_r_checks() -> None:
+    import yaml
+
+    from .r_live import ROOT
+
+    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
+    job = workflow["jobs"]["r-live"]
+    assert job["env"]["R_LIVE_REQUIRED"] == "1"
+    runs = " ".join(s.get("run", "") for s in job["steps"])
+    packages = " ".join(
+        s.get("with", {}).get("packages", "") for s in job["steps"]
+    )
+    assert "tests/model/test_reporting_delays.py" in runs
+    assert "install_cmdstan" in runs
+    for pkg in ("epinowcast/epinowcast@", "primarycensored@", "cmdstanr"):
+        assert pkg in packages, pkg

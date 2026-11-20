@@ -3,7 +3,8 @@
 Tests compare our components with R packages (epinowcast, primarycensored,
 EpiNow2, the simulator's R engine) by calling them, not through committed
 fixtures. A test skips, with the reason, only where R or a package is
-missing; CI installs them (`.github/workflows/test.yml`, job `r-live`).
+missing; CI installs them (`.github/workflows/test.yml`, job `r-live`)
+and fails there instead of skipping.
 """
 
 from __future__ import annotations
@@ -34,6 +35,23 @@ jsonlite::write_json(out, args[2], digits = NA, auto_unbox = TRUE,
 """
 
 
+def _r_path() -> str:
+    # R's own directory and the system's tools first: a toolchain earlier
+    # on the PATH (such as Homebrew's bash) can be built for another libc
+    # and break the C++ builds that cmdstan runs.
+    rscript = shutil.which("Rscript")
+    first = [str(Path(rscript).parent)] if rscript else []
+    return os.pathsep.join([*first, "/usr/bin", "/bin", os.environ["PATH"]])
+
+
+def _skip(reason: str) -> None:
+    # CI's r-live job sets R_LIVE_REQUIRED, where a skip would hide a
+    # missing package.
+    if os.environ.get("R_LIVE_REQUIRED"):
+        pytest.fail(reason)
+    pytest.skip(reason)
+
+
 def require_r(packages: Sequence[str]) -> None:
     """Skip the calling test unless Rscript and `packages` are available.
 
@@ -43,7 +61,7 @@ def require_r(packages: Sequence[str]) -> None:
         R packages the check calls.
     """
     if shutil.which("Rscript") is None:
-        pytest.skip("needs R (Rscript is not on the PATH)")
+        _skip("needs R (Rscript is not on the PATH)")
     names = ", ".join(f'"{p}"' for p in ["jsonlite", *packages])
     code = (
         'lib <- Sys.getenv("ENW_LIB"); '
@@ -57,7 +75,7 @@ def require_r(packages: Sequence[str]) -> None:
     )
     missing = out.stdout.strip()
     if out.returncode != 0 or missing:
-        pytest.skip(f"needs the R packages {missing or packages}")
+        _skip(f"needs the R packages {missing or packages}")
 
 
 def run_r(
@@ -94,7 +112,7 @@ def run_r(
         )
         src.write_text(json.dumps(inputs))
         script.write_text(_PRELUDE % code)
-        env = {**os.environ}
+        env = {**os.environ, "PATH": _r_path()}
         out = subprocess.run(
             ["Rscript", str(script), str(src), str(dst)],
             cwd=ROOT,

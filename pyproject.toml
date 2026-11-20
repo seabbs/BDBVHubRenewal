@@ -167,6 +167,7 @@ convention = "numpy"
 # Method signatures follow PyRenew's, and maths names keep their capitals.
 "packages/nowcastrenewal/src/nowcastrenewal/model/**" = ["ARG002", "N803", "N806", "PTH123"]
 "packages/nowcastrenewal/src/nowcastrenewal/latent/**" = ["ARG002", "N803", "N806"]
+"packages/nowcastrenewal/src/nowcastrenewal/reporting/**" = ["ARG002", "N803", "N806"]
 # The model's tests, from the prototype.
 "tests/model/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
 # The port's abort tests check R's conditions, not message text.
@@ -239,7 +240,11 @@ disallow_untyped_calls = false
 
 [[tool.mypy.overrides]]
 # The model subclasses PyRenew's and NumPyro's classes, which are untyped.
-module = ["nowcastrenewal.model.*", "nowcastrenewal.latent.*"]
+module = [
+  "nowcastrenewal.model.*",
+  "nowcastrenewal.latent.*",
+  "nowcastrenewal.reporting.*",
+]
 disallow_subclassing_any = false
 
 [[tool.mypy.overrides]]
