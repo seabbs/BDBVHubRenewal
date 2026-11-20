@@ -1464,3 +1464,24 @@ def test_parents_come_from_the_grid_file(monkeypatch):
     finally:
         ft.PARENTS = None
     assert ft.PARENTS is None
+
+
+def test_early_cut_offs_take_as_many_lags_as_history_allows(monkeypatch):
+    # A lag longer than the history before a cut-off is capped to it, so
+    # an early cut-off is kept, not skipped.
+    from finetune_chronos import NATIONAL, outbreak_blocks
+
+    monkeypatch.setattr(ft, "SOURCES", ("daily",))
+    monkeypatch.setattr(ft, "MAX_LAGS", {**ft.MAX_LAGS, "daily": (49,)})
+    monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 1.0)
+    counts = _counts_of(["P1", "P2"], days=63)
+    blocks = outbreak_blocks(
+        counts, ["P1", "P2"], np.random.default_rng(0), 1, 4
+    )
+    assert len(blocks) == 4
+    for b in blocks:
+        assert b["places"] == (NATIONAL,)
+        lag = b["n_covariates"] // len(b["places"])
+        # Every lag series and two steps of context fit in the history.
+        assert 1 <= lag < 49
+        assert b["nowcast"] == lag
