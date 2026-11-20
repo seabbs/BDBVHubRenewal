@@ -95,7 +95,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - We report the final checkpoint, where the learning rate reaches zero, and select no checkpoint on real data.
 - Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
 - We compare the joint block with forecasting each level alone and with summing the lowest level (SI).
-- The number of lag series is the reporting delay's 99% point, estimated at the nowcast date from complete steps only, or as many as the history allows if that is fewer (SI).
+- The number of lag series, in training and at prediction alike, is the pooled reporting delay's 99% point, estimated at the nowcast date from complete steps only, or as many as the history allows if that is fewer (SI).
 - We compare the model with attention biases with one fine-tuned without them (SI).
 - We fine-tune Chronos-2 on complete counts only, without delay series, and compare it with the ragged model (SI).
 - We fine-tune Chronos-2 on real data and compare it with the model fine-tuned on simulations (SI).
