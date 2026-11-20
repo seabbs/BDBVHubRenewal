@@ -611,7 +611,7 @@ def test_the_copula_figure_has_national_and_provinces_per_study() -> None:
         "BDBV, provinces",
     }
     labels = {t.get_text() for t in drawn[0].get_xticklabels()}
-    assert labels == {"CRPS", "90% coverage", "ES (log)"}
+    assert labels == {"CRPS", "90% coverage"}
 
 
 def test_the_copula_figure_waits_then_draws(tmp_path) -> None:

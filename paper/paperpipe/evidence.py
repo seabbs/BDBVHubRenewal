@@ -766,11 +766,10 @@ paired."""
 COPULA_METRICS: Final = {
     "cell_crps": "CRPS",
     "cell_cover90": "90% coverage",
-    "joint_log_energy": "ES (log)",
 }
 """The copula figure's scores: CRPS and 90% coverage of each cell, which
-at the national level is the sum of the provinces, and the energy score
-on log counts of the level's places and weeks as one vector."""
+at the national level is the sum of the provinces. Trajectories are scored
+for Ebola only."""
 
 
 def rho_medians(rho: pd.DataFrame) -> dict:
