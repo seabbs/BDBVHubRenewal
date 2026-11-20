@@ -1,7 +1,6 @@
-# nowcastutils
+# Reference
 
-The shared pieces the other packages build on. See the [nowcastutils page](../packages/nowcastutils.md) for worked examples.
-{ .page-subtitle }
+The nowcastutils API.
 
 ::: nowcastutils
     options:

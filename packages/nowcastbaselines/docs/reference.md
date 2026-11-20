@@ -1,7 +1,7 @@
-# nowcastbaselines
+# Reference
 
-The random walk and the random walk nowcast, and the delay fit and nowcast they are built from. See the [nowcastbaselines page](../packages/nowcastbaselines.md) for worked examples.
-{ .page-subtitle }
+The nowcastbaselines API.
+The methods are in the paper's [supporting information](https://samabbott.co.uk/bdbv-hub-modelling/paper/si.html#baselines).
 
 ::: nowcastbaselines
     options:
