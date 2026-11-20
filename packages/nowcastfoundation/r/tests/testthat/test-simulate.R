@@ -42,8 +42,11 @@ test_that("independent strata share the outbreak's dates", {
   skip_if(is.null(run$out), "no outbreak in this draw")
   first <- run$out$latent[, .(start = min(date), end = max(date)), by = location]
   expect_equal(data.table::uniqueN(first$start), 1L)
-  expect_equal(run$out$values$stratum_location, sprintf("P%02d", 1:3))
-  expect_length(run$out$values$stratum_population, 3L)
+  # Each active (not quiet) place, with its population.
+  where <- run$out$values$stratum_location
+  expect_true(all(where %in% sprintf("P%02d", 1:3)))
+  expect_setequal(where, unique(run$out$counts$location))
+  expect_length(run$out$values$stratum_population, length(where))
 })
 
 test_that("a draw reporting fewer than min_cases is drawn again", {
@@ -60,4 +63,35 @@ test_that("a draw reporting fewer than min_cases is drawn again", {
     simulate_batch(grid, 99903L, 1L, model = model, weeks = 8L),
     "no design in 1"
   )
+})
+
+test_that("the reporting delay varies by reference weekday when drawn", {
+  lib <- Sys.getenv("ENW_LIB")
+  skip_if_not(nzchar(lib) && dir.exists(file.path(lib, "epinowcast")),
+    "needs the pinned epinowcast in ENW_LIB")
+  withr::local_libpaths(lib, action = "prefix")
+  grid <- r7()
+  ctx <- list(model = suppressMessages(epinowcast::enw_model(threads = FALSE)),
+    draws = 1L, debug = FALSE, expected_scale = grid$constants$expected_scale)
+  spread <- function(dow) {
+    set.seed(21)
+    d <- draw_design(grid, weeks = 12L)
+    d$strata <- "single"; d$n_places <- 1L; d$n_ages <- 1L
+    d$window <- "established"; d$trajectory <- "flat"
+    d$delay_form <- "parametric"; d$delay_family <- "lognormal"
+    d$delay_change <- "static"; d$reporting <- "daily"; d$shocks <- "none"
+    d$bunching <- "no"; d$revisions <- "no"; d$reference_dow <- "no"
+    d$imports <- "none"; d$delay_dow <- dow; d$report_dow <- "no"
+    d$observation <- "poisson"
+    v <- draw_values(grid, d)
+    v$level <- 2000; v$ascertainment <- 0.5; v$dow_sd <- 1e-6
+    v$delay_dow_sd <- 0.4
+    out <- simulate_outbreak(grid, d, v, ctx)$counts
+    out[, delay := as.integer(report_date - reference_date)]
+    by_day <- out[, .(mean = sum(delay * count) / sum(count)),
+      by = .(dow = weekdays(reference_date))]
+    max(by_day$mean) / min(by_day$mean)
+  }
+  expect_gt(spread("yes"), 1.2)
+  expect_lt(spread("no"), 1.1)
 })
