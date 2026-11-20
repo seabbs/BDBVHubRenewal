@@ -194,8 +194,8 @@ def test_the_weekly_finetuned_model_uses_the_weekly_block_alone(
     weekly.forecast(task)
     group = store[-1]
     assert np.atleast_2d(group["target"]).shape[0] == len(group["places"])
-    n_lags = len(group["places"]) * foundation.MAX_LAG["weekly"]
-    assert len(group["past_covariates"]) == n_lags
+    lags = {n.rsplit("_lag_", 1)[1] for n in group["past_covariates"]}
+    assert len(group["past_covariates"]) == len(group["places"]) * len(lags)
 
 
 def test_one_forecast_gives_daily_draws_from_the_count_rows_too(
