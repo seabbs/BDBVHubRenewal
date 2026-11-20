@@ -1113,7 +1113,7 @@ def test_a_stored_forecast_takes_the_zones_of_its_fit_directory(
 ) -> None:
     # The candidate archive passes a stored zone fit's samples with its
     # zones file. The table takes those zones, as the submission does from
-    # the fit directory (#366).
+    # the fit directory.
     from bdbvhubrenewal import cli
     from nowcastrenewal.zones import ZONES_FILE
     from nowcastutils.forecast import Forecast

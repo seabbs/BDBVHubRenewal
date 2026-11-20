@@ -192,7 +192,7 @@ class ModelConfig:
     centred_rt : bool
         Sample the levels of the shared log Rt walk (`log_rt_baseline_x`)
         rather than its standardised steps (`NonCentredRandomWalk`), for
-        a fit where the data pin that walk (one place, #330).
+        a fit where the data pin that walk (one place).
     """
 
     national: bool = False

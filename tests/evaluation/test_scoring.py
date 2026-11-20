@@ -125,7 +125,7 @@ def test_wis_of_point_mass_is_absolute_error() -> None:
 @pytest.mark.parametrize("seed", [2, 3, 4])
 @pytest.mark.parametrize("m", [10, 100, 1000])
 def test_crps_is_scoringrules_fair_estimator(seed: int, m: int) -> None:
-    # The fair form (Ferro 2014), as the paper scores after #281, so
+    # The fair form (Ferro 2014), as the paper scores, so
     # scores at 100 and 1,000 draws compare in expectation.
     samples = np.random.default_rng(seed).gamma(2, 10, m)
     for obs in (5.0, 20.0, 60.0):

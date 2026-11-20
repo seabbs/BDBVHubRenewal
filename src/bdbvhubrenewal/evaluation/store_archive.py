@@ -218,7 +218,7 @@ def _stored(
     else:
         forecast = _stored_forecast(fit.forecasts, task, own_national(model))
         if ZONES_FILE in (fit.files or {}):
-            # A zone fit's own zones, as it submits them (#366).
+            # A zone fit's own zones, as it submits them.
             with tempfile.TemporaryDirectory() as fit_dir:
                 _unpack({ZONES_FILE: fit.files[ZONES_FILE]}, Path(fit_dir))
                 table = hub(model, forecast=forecast, fit_dir=Path(fit_dir))

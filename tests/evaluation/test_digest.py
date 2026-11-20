@@ -168,7 +168,7 @@ def test_a_fit_key_holds_the_zone_split_only_where_its_model_calls_it() -> None:
 
     zones = "packages/nowcastbaselines/src/nowcastbaselines/zones.py"
     # The province-level models split their zones in their own forecast
-    # (`with_zones`, since #299), and the zone fits call its zone_task, so
+    # (`with_zones`), and the zone fits call its zone_task, so
     # their keys hold the split.
     for model in ("renewal", "renewalbvd", "renewalsp"):
         assert zones in fit_code(model, ROOT)

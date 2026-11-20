@@ -591,8 +591,7 @@ def test_skipped_checkpoints_are_not_scored(tmp_path):
 
 def test_a_checkpoint_released_after_the_tables_is_scored(tmp_path):
     # With mtime triggers alone, a new label's units under tables already
-    # built were "missing, no update": every tick did nothing (r5 n4000,
-    # 2026-11-19).
+    # built would be "missing, no update", and no tick would score them.
     cache = tmp_path / "scores"
     for unit, labels in (
         ("germany-days", ["reference", "slots-aaa"]),

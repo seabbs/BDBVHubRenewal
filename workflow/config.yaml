@@ -115,9 +115,8 @@ finetune:
 score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
   # every checkpoint released from `published_from` (rule release_list).
-  # The earlier run's last checkpoint was released at 14:12 on 19 Nov, so
-  # only the current run's are scored. Earlier checkpoints' cached rows
-  # stay in the tables.
+  # Only checkpoints of the current run, released after this time, are
+  # scored. Earlier checkpoints' cached rows stay in the tables.
   labels: null
   published_from: "2026-11-19T15:00:00Z"
   # Checkpoints left out, by label.

@@ -1,7 +1,7 @@
 # The workflow
 
 One Snakemake workflow simulates outbreaks, fine-tunes Chronos-2 on them, publishes the checkpoints and scores them.
-The paper's workflow (`paper/workflow/Snakefile`) runs beside it for now and joins as a module next (#257).
+The paper's workflow (`paper/workflow/Snakefile`) runs beside it.
 This page walks through it in order, with the command for each piece, from a whole target down to one file.
 
 ## Running it

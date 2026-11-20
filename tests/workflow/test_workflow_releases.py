@@ -49,8 +49,8 @@ def test_the_newest_checkpoint_has_the_highest_priority_within_its_band():
 
 
 def test_only_r7_checkpoints_are_scored():
-    # r6 is retired: its last checkpoint was released at 14:12 on 19 Nov,
-    # so the shipped config scores only checkpoints released after it.
+    # The shipped config scores only checkpoints released after
+    # `published_from`.
     from pathlib import Path
 
     import yaml
