@@ -6,10 +6,16 @@ test_that("categorical settings are drawn at the grid's shares", {
   expect_equal(share("window", "early"), 0.25, tolerance = 0.03)
   expect_equal(share("window", "endemic"), 0.35, tolerance = 0.03)
   expect_equal(share("delay_change", "static"), 0.4, tolerance = 0.03)
-  expect_equal(share("bunching", "yes"), 0.15, tolerance = 0.05)
+  expect_equal(share("report_days", "daily"), 0.5, tolerance = 0.03)
+  expect_equal(share("report_days", "weekdays"), 0.25, tolerance = 0.03)
+  expect_equal(share("report_days", "fixed_days"), 0.15, tolerance = 0.03)
+  expect_equal(share("report_days", "weekly"), 0.1, tolerance = 0.03)
   expect_equal(share("revisions", "yes"), 0.3, tolerance = 0.03)
   expect_equal(share("observation", "poisson"), 0.2, tolerance = 0.03)
   expect_false(any(c("process", "gt_shape") %in% names(grid$factors)))
+  # One report-days factor (lead 13:25): no separate reporting or bunching.
+  expect_false(any(c("reporting", "bunching") %in% names(grid$factors)))
+  expect_false(any(grepl("^bunch", c(names(grid$distributions), names(grid$counts)))))
 })
 
 test_that("every distribution is named, has a layer and a reason", {
@@ -174,4 +180,22 @@ test_that("weekday effects are rare and mostly small (lead 13:24)", {
   }
   d <- grid$distributions$delay_dow_sd
   expect_equal(c(d$dist, d$median, d$sdlog), c("lognormal", 0.08, 0.5))
+})
+
+test_that("each report-days level reports on its weekdays", {
+  grid <- r7()
+  week <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+    "Saturday", "Sunday")
+  set.seed(8)
+  seen <- list()
+  for (i in 1:400) {
+    d <- draw_design(grid)
+    on <- strsplit(d$report_weekdays, ";")[[1]]
+    seen[[d$report_days]] <- c(seen[[d$report_days]], length(on))
+    if (d$report_days == "daily") expect_equal(on, "all")
+    if (d$report_days == "weekdays") expect_equal(on, week[1:5])
+    if (d$report_days != "daily") expect_true(all(on %in% week))
+  }
+  expect_setequal(unique(seen$fixed_days), 2:3)
+  expect_equal(unique(seen$weekly), 1L)
 })
