@@ -387,13 +387,13 @@ The dashboard was built with the help of a large language model.
 ::: {#tbl-grid-epidemic}
 {{< include build/tables/si/grid-epidemic.md >}}
 
-The simulation grid, epidemic and places: each categorical setting's levels and the continuous values drawn, read from the grid's settings.
+The simulation grid, strata and infections: each categorical setting's levels and each continuous setting's sampling distribution, read from the grid config.
 :::
 
 ::: {#tbl-grid-reporting}
 {{< include build/tables/si/grid-reporting.md >}}
 
-The simulation grid, reporting and observation: as @tbl-grid-epidemic.
+The simulation grid, observation, reporting delays and the reporting system: as @tbl-grid-epidemic.
 :::
 
 We draw every continuous setting from a named sampling distribution of the simulation settings, which states what we believe likely outbreaks look like (@tbl-grid-distributions).
@@ -401,7 +401,7 @@ We draw every continuous setting from a named sampling distribution of the simul
 ::: {#tbl-grid-distributions}
 {{< include build/tables/si/grid-distributions.md >}}
 
-Sampling distributions of the continuous simulation settings, read from the grid's settings, with the reason for each.
+Sampling distributions of the continuous simulation settings, read from the grid config, with the reason for each.
 :::
 
 

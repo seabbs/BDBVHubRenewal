@@ -59,7 +59,7 @@ def test_offload_is_refused_while_early_stopping_can_act():
 
 def test_evaluation_mode_defaults_to_local():
     args = fs.build_parser().parse_args(
-        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r5"]
+        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r7"]
     )
     assert args.eval == "local"
 

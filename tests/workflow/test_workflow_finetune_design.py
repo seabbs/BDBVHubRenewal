@@ -63,7 +63,7 @@ def test_a_round_is_800_simulations():
     assert CONFIG["finetune"]["rounds"] is None
     assert CONFIG["finetune"]["validation_round"] is None
     for name, grid in CONFIG["grid_rounds"].items():
-        if name == CONFIG["finetune"]["grid"] and name not in ("r5", "r6"):
+        if name == CONFIG["finetune"]["grid"]:
             assert len(grid["rounds"]) * 800 == CONFIG["finetune"]["outbreaks"]
         assert grid["validation_round"] not in grid["rounds"]
         assert grid["test_round"] not in (
@@ -182,25 +182,24 @@ def test_quiet_cut_offs_come_from_the_config(tmp_path):
     assert args.quiet_min_cases == 10
 
 
-def test_an_r6_run_holds_out_round_20_and_trains_on_21_to_30(tmp_path):
+def test_an_r7_run_holds_out_round_33(tmp_path):
     pytest.importorskip("pandas")
     sys.path.insert(0, str(ROOT / "scripts"))
     import finetune_stream as fs
 
-    args = fs.build_parser().parse_args(_trainer_args(tmp_path, {"grid": "r6"}))
-    assert args.grid == "r6"
+    args = fs.build_parser().parse_args(_trainer_args(tmp_path, {"grid": "r7"}))
+    assert args.grid == "r7"
     assert "daily+rolling7" in args.sources
-    # Round 20, every batch: seeds 32000 to 32039.
-    assert args.held_out_seeds == [32000, 32039]
+    # Round 33, every batch: seeds 33300 to 33339.
+    assert args.held_out_seeds == [33300, 33339]
 
 
 def test_each_grid_s_sources_are_its_block_design():
     sys.path.insert(0, str(ROOT / "scripts"))
     import finetune_chronos as ft
 
-    for grid, entry in CONFIG["grid_rounds"].items():
-        design = ft.DESIGNS[ft.GRID_DESIGNS[grid]]
-        assert entry["sources"] == list(design["source_shares"])
+    for entry in CONFIG["grid_rounds"].values():
+        assert entry["sources"] == list(ft.BLOCK_DESIGN["source_shares"])
 
 
 def test_development_scores_no_bdbv_blocks(tmp_path):
