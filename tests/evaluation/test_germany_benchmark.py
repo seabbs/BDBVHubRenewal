@@ -374,6 +374,9 @@ class _Extrapolate:
         return out, None
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("torch") is None, reason="needs torch"
+)
 def test_each_scored_row_is_the_sum_of_its_own_seven_days(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
