@@ -16,8 +16,15 @@ from nowcastutils.base import get_model
 REPORTED = {0: 50, 1: 80, 2: 80, 3: 100}
 
 
-def _releases(days: int, start: str = "2026-01-01") -> pd.DataFrame:
-    """Daily releases of one place, each giving every onset day so far."""
+def _releases(
+    days: int, start: str = "2026-01-01", reported=None
+) -> pd.DataFrame:
+    """Daily releases of one place, each giving every onset day so far.
+
+    `reported(d)` is a day's count reported by lag `d` (`REPORTED` by
+    default).
+    """
+    reported = reported or (lambda d: REPORTED.get(d, 100))
     first = dt.date.fromisoformat(start)
     rows = []
     for v in range(days):
@@ -28,7 +35,7 @@ def _releases(days: int, start: str = "2026-01-01") -> pd.DataFrame:
                     "vintage": vintage,
                     "location": "A",
                     "onset_date": (first + dt.timedelta(days=t)).isoformat(),
-                    "observed": REPORTED.get(v - t, 100),
+                    "observed": reported(v - t),
                     "imputed": 0,
                     "cutoff": vintage,
                 }
@@ -58,10 +65,50 @@ def test_only_releases_up_to_the_forecast_date_are_read() -> None:
     assert delay_lags(early, "daily", ("A",), "2026-06-01") == 4
 
 
-def test_a_short_history_keeps_the_fixed_lags() -> None:
+def test_a_long_delay_with_a_recent_cut_is_not_biased_short() -> None:
+    # A geometric delay: the share reported by lag d is 1 - 0.8^(d + 1),
+    # whose 99th percentile is lag 20, so 21 lags. Recent days have not
+    # seen their delays; only complete days are read, so the estimate is
+    # not short.
+    def reported(d):
+        return 10_000 * (1 - 0.8 ** (d + 1))
+
+    rows = _releases(200, reported=reported)
+    last = rows["cutoff"].max()
+    assert delay_lags(rows, "daily", ("A",), last, 0.99) == 21
+    # Naively, from the latest 28 days and their counts so far, it is
+    # shorter: those days have not been reported for long enough.
+    tri = forecaster.hub_triangle(rows, "daily", ("A",), last, max_lag=28)
+    days = list(range(tri.last - 27, tri.last + 1))
+    part, final = tri.partial[0, days, :], tri.final[0, days]
+    seen = ~np.isnan(part)
+    share = [np.nansum(part[:, d]) / final[seen[:, d]].sum() for d in range(28)]
+    naive = int(np.flatnonzero(np.array(share) >= 0.99)[0]) + 1
+    assert naive < 21
+
+
+def test_little_history_gives_as_many_lags_as_it_allows() -> None:
     rows = _releases(20)
     got = delay_lags(rows, "daily", ("A",), rows["cutoff"].max())
-    assert got == MAX_LAG["daily"]
+    tri = forecaster.hub_triangle(
+        rows, "daily", ("A",), rows["cutoff"].max(), max_lag=1
+    )
+    assert got == forecaster.history_lags(tri) == 18
+    assert got != MAX_LAG["daily"]
+
+
+def test_the_lags_never_exceed_the_history() -> None:
+    # 99% of reports by lag 20 needs 21 lags; 15 days of history allow 13.
+    def reported(d):
+        return 10_000 * (1 - 0.8 ** (d + 1))
+
+    rows = _releases(15, reported=reported)
+    last = rows["cutoff"].max()
+    assert delay_lags(rows, "daily", ("A",), last) == 13
+    model = dataclasses.replace(
+        get_model("fm_chronos_daily_ragged"), max_lag=40
+    )
+    assert model.lags(rows, ("A",), last) == 13
 
 
 def test_a_model_takes_a_fixed_lag_count_or_a_quantile(monkeypatch) -> None:

@@ -67,6 +67,9 @@ __all__ = [
     "ADAPTER_FILES",
     "CHRONOS_MODEL",
     "CHRONOS_REVISION",
+    "DELAY_LOOKBACK",
+    "DELAY_QUANTILE",
+    "DELAY_WINDOW",
     "FINETUNED_CACHE",
     "FINETUNED_CONFIG",
     "FINETUNED_ENV",
@@ -85,10 +88,12 @@ __all__ = [
     "Known",
     "Sampler",
     "chronos_sampler",
+    "delay_lags",
     "finetuned_adapter",
     "finetuned_releases",
     "finetuned_spec",
     "group_key",
+    "history_lags",
     "hub_triangle",
     "inference_precision",
     "layout_block",
@@ -113,6 +118,17 @@ LAYOUTS: Final = ("complete", "ragged")
 MAX_LAG: Final = {"weekly": 4, "daily": 28}
 """Release lag $D$, in the source's steps, from which a count is taken as
 final."""
+
+DELAY_QUANTILE: Final = 0.99
+"""The share of a step's reports its release lags hold by default
+(`delay_lags`)."""
+
+DELAY_LOOKBACK: Final = {"weekly": 16, "daily": 112}
+"""Steps a step must have been reported for to count as complete in
+`delay_lags`: delays are read up to this lag."""
+
+DELAY_WINDOW: Final = {"weekly": 4, "daily": 28}
+"""Steps whose reports `delay_lags` pools."""
 
 FINETUNED_CONFIG: Final = Path("config/finetune.toml")
 """Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
@@ -620,6 +636,81 @@ def hub_triangle(
     return HubTriangle(times, final, partial, last)
 
 
+def delay_lags(
+    rows: pd.DataFrame,
+    source: str,
+    places: Sequence[str],
+    last_time: str,
+    quantile: float = DELAY_QUANTILE,
+) -> int:
+    """Return the release lags that hold `quantile` of a step's reports.
+
+    The delay is estimated from the releases in `rows` alone (no later
+    data) and only from steps old enough to be complete: the
+    `DELAY_WINDOW` steps `DELAY_LOOKBACK` steps before the latest
+    release's cut-off, whose counts at every lag below the lookback are
+    known by then, pooled over `places`. Recent steps, which have not yet
+    seen their long delays, are left out, so the estimate is not biased
+    short by right truncation. The lag count is one more than the
+    smallest lag whose share of the step's latest count reaches
+    `quantile`, and never more than the history allows (`history_lags`).
+    With too little history for complete steps, no count in them, or no
+    lag reaching `quantile` within the lookback, it is the most lags the
+    history allows.
+
+    Parameters
+    ----------
+    rows : pandas.DataFrame
+        The releases, as `hub_triangle` takes them.
+    source : str
+        One of `SOURCES`.
+    places : sequence of str
+        Places whose reports are pooled.
+    last_time : str
+        Last step of the grid.
+    quantile : float
+        Share of the reports, in (0, 1].
+
+    Returns
+    -------
+    int
+        Release lags $D$, in the source's steps.
+
+    Raises
+    ------
+    ValueError
+        If `quantile` is not in (0, 1].
+    """
+    if not 0 < quantile <= 1:
+        raise ValueError(f"delay quantile {quantile} is not in (0, 1]")
+    back, window = DELAY_LOOKBACK[source], DELAY_WINDOW[source]
+    tri = hub_triangle(rows, source, places, last_time, max_lag=back)
+    most = history_lags(tri)
+    first = tri.last - back - window + 1
+    if first < 0:
+        return most
+    steps = list(range(first, tri.last - back + 1))
+    seen = tri.partial[:, steps, :].reshape(-1, back)
+    # A lag no release fell on carries the count of the lag before it.
+    seen = pd.DataFrame(seen).ffill(axis=1).fillna(0.0).to_numpy()
+    final = tri.final[:, steps].sum()
+    if final <= 0:
+        return most
+    share = seen.sum(axis=0) / final
+    reached = np.flatnonzero(share >= quantile - 1e-12)
+    if not reached.size:
+        return most
+    return min(int(reached[0]) + 1, most)
+
+
+def history_lags(tri: HubTriangle) -> int:
+    """Return the most release lags a triangle's history allows.
+
+    Two steps of context stay before the lags (`HubTriangle.n_context`).
+    """
+    return max(1, tri.last - 1)
+
+
 def quantile_draws(
     levels: np.ndarray, values: np.ndarray, u: np.ndarray
 ) -> np.ndarray:
@@ -1039,6 +1130,12 @@ class FoundationModel:
     known : mapping or None
         Chronos-2's quantiles of tasks predicted ahead in few batched
         passes (`prefetch`); others are predicted when forecast.
+    max_lag : int or None
+        Release lags $D$ the ragged layout gives, fixed; by default chosen
+        from the task's releases (`delay_quantile`).
+    delay_quantile : float or None
+        Share of a step's reports the release lags hold (`delay_lags`),
+        `DELAY_QUANTILE` by default. Unused with `max_lag`.
     """
 
     name: str
@@ -1049,7 +1146,23 @@ class FoundationModel:
     sample: Sampler | None = field(default=None, repr=False)
     stream: str | None = field(default=None, repr=False)
     known: Known | None = field(default=None, repr=False, compare=False)
+    max_lag: int | None = None
+    delay_quantile: float | None = None
     reads_zones: ClassVar[bool] = True
+
+    def lags(
+        self, rows: pd.DataFrame, places: Sequence[str], last_time: str
+    ) -> int:
+        """Return the release lags $D$ for releases `rows`.
+
+        `max_lag` if set, else `delay_lags` at `delay_quantile`; never
+        more than the history allows (`history_lags`).
+        """
+        if self.max_lag is not None:
+            tri = hub_triangle(rows, self.source, places, last_time, 1)
+            return min(int(self.max_lag), history_lags(tri))
+        quantile = self.delay_quantile or DELAY_QUANTILE
+        return delay_lags(rows, self.source, places, last_time, quantile)
 
     @property
     def needs_snapshots(self) -> bool:
@@ -1119,7 +1232,13 @@ class FoundationModel:
         assert rows is not None
         places = (NATIONAL, *task.locations, *zones)
         weeks = list(task.target_end_dates)
-        tri = hub_triangle(rows, self.source, places, weeks[-1])
+        tri = hub_triangle(
+            rows,
+            self.source,
+            places,
+            weeks[-1],
+            max_lag=self.lags(rows, places, weeks[-1]),
+        )
         start = tri.n_context
         if self.layout == "complete":
             walk = _walk_start(task)
