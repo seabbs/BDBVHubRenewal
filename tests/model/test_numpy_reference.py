@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.model import censored_pmf, generation_interval
+from nowcastrenewal.model import censored_pmf, generation_interval
 
 from .numpy_reference import (
     delay_matrix,

@@ -9,9 +9,9 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.forecasters import ForecastTask, get_model
-from bdbvhubrenewal.forecasters import renewal as rn
-from bdbvhubrenewal.forecasters import zonerenewal as zr
 from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastrenewal import forecaster as rn
+from nowcastrenewal import zones as zr
 from nowcastutils.hierarchy import is_zone, province_of
 
 pytest.importorskip("pyrenew")
@@ -255,8 +255,8 @@ def test_zone_code_keys_the_models_that_run_it(
 
 
 def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
-    from bdbvhubrenewal.data import bvd
-    from bdbvhubrenewal.model.zones import zone_bvd_inputs
+    from nowcastrenewal import bvd
+    from nowcastrenewal.model.zones import zone_bvd_inputs
 
     fixtures = Path(__file__).resolve().parents[1] / "data" / "bvd"
     release = bvd.load_release(fixtures / "results-3086")
@@ -313,7 +313,7 @@ def test_bvd_zone_fit_records_the_release_and_its_rhat(
     import json
     import shutil
 
-    from bdbvhubrenewal.data import bvd
+    from nowcastrenewal import bvd
 
     data = tmp_path / "data"
     shutil.copytree(ROOT / "tests" / "fixtures" / "data", data)

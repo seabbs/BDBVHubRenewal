@@ -13,7 +13,7 @@ Load the hub data, build forecast vintages and simulate outbreaks to test models
 
 ::: bdbvhubrenewal.data.delays
 
-::: bdbvhubrenewal.data.bvd
+::: nowcastrenewal.bvd
 
 ::: bdbvhubrenewal.data.zones
 

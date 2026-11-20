@@ -981,7 +981,7 @@ def plot_renewal_delay(
     Parameters
     ----------
     summary : pandas.DataFrame
-        `delay-summary.csv` rows (`bdbvhubrenewal.forecasters.renewal.
+        `delay-summary.csv` rows (`nowcastrenewal.forecaster.
         delay_summary` with `model`, `vintage` and `location`).
     baseline : pandas.DataFrame
         `baseline_share` at the same release, with the country as

@@ -51,9 +51,9 @@ onset = pd.to_datetime(daily["onset_date"])
 saturday = onset + pd.to_timedelta((5 - onset.dt.weekday) % 7, unit="D")
 target = (
     daily.assign(target_end_date=saturday.dt.date.astype(str))
-    .groupby(["vintage", "location", "target_end_date", "cutoff"], as_index=False)[
-        ["observed", "imputed"]
-    ]
+    .groupby(
+        ["vintage", "location", "target_end_date", "cutoff"], as_index=False
+    )[["observed", "imputed"]]
     .sum()
     .assign(kind="real")
 )
@@ -94,7 +94,12 @@ forecasts = {
     for name in ("randomwalk", "randomwalknowcast")
 }
 for samples in forecasts.values():
-    assert list(samples.columns) == ["location", "target_end_date", "sample", "value"]
+    assert list(samples.columns) == [
+        "location",
+        "target_end_date",
+        "sample",
+        "value",
+    ]
     assert samples.groupby(["location", "target_end_date"]).size().eq(100).all()
 ```
 
