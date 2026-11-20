@@ -116,7 +116,7 @@ def test_the_code_names_are_the_paths_first_hashed():
     assert set(ft.CODE) == {
         *ft.SIMULATOR,
         "scripts/finetune_chronos.py",
-        "packages/nowcastfoundation/src/nowcastfoundation/finetune.py",
+        "src/bdbvhubrenewal/forecasters/finetune.py",
     }
     # Every engine file is hashed.
     engine = Path(__file__).parents[1] / ft.ENGINE / "R"
