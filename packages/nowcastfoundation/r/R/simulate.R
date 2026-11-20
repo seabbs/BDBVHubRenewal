@@ -285,9 +285,8 @@ simulate_outbreak <- function(grid, design, v, ctx) {
 }
 
 # Simulate one design: up to five draws of its values, each kept if it
-# runs, reports at least `min_cases` (`redraw_reason`) and passes the sim
-# QC (`qc_reason`). Returns the outbreak (or NULL) and a failure row per
-# failed try.
+# runs and reports at least `min_cases` (`redraw_reason`). Returns the
+# outbreak (or NULL) and a failure row per failed try.
 simulate_cell <- function(grid, design, ctx, id = NA_character_) {
   if (design$strata_link == "independent" &&
       design$n_places * design$n_ages > 1) {
@@ -300,12 +299,7 @@ simulate_cell <- function(grid, design, ctx, id = NA_character_) {
     reason <- if (inherits(res, "error")) {
       conditionMessage(res)
     } else {
-      first <- res$counts[draw == 1L]
-      reason <- redraw_reason(sum(res$counts$count) / ctx$draws, grid)
-      population <- stats::setNames(
-        res$values$stratum_population, res$values$stratum_location
-      )
-      if (is.na(reason)) qc_reason(first, grid, population) else reason
+      redraw_reason(sum(res$counts$count) / ctx$draws, grid)
     }
     if (is.na(reason)) {
       return(list(out = res, failures = failures))
@@ -491,43 +485,4 @@ redraw_reason <- function(size, grid) {
   } else {
     NA_character_
   }
-}
-
-#' Why a simulation fails the sim QC, if it does
-#'
-#' The checks of scripts/sim_qc.py on one draw's counts, with the grid's
-#' thresholds (`grid$qc`): more cases in a stratum than its population,
-#' the largest week-on-week rise in weekly cases by reference date (weeks
-#' from Monday), and the mean reporting delay.
-#'
-#' @param counts One draw's counts: `location`, `reference_date`,
-#'   `report_date` and `count`.
-#' @param grid A grid (`read_grid`).
-#' @param population Each stratum's population, named by location, or
-#'   `NULL` to skip the size check.
-#' @return The reason, or `NA` if the simulation passes.
-#' @export
-qc_reason <- function(counts, grid, population = NULL) {
-  q <- grid$qc
-  w <- counts$count
-  if (!is.null(population)) {
-    cases <- tapply(w, counts$location, sum)
-    if (any(cases > population[names(cases)], na.rm = TRUE)) {
-      return("cases in a stratum above its population")
-    }
-  }
-  ref <- counts$reference_date
-  week <- ref - (as.integer(format(ref, "%u")) - 1L)
-  weekly <- tapply(w, week, sum)
-  growth <- diff(log(as.numeric(weekly[order(names(weekly))]) + 1))
-  if (length(growth) && max(growth) > log(q$max_weekly_jump)) {
-    return(sprintf(
-      "weekly cases rise more than %s-fold in one week", q$max_weekly_jump
-    ))
-  }
-  delay <- as.integer(counts$report_date - ref)
-  if (sum(delay * w) / sum(w) > q$max_mean_delay_days) {
-    return(sprintf("mean reporting delay over %s days", q$max_mean_delay_days))
-  }
-  NA_character_
 }
