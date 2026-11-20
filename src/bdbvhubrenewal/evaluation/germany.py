@@ -447,6 +447,9 @@ def germany_forecasts(
             prefetch(m, every) if isinstance(m, FoundationModel) else m
             for m in built
         ]
+        # The loop pops each date's tasks, which frees them only once this
+        # list no longer holds them.
+        del every
     keys = ["model", "origin", "location", "target_end_date", "horizon"]
     frames = []
     for date in dates:

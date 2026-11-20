@@ -6,7 +6,6 @@ from nowcastfoundation.backends import Series, chronos2
 
 def test_the_forecaster_predicts_through_the_chronos2_backend():
     assert forecaster._predict is chronos2._predict
-    assert forecaster.torch_device is chronos2.torch_device
     assert (
         forecaster.CHRONOS_MODEL == chronos2.CHRONOS_MODEL == "amazon/chronos-2"
     )

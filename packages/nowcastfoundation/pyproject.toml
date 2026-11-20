@@ -8,8 +8,8 @@ authors = [{ name = "Sam Abbott", email = "sam.abbott@lshtm.ac.uk" }]
 requires-python = ">=3.13"
 # Chronos-2, torch, peft and safetensors are imported by `forecaster`,
 # `series_bias` and `checkpoint` but stay in the workspace's `chronos`
-# dependency group: declaring them here adds them to the runtime export
-# every fit key holds, so they are added with the next refit.
+# dependency group, so the runtime export every fit key holds leaves them
+# out.
 dependencies = [
   "jax>=0.12.0",
   "numpy>=1.26,<3",

@@ -360,6 +360,11 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def code_sha256(path: str) -> str:
+    """Return the SHA-256 of a hashed code file, its path from `ROOT`."""
+    return _sha256(ROOT / path)
+
+
 QUIET_WINDOW_DAYS = 28
 """Days up to a cut-off over which a block's reported cases are counted
 for the quiet rule (`quiet`)."""
@@ -561,9 +566,9 @@ def whole_system(
     groups = sorted({p.split("-")[0] for p in provinces})
     ages = sorted(
         {
-            p.split("-")[1]
-            for p in provinces
-            if re.fullmatch(r"A\d+", p.split("-")[1])
+            parts[1]
+            for parts in (p.split("-") for p in provinces)
+            if len(parts) > 1 and re.fullmatch(r"A\d+", parts[1])
         }
     )
     return (NATIONAL, *groups, *ages, *sorted(provinces)), "all_levels"
@@ -599,9 +604,9 @@ def choose_places(
         groups.setdefault(p.split("-")[0], []).append(p)
     ages = sorted(
         {
-            p.split("-")[1]
-            for p in provinces
-            if re.fullmatch(r"A\d+", p.split("-")[1])
+            parts[1]
+            for parts in (p.split("-") for p in provinces)
+            if len(parts) > 1 and re.fullmatch(r"A\d+", parts[1])
         }
     )
     chosen: list[str] = []

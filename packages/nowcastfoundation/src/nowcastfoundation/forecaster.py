@@ -50,7 +50,6 @@ from nowcastfoundation.backends.chronos2 import (
     CHRONOS_REVISION,
     _predict,
     apply_threads,
-    inference_precision,
     torch_device,
 )
 from nowcastutils.base import (
@@ -93,7 +92,6 @@ __all__ = [
     "finetuned_spec",
     "group_key",
     "hub_triangle",
-    "inference_precision",
     "lag_count",
     "layout_block",
     "native_sampler",
@@ -104,7 +102,6 @@ __all__ = [
     "register_realdata_models",
     "release_tag",
     "resolve_checkpoint",
-    "torch_device",
 ]
 
 SOURCES: Final = ("weekly", "daily")

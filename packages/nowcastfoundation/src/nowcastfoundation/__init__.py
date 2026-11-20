@@ -5,6 +5,5 @@ Import from the modules themselves, for example
 `from nowcastfoundation.forecaster import FoundationModel`.
 """
 
-# The foundation models' fit keys held `bdbvhubrenewal.__version__` while
-# their module was in that package; the same statement here keeps them.
+# The foundation models' fit keys hold this statement.
 __version__ = "0.1.0"

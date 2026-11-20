@@ -25,7 +25,7 @@ Low level, any output file, for example:
 
 ```sh
 uv run --group paper snakemake <ROOT>/rounds/r4/sims/counts-30421.csv.gz  # one batch
-uv run --group paper snakemake <RUN>/train/n1000/settings.json            # one checkpoint
+uv run --group paper snakemake <RUN>/train/n800/settings.json            # one checkpoint
 uv run --group paper snakemake <SCORE_CACHE>/germany-days/slots-<hash>.done    # one checkpoint's German scores
 ```
 
@@ -87,7 +87,7 @@ The engine is the R package `packages/nowcastfoundation/r`, run by `workflow/scr
 - `simulate_batch`: one batch of the engine through `workflow/scripts/simulate.R`, under `JOB_PREFIX` at nice 19, once there is memory, disk and load to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one, and its whole command runs with that library and the system's tools ahead of PATH (R puts the system libraries on `LD_LIBRARY_PATH`, under which a bash from another prefix fails).
 - `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
-- `sim_qc`: the sim QC (`scripts/sim_qc.py`), a record of each round (no thresholds since Sam's 13:25 decision: it records each simulation's summaries and an empty exclusion list; rounds checked before keep theirs), whose exclusions (`qc/excluded.csv`, with reason and evidence) the trainer skips. Nothing is deleted.
+- `sim_qc`: the sim QC (`scripts/sim_qc.py`), a record of each round (no thresholds: it records each simulation's summaries and an empty exclusion list), whose exclusions (`qc/excluded.csv`, with reason and evidence) the trainer skips. Nothing is deleted.
 - `round_ready`: the seed list and `READY`, last.
 - `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
 - `release_batch`, `release_qc`, `release`: opt-in, each batch and the round's QC exclusions to its round's release.
@@ -98,7 +98,7 @@ Outputs are in `<ROOT>/rounds/r<N>/`.
 
 ## 2. Fine-tune (`rules/finetune.smk`)
 
-One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into one segment per checkpoint prefix (250, 500, 750, 1,000, 2,000, 4,000, 8,400).
+One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into one segment per checkpoint prefix (`finetune.prefixes`).
 Segment N resumes from the state kept with the prefix before and stops once `n<N>` is saved (`--until N`).
 The state carries the learning-rate schedule, the step, the batch position and torch's random state, so the segments in turn are the run that never stopped.
 

@@ -369,6 +369,11 @@ class PlaceRt(RandomVariable):
                 for i in range(n_places)
             ]
         lags = self.place_lags
+        if len(lags) < n_places:
+            raise ValueError(
+                f"lagged R paths need a lag for each of {n_places} places, "
+                f"got {len(lags)}"
+            )
         return [
             jnp.concatenate([jnp.full(lags[i], shared[0]), shared])[:n]
             for i in range(n_places)

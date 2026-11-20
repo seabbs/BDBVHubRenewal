@@ -1,4 +1,4 @@
-"""Every workspace package module imports on its own (WP2b)."""
+"""Every workspace package module imports on its own."""
 
 from __future__ import annotations
 

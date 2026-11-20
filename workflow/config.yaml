@@ -60,7 +60,7 @@ finetune:
   outbreaks: 3200
   # Training seeds: the rounds' batches in seed order, or a fixed list
   # from `seed_file` (one seed a line, in order). The validation round is
-  # one whole grid block, and the ten rounds after it the ten blocks
+  # one whole grid block, and the grid's training rounds the blocks
   # trained on. The trainer monitors the first `holdout` simulations of
   # the validation round; the scoring workflow scores it whole. Unset
   # (null), the rounds, validation round and sources are `grid_rounds`.

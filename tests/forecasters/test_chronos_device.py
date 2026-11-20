@@ -52,9 +52,9 @@ def test_auto_or_unset_detects_the_device(loaded, monkeypatch):
 
 
 def test_one_device_resolver_for_scoring_and_training():
-    from nowcastfoundation import forecaster as foundation
+    from nowcastfoundation.backends import chronos2
 
-    assert foundation.torch_device("cuda:1") == "cuda:1"
+    assert chronos2.torch_device("cuda:1") == "cuda:1"
     scripts = __import__("pathlib").Path(__file__).parents[2] / "scripts"
     for name in ("finetune_stream.py", "finetune_speed.py"):
         assert "def pick_device" not in (scripts / name).read_text()
