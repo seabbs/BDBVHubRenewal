@@ -162,6 +162,7 @@ def use_design(grid: str) -> str:
         silently given r5's blocks.
     """
     global DESIGN, SOURCE_SHARES, CADENCES, WHOLE_SYSTEM, PARENTS
+    global SIMULATOR, CODE
     if grid not in GRID_DESIGNS:
         raise ValueError(
             f"grid {grid!r} has no block design; known: {sorted(GRID_DESIGNS)}"
@@ -171,6 +172,10 @@ def use_design(grid: str) -> str:
     CADENCES = {k: dict(v) for k, v in DESIGNS[DESIGN]["cadences"].items()}
     PARENTS = grid_parents(grid)
     WHOLE_SYSTEM = DESIGNS[DESIGN].get("whole_system", False)
+    # The run's own grid file is hashed, if it has one.
+    if (GRIDS / f"{grid}.yaml").exists():
+        SIMULATOR = simulator_files(f"config/finetune/grids/{grid}.yaml")
+        CODE = code_files(SIMULATOR)
     return DESIGN
 
 
@@ -272,34 +277,52 @@ def max_series(budget_gb: float) -> int:
 ENGINE = "packages/nowcastfoundation/r"
 """The simulator engine, whose R files and description are hashed."""
 
-SIMULATOR = (
-    "config/finetune/grids/r7.yaml",
-    "workflow/scripts/simulate.R",
-    f"{ENGINE}/DESCRIPTION",
-    *(
-        f"{ENGINE}/R/{name}.R"
-        for name in (
-            "delays",
-            "design",
-            "grid",
-            "infections",
-            "nowcastfoundation-package",
-            "observation",
-            "reporting",
-            "simulate",
-            "utils",
-        )
-    ),
-)
-"""The simulator's files: the grid, the rule's wrapper and the engine."""
+WRAPPER = "workflow/scripts/simulate.R"
+"""The simulate rule's wrapper around the engine."""
 
-CODE = {
-    **{path: path for path in SIMULATOR},
-    "scripts/finetune_chronos.py": "scripts/finetune_chronos.py",
-    "src/bdbvhubrenewal/forecasters/finetune.py": (
-        "packages/nowcastfoundation/src/nowcastfoundation/finetune.py"
-    ),
-}
+ROOT = Path(__file__).parents[1]
+"""The repository root, which the hashed paths are relative to."""
+
+
+def simulator_files(grid_file: str) -> tuple[str, ...]:
+    """Return the simulator's files: the grid, the wrapper and the engine.
+
+    The engine is its description and every R file (`ENGINE/R/*.R`,
+    found by glob so a new file is hashed without listing it).
+    """
+    engine = sorted(p.name for p in (ROOT / ENGINE / "R").glob("*.R"))
+    return (
+        grid_file,
+        WRAPPER,
+        f"{ENGINE}/DESCRIPTION",
+        *(f"{ENGINE}/R/{name}" for name in engine),
+    )
+
+
+def workflow_grid_file() -> str:
+    """Return the workflow's grid file (`simulate.grid_file`)."""
+    import yaml
+
+    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    return str(config["simulate"]["grid_file"])
+
+
+def code_files(simulator: tuple[str, ...]) -> dict[str, str]:
+    """Return `CODE` for a simulator's files."""
+    return {
+        **{path: path for path in simulator},
+        "scripts/finetune_chronos.py": "scripts/finetune_chronos.py",
+        "src/bdbvhubrenewal/forecasters/finetune.py": (
+            "packages/nowcastfoundation/src/nowcastfoundation/finetune.py"
+        ),
+    }
+
+
+SIMULATOR = simulator_files(workflow_grid_file())
+"""The simulator's files, with the workflow's grid until a run sets its
+own (`use_design`)."""
+
+CODE = code_files(SIMULATOR)
 """Files the checkpoint depends on, hashed into its settings: each
 file's name in `code_sha256`, then where it is now.
 
