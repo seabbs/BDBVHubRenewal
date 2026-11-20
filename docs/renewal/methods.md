@@ -109,9 +109,9 @@ Each zone fit runs 2 chains of 500 warm-up and 1500 draws, keeping every other d
 Each chain starts from its own draw from the prior.
 The walks are sampled non-centred and anchored at their mean over the fit, which removes a ridge between a walk's level and its first steps.
 In `renewalsp` the log Rt walk is the only Rt process.
-In a province with at least 250 cases by the cut-off, the data pin its level closely, so we sample its weekly levels directly (centred) rather than its standardised steps (#330).
+In a province with at least 250 cases by the cut-off, the data pin its level closely, so we sample its weekly levels directly (centred) rather than its standardised steps.
 With fewer cases a centred walk funnels, so those provinces keep the non-centred walk.
-A fit runs on a 4-core CI runner in 1.4 to 3.1 hours at the origins 2026-10-17 to 2026-11-15 (#185).
+A fit runs on a 4-core CI runner in 1.4 to 3.1 hours at the origins 2026-10-17 to 2026-11-15.
 
 Each fit reports, for every parameter, the rank-normalised R-hat and the bulk and tail effective sample sizes[^vehtari].
 It also reports, for every chain, the divergent transitions, the share of draws at the maximum tree depth, the E-BFMI and the step size.
@@ -135,12 +135,12 @@ The submission walks a chain of candidates, `renewalbvd`, `renewalsp`, `renewal`
 - Fits are slow.
   A zone fit takes 1.5 to 2 times as long as the province fits it replaced, and the time grows with the number of zones fitted.
 - The silent zones take the random walk's introductions, whose delay is fitted to pairs of releases at most 42 days apart.
-  Where no pair is that close, as at the 2026-10-09 origin, the delay is fitted to the longer pairs instead (#365).
+  Where no pair is that close, as at the 2026-10-09 origin, the delay is fitted to the longer pairs instead.
   A day of every age at the first release of such a pair is final at the second, so the delay is still identified, but from one pair only.
-- The province fits we replaced saturated the maximum tree depth in most draws, which made their convergence slow and fragile (#320).
+- The province fits we replaced saturated the maximum tree depth in most draws, which made their convergence slow and fragile.
   The zone fits do not.
-  Before #330, `renewalsp` did too in its largest province, which the centred walk fixed there.
-- In #185's backtest, scored against each later release, the zone fits beat the province fits at every level.
+  In `renewalsp`, the centred walk keeps its largest province from doing so.
+- In the backtest of the zone fits against the province fits, scored against each later release, the zone fits beat the province fits at every level.
   On weeks complete at the newest release they were mixed at the province level.
   Both did worse than `randomwalknowcast` at the national level at the two latest origins.
 - The delay is by province, so zones in the same province cannot differ in how fast they report.
