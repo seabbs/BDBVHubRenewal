@@ -4,7 +4,7 @@ How the renewal models used for the hub's nowcasts and forecasts work, from data
 { .page-subtitle }
 
 This page describes the methods in prose, in the order the data meet them.
-The full equations of each part are on the [Renewal models](../methods/model.md) page, and the code is in [`forecasters/zonerenewal.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/src/bdbvhubrenewal/forecasters/zonerenewal.py) and [`model/`](https://github.com/seabbs/bdbv-hub-modelling/tree/main/src/bdbvhubrenewal/model).
+The full equations of each part are on the [Renewal models](../methods/model.md) page, and the code is in [`zones.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastrenewal/src/nowcastrenewal/zones.py) and [`model/`](https://github.com/seabbs/bdbv-hub-modelling/tree/main/packages/nowcastrenewal/src/nowcastrenewal/model).
 
 ## Data and levels
 

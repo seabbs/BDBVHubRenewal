@@ -506,11 +506,8 @@ def test_lopo_scores_only_the_masked_province(
 def test_backtest_sampler_comes_from_the_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bdbvhubrenewal.forecasters.renewal import (
-        SAMPLER_ENV,
-        sampler_settings,
-    )
     from nowcasteval.backtest import apply_sampler
+    from nowcastrenewal.forecaster import SAMPLER_ENV, sampler_settings
 
     cfg = load_config(ROOT / "config" / "backtest.toml")
     assert cfg.sampler == {

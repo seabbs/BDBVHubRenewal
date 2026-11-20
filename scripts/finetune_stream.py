@@ -16,11 +16,10 @@ Held-out loss is on the first `--holdout` outbreaks of the held-out
 seeds, simulated first.
 
     uv run --group chronos python scripts/finetune_stream.py SIM_DIR OUT \
-        --grid r3 --train-seeds FIRST LAST --held-out-seeds FIRST LAST \
+        --train-seeds FIRST LAST --held-out-seeds FIRST LAST \
         --publish
 
-`scripts/finetune_driver.sh` runs it with the seeds of a config such as
-`config/finetune/r3.env`.
+The workflow's `finetune` rule runs it (workflow/rules/finetune.smk).
 
 `OUT/stream-status.json` holds the trainer's state, and while
 `OUT/../PAUSE` exists the trainer waits between steps.
@@ -579,13 +578,13 @@ def init_worker(
     univariate: float = ft.UNIVARIATE_SHARE,
     draws: int | None = None,
     subset_seed: int = 0,
-    grid: str = ft.GRID,
+    grid_file: Path | str = ft.GRID_FILE,
     loss_days: int | None = None,
     quiet_min_cases: int | None = None,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     global DRAWS_PER_PASS, SUBSET_SEED
-    ft.use_design(grid)
+    ft.use_grid(grid_file)
     ft.MAX_SERIES, ft.MAX_LAGS, ft.SOURCES = max_series, lags, sources
     ft.UNIVARIATE_SHARE = univariate
     ft.LOSS_HORIZON_DAYS = loss_days
@@ -1409,7 +1408,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", default=os.environ.get("DEVICE", "auto"))
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--note", default="")
-    parser.add_argument("--grid", required=True)
+    parser.add_argument("--grid-file", type=Path, default=ft.GRID_FILE)
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--blocks-per-simulation", type=int, default=12)
     # Sim QC exclusions (scripts/sim_qc.py), read before each new batch.
@@ -1500,8 +1499,7 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
     CHUNK = args.chunk
-    # The grid must have a grid file; the block design is the same for all.
-    ft.use_design(args.grid)
+    ft.use_grid(args.grid_file)
     ft.SOURCES = tuple(args.sources or ft.SOURCE_SHARES)
     ft.check_sources(ft.SOURCES)
     ft.check_package(Path(__file__).parents[1])
@@ -1579,7 +1577,7 @@ def main() -> None:
             ft.UNIVARIATE_SHARE,
             DRAWS_PER_PASS,
             SUBSET_SEED,
-            args.grid,
+            args.grid_file,
             ft.LOSS_HORIZON_DAYS,
             ft.QUIET_MIN_CASES,
         ),
@@ -1609,7 +1607,6 @@ def main() -> None:
     optimiser = make_optimiser(model, args.learning_rate, args.bias_lr)
     accepted = inspect.signature(Chronos2Model.forward).parameters
     base = {
-        "grid": args.grid,
         "chronos_revision": CHRONOS_REVISION,
         "code_sha256": {
             **{n: ft._sha256(Path(p)) for n, p in ft.CODE.items()},
@@ -1628,6 +1625,7 @@ def main() -> None:
             },
         },
         "max_lags": {k: [min(v), max(v)] for k, v in ft.MAX_LAGS.items()},
+        "lag_cap": ft.LAG_CAP,
         "held_out_sha256": ft._sha256(out / "outbreaks-held-out.txt"),
         "n_validation": len(val),
         "chunk": CHUNK,

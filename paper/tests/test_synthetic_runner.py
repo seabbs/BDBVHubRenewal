@@ -356,34 +356,10 @@ def test_strata_take_hub_codes_whose_parents_are_real_nodes(
 CONFIG = Path(__file__).parents[1] / "workflow" / "config.yaml"
 
 
-HELD_OUT_FACTORS = {
-    "delay_change",
-    "delay_family",
-    "delay_form",
-    "delay_places",
-    "gt_shape",
-    "imports",
-    "mixing",
-    "obs_strata",
-    "observation",
-    "place_rt",
-    "process",
-    "reference_dow",
-    "reporting",
-    "seeding",
-    "shocks",
-    "spread",
-    "strata",
-    "strata_link",
-    "trajectory",
-}
-"""The design factors of the held-out set's grid (r5), as its settings
-files have them."""
-
-
 def test_factors_include_every_factor_of_the_held_out_grid() -> None:
-    assert yaml.safe_load(CONFIG.read_text())["synthetic"]["grid"] == "r5"
-    assert set(synthetic.FACTORS) >= HELD_OUT_FACTORS
+    cfg = yaml.safe_load(CONFIG.read_text())["synthetic"]
+    grid = yaml.safe_load((CONFIG.parents[1] / cfg["grid_file"]).read_text())
+    assert set(synthetic.FACTORS) >= set(grid["factors"])
 
 
 def _draws(counts: pd.DataFrame, n: int) -> pd.DataFrame:

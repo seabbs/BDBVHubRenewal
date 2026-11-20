@@ -115,8 +115,8 @@ COLUMNS: Final = (
 """The long table's columns (`paper/schema.md`)."""
 
 FACTORS: Final = (
-    "process",
-    "gt_shape",
+    "window",
+    "gt_family",
     "trajectory",
     "delay_family",
     "delay_form",
@@ -135,6 +135,10 @@ FACTORS: Final = (
     "delay_places",
     "obs_strata",
     "strata_link",
+    "observation_strata",
+    "reporting_strata",
+    "bunching",
+    "revisions",
     "n_places",
     "n_ages",
     "max_delay",

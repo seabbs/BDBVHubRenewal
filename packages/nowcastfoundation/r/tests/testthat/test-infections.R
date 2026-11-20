@@ -52,7 +52,7 @@ test_that("endemic and controlled paths follow a smooth weekly walk", {
 
 for (window in c("early", "established", "endemic")) {
   test_that(paste("a", window, "window opens as it should"), {
-    grid <- r7()
+    grid <- test_grid()
     set.seed(4)
     d <- draw_design(grid)
     d$strata <- "places"
@@ -79,13 +79,17 @@ for (window in c("early", "established", "endemic")) {
       expect_true(all(apply(first[, 1:2], 2, function(x) {
         diff(range(x)) < 1e-9 && x[1] > 0
       })))
+      # Running before the series too, so its onsets open at the level
+      # (ascertained), not from zero (the 33715-0016 ramp).
+      asc <- run$values$ascertainment[1:2]
+      expect_equal(run$onsets[1, 1:2], first[1, 1:2] * asc, tolerance = 1e-6)
     }
     expect_equal(nrow(run$latent), length(gt) + 100L)
   })
 }
 
 test_that("every cell gives finite onsets over its whole range", {
-  grid <- r7()
+  grid <- test_grid()
   set.seed(10)
   for (g in 0:299) {
     d <- draw_design(grid)
@@ -104,7 +108,7 @@ test_that("every cell gives finite onsets over its whole range", {
 })
 
 test_that("layer values vary across strata as their structure says", {
-  grid <- r7()
+  grid <- test_grid()
   set.seed(9)
   for (structure in c("shared", "pooled", "independent")) {
     a <- stratum_values(grid, structure, 6L, "ascertainment", probability = TRUE)
@@ -113,4 +117,30 @@ test_that("layer values vary across strata as their structure says", {
     expect_true(all(a > 0 & a < 1) && all(m > 0))
     expect_equal(length(unique(a)) == 1, structure == "shared")
   }
+})
+
+test_that("without variants, infections and cases never exceed the population", {
+  # The size check of the old sim QC, now a property of the simulator.
+  # Variants return immune people to the susceptible, so reinfections can
+  # take a stratum's cumulative infections past its population.
+  grid <- test_grid()
+  set.seed(5)
+  checked <- 0L
+  for (g in 1:200) {
+    d <- draw_design(grid)
+    v <- draw_values(grid, d)
+    v$variant_at <- v$variant_escape <- v$variant_r <- v$variant_days <- numeric(0)
+    gt <- gt_pmf(v$gt_mean, d$gt_family, v$gt_cv)
+    n <- 7L * (v$weeks + v$max_delay %/% 7L + 4L) - length(gt)
+    run <- tryCatch(
+      latent_onsets(grid, n, gt, strata_of(d$n_places, d$n_ages), d, v),
+      error = function(e) NULL
+    )
+    if (is.null(run)) next
+    checked <- checked + 1L
+    pop <- run$values$stratum_population
+    expect_true(all(colSums(run$infections) <= pop * (1 + 1e-9)))
+    expect_true(all(colSums(run$onsets) <= pop * (1 + 1e-9)))
+  }
+  expect_gt(checked, 150L)
 })

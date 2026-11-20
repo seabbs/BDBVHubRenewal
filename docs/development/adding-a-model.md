@@ -33,7 +33,7 @@ For the leave-one-province-out check, set `supports_mask = True` and drop the pr
 
 ## Renewal variants
 
-A new renewal variant is one entry in `VARIANTS` in [`forecasters.renewal`][bdbvhubrenewal.forecasters.renewal].
+A new renewal variant is one entry in `VARIANTS` in [`forecasters.renewal`][nowcastrenewal.forecaster].
 It names a base `ModelConfig` and the fields it changes.
 Fitted variants are not run by the docs build or the smoke tests.
 The [fit store](cli.md#fit-store) fits them once a variant is on `main`.

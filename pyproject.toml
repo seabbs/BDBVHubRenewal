@@ -20,6 +20,7 @@ dependencies = [
   "nowcasteval",
   "nowcastbaselines",
   "nowcastfoundation",
+  "nowcastrenewal",
 ]
 keywords = [
   "epidemiology",
@@ -41,7 +42,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-# The PyRenew renewal model (`bdbvhubrenewal.model`), pinned by SHA.
+# The PyRenew renewal model (`nowcastrenewal.model`), pinned by SHA.
 # PyRenew brings JAX and NumPyro. The package imports without it.
 model = [
   "pyrenew @ git+https://github.com/CDCgov/PyRenew@2441cb327d6e563eab0495540cb7467a102c234f",
@@ -106,6 +107,7 @@ nowcastutils = { workspace = true }
 nowcasteval = { workspace = true }
 nowcastbaselines = { workspace = true }
 nowcastfoundation = { workspace = true }
+nowcastrenewal = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -163,7 +165,8 @@ convention = "numpy"
 # The small config classes and helpers carry no docstrings.
 "src/bdbvhubrenewal/submission/validate.py" = ["D101", "D102", "D103"]
 # Method signatures follow PyRenew's, and maths names keep their capitals.
-"src/bdbvhubrenewal/model/**" = ["ARG002", "N803", "N806", "PTH123"]
+"packages/nowcastrenewal/src/nowcastrenewal/model/**" = ["ARG002", "N803", "N806", "PTH123"]
+"packages/nowcastrenewal/src/nowcastrenewal/latent/**" = ["ARG002", "N803", "N806"]
 # The model's tests, from the prototype.
 "tests/model/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
 # The port's abort tests check R's conditions, not message text.
@@ -236,7 +239,7 @@ disallow_untyped_calls = false
 
 [[tool.mypy.overrides]]
 # The model subclasses PyRenew's and NumPyro's classes, which are untyped.
-module = ["bdbvhubrenewal.model.*"]
+module = ["nowcastrenewal.model.*", "nowcastrenewal.latent.*"]
 disallow_subclassing_any = false
 
 [[tool.mypy.overrides]]

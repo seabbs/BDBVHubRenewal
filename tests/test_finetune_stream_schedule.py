@@ -49,6 +49,6 @@ def test_sims_done_interpolates_within_a_chunk():
 
 def test_the_trainer_has_no_step_schedule():
     args = fs.build_parser().parse_args(
-        ["s", "o", "--grid", "r7", "--held-out-seeds", "1", "2"]
+        ["s", "o", "--held-out-seeds", "1", "2"]
     )
     assert not hasattr(args, "lr_steps")

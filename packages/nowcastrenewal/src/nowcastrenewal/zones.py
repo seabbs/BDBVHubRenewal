@@ -23,7 +23,7 @@ from typing import Any, Final
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.forecasters.renewal import (
+from nowcastrenewal.forecaster import (
     VARIANTS,
     RenewalFit,
     RenewalModel,
@@ -211,7 +211,7 @@ def zone_bvd_rows(
 
     Parameters
     ----------
-    release : bdbvhubrenewal.data.bvd.BvdRelease
+    release : nowcastrenewal.bvd.BvdRelease
         The release chosen for the vintage.
     cache_dir : pathlib.Path or str, optional
         The release cache. Defaults to `bvd/` in the data directory. The
@@ -227,7 +227,7 @@ def zone_bvd_rows(
         Columns of `data.bvd.MODEL_ROW_COLUMNS`, or None if the release
         has no zone estimates.
     """
-    from bdbvhubrenewal.data import bvd
+    from nowcastrenewal import bvd
 
     cache = Path(cache_dir) if cache_dir is not None else _data_dir() / "bvd"
     path = cache / release.tag / ZONE_ESTIMATES
@@ -286,17 +286,17 @@ def zone_vintage_inputs(
     task : ForecastTask
         A task whose locations are zones and whose target is
         `zone_target`. Its mask names provinces.
-    config : bdbvhubrenewal.model.ModelConfig
+    config : nowcastrenewal.model.ModelConfig
         The model configuration.
     bvd : pandas.DataFrame, optional
         BVDOutbreakSize rows (`bvd_rows`).
 
     Returns
     -------
-    bdbvhubrenewal.model.zones.ZoneVintage
+    nowcastrenewal.model.zones.ZoneVintage
         The model inputs.
     """
-    from bdbvhubrenewal.model.zones import zone_vintage_from_tables
+    from nowcastrenewal.model.zones import zone_vintage_from_tables
     from nowcastutils.releases import release_pairs
 
     pairs = None
@@ -386,13 +386,13 @@ class ZoneRenewalModel(RenewalModel):
         As `RenewalModel.run`, with `zone_vintage_inputs` and
         `build_zone_model`, and the delay summaries by province.
         """
-        from bdbvhubrenewal.model.zones import build_zone_model
+        from nowcastrenewal.model.zones import build_zone_model
 
         pr = engine()
         config = model_config(self.variant)
         rows, used = None, None
         if config.bvd:
-            from bdbvhubrenewal.data import bvd
+            from nowcastrenewal import bvd
 
             release = bvd_release(task)
             used = bvd_record(release)

@@ -78,6 +78,7 @@ __all__ = [
     "FINETUNED_URL",
     "LAYOUTS",
     "MAX_LAG",
+    "PERIODS",
     "REALDATA_PREFIX",
     "SLOTS_PREFIX",
     "SOURCES",
@@ -129,6 +130,11 @@ DELAY_LOOKBACK: Final = {"weekly": 16, "daily": 112}
 
 DELAY_WINDOW: Final = {"weekly": 4, "daily": 28}
 """Steps whose reports `delay_lags` pools."""
+
+PERIODS: Final = {"daily": "rolling7"}
+"""The aggregate row each place has in a ragged block, by source
+(`FoundationModel.period`): the daily source's 7-day rolling sums, from
+which the hub's 7-day target is read."""
 
 FINETUNED_CONFIG: Final = Path("config/finetune.toml")
 """Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
@@ -428,15 +434,15 @@ def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
 def _finetuned(name: str, source: str) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_spec` names.
 
-    The weekly and daily models share the checkpoint; the daily one reads
-    its weekly forecast from per-place weekly total rows, as trained.
+    The weekly and daily models share the checkpoint. Each builds the
+    block its zero-shot model builds (`PERIODS`); only the weights differ.
     """
     return FoundationModel(
         name,
         source,
         "ragged",
         resolve_checkpoint(finetuned_spec()),
-        weekly_totals=source == "daily",
+        period=PERIODS.get(source),
     )
 
 
@@ -1018,8 +1024,9 @@ def _weekly_from_totals(
 ) -> np.ndarray:
     """Return weekly draws `[S, L, W]` read from the total rows.
 
-    A week whose Saturday is past the context takes its total row's draw
-    there; an earlier week takes its total summed from the daily counts.
+    A week whose end is past the context takes its total row's draw
+    there, no lower than the sum of its days' counts reported; an earlier
+    week takes its total summed from the daily counts.
     `drawn` is `[S, 2L, horizon]`, the count rows then the total rows.
     """
     n_places = period.totals.shape[0]
@@ -1027,7 +1034,10 @@ def _weekly_from_totals(
     for week in weeks:
         t = tri.times.index(week)
         if t >= start:
-            out.append(drawn[:, n_places:, t - start])
+            # No lower than the days' counts reported, as the daily rows'
+            # draws are floored (`_daily_frame`).
+            reported = tri.final[:, max(t - 6, 0) : t + 1].sum(axis=1)
+            out.append(np.maximum(drawn[:, n_places:, t - start], reported))
         else:
             total = np.nan_to_num(period.totals[:, t])
             out.append(np.broadcast_to(total, drawn[:, :n_places, 0].shape))
@@ -1074,23 +1084,6 @@ def _daily_frame(
     )[list(DAILY_COLUMNS)]
 
 
-def _lags_of(group: Series, places: set[str]) -> Series:
-    """Keep the lag series of `places` only.
-
-    A place with no cases has lag series of zeros, which tell Chronos-2
-    nothing and in the daily block would take most of its memory.
-    """
-    out = dict(group)
-    for key in ("past_covariates", "future_covariates"):
-        if key in out:
-            out[key] = {
-                name: values
-                for name, values in out[key].items()
-                if name.rsplit("_lag_", 1)[0] in places
-            }
-    return out
-
-
 def _at(rows: pd.DataFrame | None, vintage: str) -> pd.DataFrame | None:
     """Return the rows of one release, or None."""
     return None if rows is None else rows.loc[rows["vintage"] == vintage]
@@ -1117,10 +1110,12 @@ class FoundationModel:
     checkpoint : Checkpoint or None
         The fine-tuned checkpoint Chronos-2 loads, or None for the
         pretrained model.
-    weekly_totals : bool
-        For the daily source: give each place a row of its weekly totals,
-        summed from its daily counts (`week_rows`), and read the weekly
-        forecast from that row. As the fine-tuned model was trained.
+    period : str or None
+        For the daily source, each place's aggregate row after its count
+        rows: `rolling7`, each day's 7-day sum (`rolling_rows`, as the
+        daily+rolling7 training blocks), or `week`, each week's total on
+        its Saturday (`week_rows`, as daily+weekly). The hub's 7-day sums
+        are read from it. None for no such row.
     sample : Sampler or None
         Draws the trajectories, Chronos-2 with `checkpoint` by default.
     stream : str or None
@@ -1142,7 +1137,7 @@ class FoundationModel:
     source: str
     layout: str
     checkpoint: Checkpoint | None = None
-    weekly_totals: bool = False
+    period: str | None = None
     sample: Sampler | None = field(default=None, repr=False)
     stream: str | None = field(default=None, repr=False)
     known: Known | None = field(default=None, repr=False, compare=False)
@@ -1257,15 +1252,15 @@ class FoundationModel:
         horizon = len(tri.times) - start
         seed = int(task.rng(self.stream or self.name).integers(0, 2**31 - 1))
         period = None
-        if self.weekly_totals:
+        if self.period == "rolling7":
+            period = rolling_rows(tri, 7)
+        elif self.period == "week":
             period = week_rows(tri)
+        elif self.period is not None:
+            raise ValueError(f"unknown period rows {self.period!r}")
+        # Zero-shot and fine-tuned models build the same block, the
+        # zero-case places' lag rows included; only the weights differ.
         group = layout_block(tri, self.layout, places, start, period)
-        if self.checkpoint is None:
-            # Zero-shot drops the lags of places with no cases, which tell
-            # Chronos-2 nothing. A fine-tuned model was trained with them
-            # (all-zero rows), so it keeps them.
-            cased = {places[i] for i in np.flatnonzero(tri.final.sum(axis=1))}
-            group = _lags_of(group, cased)
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint, known=self.known
         )
@@ -1468,7 +1463,13 @@ for _source in SOURCES:
         _name = f"fm_chronos_{_source}_{_layout}"
         register_model(
             _name,
-            partial(FoundationModel, _name, _source, _layout),
+            partial(
+                FoundationModel,
+                _name,
+                _source,
+                _layout,
+                period=PERIODS.get(_source) if _layout == "ragged" else None,
+            ),
             f"Chronos-2 on the hub target's {_source} releases, {_layout} "
             "layout, every target in one block.",
             fitted=True,

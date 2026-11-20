@@ -115,12 +115,12 @@ def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: i
     import jax.numpy as jnp
 
     from bdbvhubrenewal.data import PROVINCE_POPULATIONS
-    from bdbvhubrenewal.model.inputs import gravity_kernel as model_kernel
-    from bdbvhubrenewal.model.model import (
+    from nowcastrenewal.model.inputs import gravity_kernel as model_kernel
+    from nowcastrenewal.model.model import (
         generation_interval,
         incubation_period,
     )
-    from bdbvhubrenewal.model.renewal import coupled_renewal, mixing_matrix
+    from nowcastrenewal.model.renewal import coupled_renewal, mixing_matrix
 
     s = outbreak.settings
     p = outbreak.parameters
