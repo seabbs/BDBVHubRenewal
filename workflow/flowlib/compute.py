@@ -286,6 +286,36 @@ def remote_pid_file(worker: Worker, job: Mapping) -> str:
     return str(Path(worker.root) / ".remote-jobs" / f"{name}.pid")
 
 
+def job_command(
+    worker: Worker,
+    job: Mapping,
+    env: Mapping[str, str],
+    snakemake: str,
+    argv: Sequence[str],
+) -> str:
+    """Return the shell command running `job` on `worker`.
+
+    A run of the job still alive there (its ssh dropped) is not joined by
+    a second (exit 75); the pid file names this run's Snakemake. Its
+    stdin is /dev/null: under `ssh -tt` it would be the session's
+    terminal, and a shell the job starts would then be interactive (an
+    rc file may attach tmux and wait there for ever).
+    """
+    q = shlex.quote
+    pid = q(remote_pid_file(worker, job))
+    return (
+        f"mkdir -p $(dirname {pid}) && "
+        f'if [ -f {pid} ] && kill -0 "$(cat {pid})" 2>/dev/null; then '
+        f"echo 'the job is still running on {worker.name}' >&2; exit 75; fi; "
+        f"echo $$ > {pid}; "
+        f"cd {q(worker.checkout)} && exec env -u LOCAL_CONFIG "
+        + " ".join(f"{k}={q(v)}" for k, v in env.items())
+        + f" {snakemake} "
+        + " ".join(q(a) for a in argv)
+        + " </dev/null"
+    )
+
+
 def reachable(worker: Worker) -> bool:
     """Whether `worker` answers over ssh within 10 s (`local` always)."""
     if worker.local:
