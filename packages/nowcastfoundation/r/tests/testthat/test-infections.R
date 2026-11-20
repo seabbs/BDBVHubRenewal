@@ -118,3 +118,29 @@ test_that("layer values vary across strata as their structure says", {
     expect_equal(length(unique(a)) == 1, structure == "shared")
   }
 })
+
+test_that("without variants, infections and cases never exceed the population", {
+  # The size check of the old sim QC, now a property of the simulator.
+  # Variants return immune people to the susceptible, so reinfections can
+  # take a stratum's cumulative infections past its population.
+  grid <- r7()
+  set.seed(5)
+  checked <- 0L
+  for (g in 1:200) {
+    d <- draw_design(grid)
+    v <- draw_values(grid, d)
+    v$variant_at <- v$variant_escape <- v$variant_r <- v$variant_days <- numeric(0)
+    gt <- gt_pmf(v$gt_mean, d$gt_family, v$gt_cv)
+    n <- 7L * (v$weeks + v$max_delay %/% 7L + 4L) - length(gt)
+    run <- tryCatch(
+      latent_onsets(grid, n, gt, strata_of(d$n_places, d$n_ages), d, v),
+      error = function(e) NULL
+    )
+    if (is.null(run)) next
+    checked <- checked + 1L
+    pop <- run$values$stratum_population
+    expect_true(all(colSums(run$infections) <= pop * (1 + 1e-9)))
+    expect_true(all(colSums(run$onsets) <= pop * (1 + 1e-9)))
+  }
+  expect_gt(checked, 150L)
+})
