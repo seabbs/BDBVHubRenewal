@@ -508,7 +508,8 @@ $$
 Its expectation does not depend on $m$, whereas the usual sample form, with $2m^2$ in the second denominator, favours forecasts with more samples [@Ferro2014; @Zamo2018].
 The fair energy score is the same form for a vector of counts, with the Euclidean norm $\lVert \cdot \rVert$ in place of $|\cdot|$.
 We compute both with scoringrules' `fair` estimator, `crps_ensemble` and `es_ensemble`, the CRPS on counts and on $\log(x + 1)$ counts, and the energy score on $\log(x + 1)$ counts only.
-Our models give 1,000 samples and hub teams 100, so the fair form compares them on the same footing.
+The random walks give 1,000 samples and hub teams 100, so the fair form compares them on the same footing.
+Chronos-2 gives quantiles, not samples, so it has no fair CRPS.
 We score the German hub's seven quantile levels, and 23 levels, from 1% to 99%, for the synthetic study and for forecasts given as samples.
 Relative WIS compares each model with the baseline on the forecasts both made, while bias and coverage use every forecast a model made.
 
@@ -662,7 +663,7 @@ The share of evaluated outbreaks in each level of each grid factor, as each simu
 ::: {#fig-synthetic-si-nowcasts}
 ![](build/figures/si/synthetic-si-nowcasts.png)
 
-Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-factors}
@@ -686,13 +687,13 @@ Held-out synthetic data: WIS over time. {{< meta results.synthetic.label >}} {{<
 ::: {#fig-synthetic-si-results-crps}
 ![](build/figures/si/synthetic-si-results-crps.png)
 
-Held-out synthetic data: the main results figure for every model, scoring the samples by the fair CRPS rather than the WIS of their quantiles. (A, B) CRPS relative to `randomwalknowcast` on the natural and log scales; (C) bias; (D) 50% and 90% coverage; then relative CRPS by scenario factor and by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: the main results figure for every model that gives samples, scoring the samples by the fair CRPS rather than the WIS of their quantiles. (A, B) CRPS relative to `randomwalknowcast` on the natural and log scales; (C) bias; (D) 50% and 90% coverage; then relative CRPS by scenario factor and by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-finetune-size}
 ![](build/figures/si/synthetic-si-finetune-size.png)
 
-Held-out synthetic data: relative WIS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: relative WIS of each fine-tuning checkpoint, at doublings from 100 outbreaks, against the number of simulated outbreaks it was trained on (log scale). {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#tbl-synthetic-horizon}
@@ -712,7 +713,7 @@ Held-out synthetic data scores by location and stratum. {{< meta results.synthet
 ::: {#fig-germany-si-nowcasts}
 ![](build/figures/si/germany-si-nowcasts.png)
 
-German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#fig-germany-si-places}
@@ -765,7 +766,7 @@ Ebola hub submissions: mean energy score of each model's trajectories on log(x +
 ::: {#fig-ebola-si-nowcasts}
 ![](build/figures/si/ebola-si-nowcasts.png)
 
-Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola-si-places}
@@ -796,7 +797,7 @@ Ebola: WIS over time. {{< meta results.ebola.label >}} {{< meta results.ebola.no
 ::: {#fig-ebola-si-results-crps}
 ![](build/figures/si/ebola-si-results-crps.png)
 
-Ebola: the main results figure for every model, scoring the samples by the fair CRPS rather than the WIS of their quantiles. (A, B) CRPS relative to {{< meta results.ebola.baseline >}} on the natural and log scales; (C) bias; (D) 50% and 90% coverage; then relative CRPS by location and by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: the main results figure for every model that gives samples, scoring the samples by the fair CRPS rather than the WIS of their quantiles. (A, B) CRPS relative to {{< meta results.ebola.baseline >}} on the natural and log scales; (C) bias; (D) 50% and 90% coverage; then relative CRPS by location and by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#tbl-ebola-horizon}
