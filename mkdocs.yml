@@ -63,11 +63,12 @@ nav:
       - API reference:
           - reference/index.md
           - nowcastutils: reference/nowcastutils.md
+          - nowcasteval: reference/nowcasteval.md
+          - nowcastbaselines: reference/nowcastbaselines.md
           - Data: reference/data.md
           - Models:
               - Forecasters: reference/forecasters.md
               - Renewal model: reference/model.md
-              - Baselinenowcast: reference/baselinenowcast.md
           - Evaluation: reference/evaluation.md
           - Reporting:
               - Figures and tables: reference/reporting.md
@@ -176,6 +177,7 @@ plugins:
         model-development/model-building.md: renewal/methods.md
         model-development/log.md: renewal/index.md
         model-development/score-history.md: backtest.md
+        reference/baselinenowcast.md: reference/nowcastbaselines.md
   - mkdocs-jupyter:
       # Only the executed notebook. The .py source would also render to
       # getting-started/ and replace it with a page without outputs.

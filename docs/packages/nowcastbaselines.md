@@ -3,12 +3,12 @@
 The random walk and the random walk nowcast, for weekly counts revised as later releases report more cases.
 { .page-subtitle }
 
-Until the package split, nowcastbaselines is `bdbvhubrenewal.forecasters` (`randomwalk`, `randomwalknowcast`) with `nowcastbaselines.baselinenowcast` ([Packages](index.md)).
+nowcastbaselines is the package in `packages/nowcastbaselines` of the repository, and builds on [nowcastutils](nowcastutils.md) ([Packages](index.md)).
 
 ## Install
 
 ```sh
-uv pip install "git+https://github.com/seabbs/bdbv-hub-modelling"
+uv pip install "git+https://github.com/seabbs/bdbv-hub-modelling#subdirectory=packages/nowcastbaselines"
 ```
 
 ## Getting started
@@ -61,15 +61,34 @@ target["total"] = target["observed"] + target["imputed"]
 target["location_name"] = target["location"]
 ```
 
-A task is what a model sees at one release.
-Both models return 100 sample trajectories for each place and week.
+A task is what a model sees at one release: its data, the places and the weeks to forecast.
+The weeks run from four weeks before the release's reference week, which the data have not yet completed, to three weeks after.
+Importing `nowcastbaselines.randomwalk` adds both models to the registry.
+Each returns 100 sample trajectories for each place and week.
 
 ```python
-from nowcasteval.backtest import BacktestConfig, make_tasks
-from bdbvhubrenewal.forecasters import get_model
+import datetime as dt
 
-latest = target.loc[target["vintage"] == target["vintage"].max()]
-task = make_tasks(latest, None, BacktestConfig(seed=1), daily=daily)[0]
+import nowcastbaselines.randomwalk  # noqa: F401
+from nowcastutils.base import ForecastTask, get_model
+from nowcastutils.dates import reference_date_for_vintage
+
+vintage = daily["vintage"].max()
+reference = reference_date_for_vintage(vintage)
+task = ForecastTask(
+    vintage=vintage,
+    reference_date=reference,
+    kind="real",
+    cutoff=vintage,
+    target=target.loc[target["vintage"] == vintage].reset_index(drop=True),
+    delays=None,
+    locations=("A-1", "A-2"),
+    target_end_dates=tuple(
+        (reference + dt.timedelta(weeks=h)).isoformat() for h in range(-4, 4)
+    ),
+    seed=1,
+    daily_history=daily,
+)
 forecasts = {
     name: get_model(name).forecast(task)
     for name in ("randomwalk", "randomwalknowcast")
@@ -90,12 +109,12 @@ The forecasts are sample tables, so nowcasteval scores them ([nowcasteval](nowca
 
 ### Run them over many releases
 
-`make_tasks` gives one task per release in the target it is passed, so a backtest is a loop over its tasks.
-`nowcasteval.backtest.run_forecasts` runs a list of models over a list of tasks and skips a model where it cannot forecast.
+A backtest is one task per release, each with the data up to that release.
+`nowcasteval.backtest.make_tasks` builds them from a target table and the daily releases, and `nowcasteval.backtest.run_forecasts` runs a list of models over them, skipping a model where it cannot forecast.
 
 ## Reference
 
-[Forecasters API](../reference/forecasters.md) and [Baselinenowcast API](../reference/baselinenowcast.md).
+[nowcastbaselines API](../reference/nowcastbaselines.md).
 The methods are in the paper's [supporting information](../paper/si.html#baselines).
 
 ## How it is used in the workflow
