@@ -12,23 +12,9 @@ rounds: []
 # or monitored, and scored only for the final model. A round's number
 # sets its seeds and its release `sims-r<N>`, so no two grids share a
 # round (flowlib.grids): r7 validates on round 33, trains on 34 to 37 and
-# tests on 38, and never overwrites r5's or r6's.
+# tests on 38, and never overwrites the earlier grids' rounds
+# (`retired_rounds`).
 grid_rounds:
-  r5:
-    rounds: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
-    validation_round: 9
-    test_round: null
-    topup_round: null
-    sources: [daily, weekly, 3day, daily+weekly, daily+3day]
-  r6:
-    rounds: [21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
-    validation_round: 20
-    test_round: 31
-    # The training rounds' missing cells, simulated again (target `topup`,
-    # flowlib.topup), so the final model trains on ten whole blocks.
-    topup_round: 32
-    sources: [daily, weekly, 3day, daily+weekly, daily+rolling7, daily+3day,
-      daily+rolling3]
   r7:
     rounds: [34, 35, 36, 37]
     validation_round: 33
@@ -36,6 +22,10 @@ grid_rounds:
     topup_round: null
     sources: [daily, weekly, 3day, daily+weekly, daily+rolling7, daily+3day,
       daily+rolling3]
+
+# Rounds earlier grids (r1 to r6) used, first to last: their seeds and
+# sims-r<N> releases are never reused by a grid (flowlib.grids).
+retired_rounds: {first: 9, last: 32}
 
 # Whether `finetune` trains only the next segment, not every one in
 # reach. A scheduled tick sets it (flowlib.schedule), so each run ends

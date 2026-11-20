@@ -623,10 +623,9 @@ def test_workers_take_the_trainer_block_settings():
     )
     try:
         lags = {"daily": (28,)}
-        init_worker(100, lags, ("daily",), grid="r5", loss_days=7)
-        assert finetune_chronos.DESIGN == "r5"
+        init_worker(100, lags, ("daily",), grid="r7", loss_days=7)
+        assert finetune_chronos.PARENTS is not None
         assert finetune_chronos.LOSS_HORIZON_DAYS == 7
-        assert finetune_chronos.CADENCES["daily"] == {"weekly": 1.0}
         assert finetune_chronos.MAX_SERIES == 100
         assert lags == finetune_chronos.MAX_LAGS
         assert finetune_chronos.SOURCES == ("daily",)
@@ -636,7 +635,7 @@ def test_workers_take_the_trainer_block_settings():
             finetune_chronos.MAX_LAGS,
             finetune_chronos.SOURCES,
         ) = saved
-        finetune_chronos.use_design("r6")
+        finetune_chronos.PARENTS = None
         finetune_chronos.LOSS_HORIZON_DAYS = None
 
 
@@ -1304,7 +1303,7 @@ def test_evaluation_cadence_defaults_to_the_recipe_s():
     import finetune_stream as fs
 
     args = fs.build_parser().parse_args(
-        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r5"]
+        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r7"]
     )
     assert args.eval_every == fs.ft.EVAL_EVERY == 100
     assert args.by_source_every == fs.BY_SOURCE_EVERY == 200
@@ -1316,38 +1315,11 @@ def test_evaluation_cadence_defaults_to_the_recipe_s():
         fs.check_cadence(0, 0)
 
 
-def test_an_unknown_grid_has_no_design():
+def test_a_grid_with_no_file_is_refused():
     import finetune_chronos
 
     with pytest.raises(ValueError, match="r99"):
         finetune_chronos.use_design("r99")
-    finetune_chronos.use_design("r6")
-
-
-def test_grids_before_r6_keep_r5s_blocks(tmp_path):
-    import finetune_chronos
-    from finetune_stream import cut
-
-    try:
-        for grid in ("r5", "r4"):
-            assert finetune_chronos.use_design(grid) == "r5"
-            assert finetune_chronos.SOURCE_SHARES == {
-                "daily": 0.25,
-                "weekly": 0.25,
-                "3day": 0.15,
-                "daily+weekly": 0.25,
-                "daily+3day": 0.10,
-            }
-            for mix in finetune_chronos.CADENCES.values():
-                assert mix == {"weekly": 1.0}
-        finetune_chronos.SOURCES = ("daily", "daily+weekly")
-        ids = _sim_dir(tmp_path)
-        blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
-        assert blocks
-        assert {b["cadence"] for b in blocks} == {"weekly"}
-    finally:
-        finetune_chronos.use_design("r6")
-        finetune_chronos.SOURCES = tuple(finetune_chronos.SOURCE_SHARES)
 
 
 def test_the_trainer_takes_its_design_from_the_grid():
@@ -1355,7 +1327,7 @@ def test_the_trainer_takes_its_design_from_the_grid():
     import finetune_stream as fs
 
     args = fs.build_parser().parse_args(
-        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r5"]
+        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r7"]
     )
     assert args.sources is None
     try:
@@ -1365,10 +1337,12 @@ def test_the_trainer_takes_its_design_from_the_grid():
             "weekly",
             "3day",
             "daily+weekly",
+            "daily+rolling7",
             "daily+3day",
+            "daily+rolling3",
         )
     finally:
-        finetune_chronos.use_design("r6")
+        finetune_chronos.PARENTS = None
 
 
 def test_a_whole_system_block_holds_every_stratum_and_its_totals(monkeypatch):
@@ -1446,7 +1420,7 @@ def test_r7_blocks_are_whole_systems_never_cut(monkeypatch):
         assert all(b["places"] == (NATIONAL,) for b in blocks)
         assert any("over the series cap" in e for e in empty)
     finally:
-        ft.use_design("r6")
+        ft.PARENTS = None
 
 
 def test_parents_come_from_the_grid_file(monkeypatch):
@@ -1488,6 +1462,5 @@ def test_parents_come_from_the_grid_file(monkeypatch):
         }
         assert parents == {"unallocated"}
     finally:
-        ft.use_design("r6")
-    # A grid with no file keeps its parents drawn evenly with r6's draws.
+        ft.PARENTS = None
     assert ft.PARENTS is None

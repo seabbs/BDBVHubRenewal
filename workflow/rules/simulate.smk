@@ -218,13 +218,13 @@ rule round_ready:
 
 
 # Refuses to upload into a release of another grid's batches: its notes
-# name the grid (`Grid r6.`), and unmarked releases are r5's
+# name the grid (`Grid r7.`), and unmarked releases are an earlier grid's
 # (flowlib.grids.release_grid).
 GRID_GUARD = """
         notes=$(gh release view {params.tag} -R {params.repo} --json body -q .body)
         found=$(printf '%s\\n' "$notes" | sed -n 's/.*Grid \\(r[0-9][0-9]*\\)\\..*/\\1/p' | head -n 1)
-        if [ "${{found:-r5}}" != "{params.grid}" ]; then
-            echo "{params.tag} holds grid ${{found:-r5}}'s batches, not {params.grid}'s: not uploading"
+        if [ "${{found:-unmarked}}" != "{params.grid}" ]; then
+            echo "{params.tag} holds grid ${{found:-unmarked}}'s batches, not {params.grid}'s: not uploading"
             exit 1
         fi
 """
@@ -334,7 +334,8 @@ rule release:
     input:
         # Never another grid's round: its release holds that grid's batches.
         lambda wc: grids.check_release(
-            config["rounds"], grid_name(), config["grid_rounds"]
+            config["rounds"], grid_name(), config["grid_rounds"],
+            config.get("retired_rounds"),
         )
         or [],
         [
