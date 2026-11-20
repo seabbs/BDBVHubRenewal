@@ -118,7 +118,7 @@ def test_model_code_imports_no_hub_zone_module() -> None:
         "nowcastutils.base",
         "nowcastfoundation.forecaster",
         "nowcastbaselines.zones",
-        "bdbvhubrenewal.forecasters.renewal",
+        "nowcastrenewal.forecaster",
         "nowcasteval.nowcast",
     ):
         assert HUB_ZONES not in _imported(module), module
@@ -126,10 +126,10 @@ def test_model_code_imports_no_hub_zone_module() -> None:
 
 def test_renewal_code_reads_no_hub_delay_or_places() -> None:
     for module in (
-        "bdbvhubrenewal.model.inputs",
-        "bdbvhubrenewal.model.zones",
-        "bdbvhubrenewal.forecasters.renewal",
-        "bdbvhubrenewal.forecasters.zonerenewal",
+        "nowcastrenewal.model.inputs",
+        "nowcastrenewal.model.zones",
+        "nowcastrenewal.forecaster",
+        "nowcastrenewal.zones",
     ):
         assert "bdbvhubrenewal.data.delays" not in _imported(module), module
         loaders = _imports_from(module, "bdbvhubrenewal.data")

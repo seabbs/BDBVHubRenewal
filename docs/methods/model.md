@@ -10,7 +10,7 @@ How the models are built in code and sampled is on the [Implementation](implemen
 ## Overview
 
 `renewal` fits the health zones with recent cases together, nests them in their provinces, pools them and links them by importation.
-`renewalbvd` fits the same zones ([`forecasters/zonerenewal.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/src/bdbvhubrenewal/forecasters/zonerenewal.py), [`model/zones.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/src/bdbvhubrenewal/model/zones.py)).
+`renewalbvd` fits the same zones ([`forecasters/zonerenewal.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastrenewal/src/nowcastrenewal/zones.py), [`model/zones.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastrenewal/src/nowcastrenewal/model/zones.py)).
 Their provinces are the sums of their zones, and the country is the sum of the provinces.
 `renewalsp` fits the place model to each province on its own, with no pooling or importation.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.

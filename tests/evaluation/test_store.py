@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import base64
 import dataclasses
 import json
@@ -184,7 +185,7 @@ def test_code_digest_follows_third_party_imports(tmp_path: Path) -> None:
 
 def test_code_digest_ignores_docstrings_and_comments(tmp_path: Path) -> None:
     root = _copy_repo(tmp_path)
-    code = root / "src/bdbvhubrenewal/model/delays.py"
+    code = root / "packages/nowcastrenewal/src/nowcastrenewal/model/delays.py"
     text = code.read_text()
     before = store.code_digest("renewal", root)
     code.write_text(text + '\n\ndef _f():\n    """Doc."""\n    return 1\n')
@@ -207,19 +208,20 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
 
     src = "src/bdbvhubrenewal"
+    renewal = "packages/nowcastrenewal/src/nowcastrenewal"
     before = digests()
     # The zone variants share a module, so share a key, and renewalsp,
     # in the province module they build on, has its own.
     assert before["renewal"] == before["renewalbvd"]
     assert before["renewal"] != before["renewalsp"]
     assert before["renewal"] != before["randomwalknowcast"]
-    edit(f"{src}/forecasters/renewal.py")
+    edit(f"{renewal}/forecaster.py")
     after = digests()
     assert after["randomwalknowcast"] == before["randomwalknowcast"]
     assert after["renewal"] != before["renewal"]
     assert after["renewalsp"] != before["renewalsp"]
     before = after
-    edit(f"{src}/model/observation.py")
+    edit(f"{renewal}/model/observation.py")
     after = digests()
     assert after["renewal"] != before["renewal"]
     before = after
@@ -287,7 +289,7 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
 def test_zone_data_keys_the_zone_fits(
     tasks: dict[str, ForecastTask], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhubrenewal.forecasters import zonerenewal as zr
+    from nowcastrenewal import zones as zr
 
     sampler = store.samplers()
     models = ["renewal", "renewalsp"]
@@ -303,9 +305,14 @@ def test_zone_data_keys_the_zone_fits(
 
 def test_fit_code_is_the_models_code_not_the_store() -> None:
     renewal = set(store.fit_code("renewal", ROOT))
-    assert "src/bdbvhubrenewal/model/observation.py" in renewal
+    assert (
+        "packages/nowcastrenewal/src/nowcastrenewal/model/observation.py"
+        in renewal
+    )
     walk = set(store.fit_code("randomwalknowcast", ROOT))
-    assert "src/bdbvhubrenewal/forecasters/renewal.py" not in walk
+    assert (
+        "packages/nowcastrenewal/src/nowcastrenewal/forecaster.py" not in walk
+    )
     # The store and the backtest module are loader and IO code; the
     # functions of theirs a fit runs are keyed by source (`FIT_FUNCTIONS`).
     for files in (renewal, walk):
@@ -459,7 +466,9 @@ def test_renewal_key_has_every_model_module(name: str) -> None:
     renewal = set(store.fit_code(name, ROOT))
     model = {
         p.relative_to(ROOT).as_posix()
-        for p in (ROOT / "src/bdbvhubrenewal/model").glob("*.py")
+        for p in (
+            ROOT / "packages/nowcastrenewal/src/nowcastrenewal/model"
+        ).glob("*.py")
     }
     assert model <= renewal, sorted(model - renewal)
 
@@ -479,7 +488,7 @@ def offline_bvd(monkeypatch: pytest.MonkeyPatch) -> None:
     releases from GitHub.
     """
     monkeypatch.setattr(
-        "bdbvhubrenewal.forecasters.renewal.bvd_release", lambda *_: None
+        "nowcastrenewal.forecaster.bvd_release", lambda *_: None
     )
 
 
@@ -513,7 +522,7 @@ def test_keys_follow_the_task_settings_and_bvd_release(
     assert changed[("renewal", latest)] != keys[("renewal", latest)]
     assert changed[("renewalbvd", latest)] == keys[("renewalbvd", latest)]
     monkeypatch.setattr(
-        "bdbvhubrenewal.forecasters.renewal.bvd_record",
+        "nowcastrenewal.forecaster.bvd_record",
         lambda _: {"tag": "other"},
     )
     moved = store.current_keys(tasks, models, sampler, "c")
@@ -675,8 +684,8 @@ def test_a_fit_that_raises_is_stored_as_failed(
 @pytest.fixture
 def candidate_flat(fitted_flat: str, monkeypatch: pytest.MonkeyPatch) -> str:
     """Make the stand-in a submission candidate, config `flatcfg`."""
-    from bdbvhubrenewal.forecasters import renewal
     from bdbvhubrenewal.submission import fitting
+    from nowcastrenewal import forecaster as renewal
     from nowcastutils import base
 
     spec = base._REGISTRY[fitted_flat]
@@ -1061,7 +1070,7 @@ def test_a_stored_fit_with_zones_archives_its_own_zones(
     # the archive still gives them to the hub table, beside the stored
     # samples, so its zones are the ones the model would submit (#366).
     from bdbvhubrenewal.evaluation import store_archive
-    from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
+    from nowcastrenewal.zones import ZONES_FILE
 
     root = tmp_path / "store"
     task = tasks[sorted(tasks)[-1]]
@@ -1339,3 +1348,22 @@ def test_places_key_only_the_models_that_read_them(
     assert store.current_keys(moved, renewal, sampler, "c") != (
         store.current_keys(tasks, renewal, sampler, "c")
     )
+
+
+def test_fit_function_keys_name_moved_modules_by_their_old_name() -> None:
+    # A store function's imports of a moved module (WP2b) keep its dump,
+    # in whatever order isort puts them.
+    def dump(body: str) -> str:
+        tree = ast.parse(f"def fit_files():\n{body}    return 1\n")
+        return store._fit_source(tree.body[0])
+
+    old = (
+        "    from bdbvhubrenewal.forecasters.renewal import FIT_VARIANTS\n"
+        "    from bdbvhubrenewal.submission.fitting import get_config\n"
+    )
+    new = (
+        "    from bdbvhubrenewal.submission.fitting import get_config\n"
+        "    from nowcastrenewal.forecaster import FIT_VARIANTS\n"
+    )
+    assert dump(new) == dump(old)
+    assert dump("    from nowcastrenewal.model import x\n") != dump(old)

@@ -417,7 +417,7 @@ def delay_summary(origin: Origin, model: str, vintage: str) -> pd.DataFrame:
 
     The share at age $a$ is $1 / G(a)$, from the delay fitted at the
     origin, for every place, in the form of the renewal models' delay
-    summaries (`bdbvhubrenewal.forecasters.renewal.fit_delays`).
+    summaries (`nowcastrenewal.forecaster.fit_delays`).
 
     Parameters
     ----------

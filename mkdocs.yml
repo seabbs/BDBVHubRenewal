@@ -190,7 +190,7 @@ plugins:
       default_handler: python
       handlers:
         python:
-          paths: [src, packages/nowcastutils/src, packages/nowcasteval/src, packages/nowcastbaselines/src, packages/nowcastfoundation/src]
+          paths: [src, packages/nowcastutils/src, packages/nowcasteval/src, packages/nowcastbaselines/src, packages/nowcastfoundation/src, packages/nowcastrenewal/src]
           options:
             docstring_style: numpy
             docstring_section_style: table

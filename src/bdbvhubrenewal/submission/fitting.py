@@ -10,7 +10,7 @@ The chain is `bvd` (the `renewalbvd` variant), `renewalsp` (`renewal`
 fitted to each province on its own), `main` (the `renewal` variant), then the
 random walks.
 The renewal configurations run the PyRenew model through
-`bdbvhubrenewal.forecasters.renewal.fit_renewal`, which samples, draws the
+`nowcastrenewal.forecaster.fit_renewal`, which samples, draws the
 trajectories and writes `ppc.json`. `randomwalk` needs no fit.
 
 A fit function gets the forecast task, the sampler settings from
@@ -440,7 +440,7 @@ register_config(
 
 
 def _renewal_config(name: str) -> FitConfig:
-    from bdbvhubrenewal.forecasters.renewal import (
+    from nowcastrenewal.forecaster import (
         FIT_VARIANTS,
         VARIANTS,
         fit_renewal,

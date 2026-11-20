@@ -7,8 +7,8 @@ from numpyro.handlers import seed, trace
 from pyrenew.deterministic import DeterministicVariable
 from pyrenew.randomvariable import DistributionalVariable
 
-from bdbvhubrenewal.model import PooledInitialValue
-from bdbvhubrenewal.model.pooled import sum_to_zero_basis
+from nowcastrenewal.model import PooledInitialValue
+from nowcastrenewal.model.pooled import sum_to_zero_basis
 
 
 def _pooled(centred: bool = True) -> PooledInitialValue:

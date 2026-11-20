@@ -4,15 +4,15 @@ r"""Simulate province outbreaks and publish them as hub-style vintages.
 The simulator draws from the model's own components with known
 parameters, so recovery can be checked and there is one implementation
 of the maths. Expected daily infections come from the model's renewal
-(`bdbvhubrenewal.model.renewal.coupled_renewal`), with its generation
+(`nowcastrenewal.model.renewal.coupled_renewal`), with its generation
 interval, gravity kernel, importation and depletion of the effective
 population, for $\log R_p(t) = \log R(t) + \delta_p$ with a national
 $R(t)$ that turns and fixed province offsets $\delta_p$.
 Expected onsets are infections convolved with the model's incubation
-period (`bdbvhubrenewal.model.model.incubation_period`).
+period (`nowcastrenewal.model.model.incubation_period`).
 Confirmed cases are Poisson with mean $\alpha(t)$ times expected onsets.
 Each is reported after a double censored Gamma delay
-(`bdbvhubrenewal.model.censored.censored_pmf`) whose mean $\mu(t)$
+(`nowcastrenewal.model.censored.censored_pmf`) whose mean $\mu(t)$
 changes over time, has no onset with probability $\pi$ at its report
 day, and is published after a lag of 0 to 3 days.
 
@@ -40,18 +40,16 @@ from numpy.typing import NDArray
 from bdbvhubrenewal.data import PROVINCE_POPULATIONS
 from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.data.tidy import province_places
-from bdbvhubrenewal.model.censored import censored_pmf
-from bdbvhubrenewal.model.inputs import (
-    gravity_kernel as model_gravity_kernel,
-)
-from bdbvhubrenewal.model.model import (
+from nowcastrenewal.model.censored import censored_pmf
+from nowcastrenewal.model.inputs import gravity_kernel as model_gravity_kernel
+from nowcastrenewal.model.model import (
     GI_MEAN,
     GI_SD,
     INCUBATION_MEAN,
     generation_interval,
     incubation_period,
 )
-from bdbvhubrenewal.model.renewal import coupled_renewal, mixing_matrix
+from nowcastrenewal.model.renewal import coupled_renewal, mixing_matrix
 from nowcastutils.base import NATIONAL
 from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.releases import release_cutoff

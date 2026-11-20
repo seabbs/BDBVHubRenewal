@@ -5,14 +5,9 @@ from jax import random
 from numpyro.infer import Predictive, init_to_median
 
 from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.model import (
-    MAIN,
-    ModelConfig,
-    build_model,
-    model_args,
-)
-from bdbvhubrenewal.model.inputs import vintage_from_tables
-from bdbvhubrenewal.model.model import LADDER, incubation_period, seed_lead
+from nowcastrenewal.model import MAIN, ModelConfig, build_model, model_args
+from nowcastrenewal.model.inputs import vintage_from_tables
+from nowcastrenewal.model.model import LADDER, incubation_period, seed_lead
 
 from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
 
@@ -250,7 +245,7 @@ def test_missingness_offsets_are_non_centred(sim_vintage):
 
 
 def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
-    from bdbvhubrenewal.model import forecast_trajectories
+    from nowcastrenewal.model import forecast_trajectories
 
     model = build_model(sim_vintage)
     prior = Predictive(model.sample, num_samples=20)(
