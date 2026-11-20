@@ -97,7 +97,7 @@ def test_development_writes_main_and_si_outputs(development: Path) -> None:
         assert list((development / "tables" / "si").glob(f"{study}-*.csv"))
     assert (development / "tables" / "main" / "synthetic-grid.csv").is_file()
     joint = development / "tables" / "main" / "synthetic-joint.md"
-    assert "rel_energy_log" in joint.read_text()
+    assert not joint.exists()
     design = development / "tables" / "si" / "grid-epidemic.md"
     assert "Generative process" in design.read_text()
     assert (development / "figures" / "si" / "sim-examples.png").is_file()

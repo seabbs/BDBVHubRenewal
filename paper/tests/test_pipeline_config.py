@@ -207,3 +207,11 @@ def test_the_heldout_set_is_the_runs_test_round() -> None:
     assert (
         Path(cfg["synthetic"]["grid_file"]).name == Path(sim["grid_file"]).name
     )
+
+
+def test_trajectory_scores_are_for_ebola_only() -> None:
+    from paperpipe.evidence import COPULA_METRICS
+    from paperpipe.outputs import JOINT_STUDIES
+
+    assert JOINT_STUDIES == ("ebola",)
+    assert "joint_log_energy" not in COPULA_METRICS
