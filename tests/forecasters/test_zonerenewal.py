@@ -225,7 +225,7 @@ def test_zone_inputs_take_the_zone_counts_and_province_delays(
     ("rel", "moved"),
     [
         # The zone fits' forecaster keys only them.
-        ("forecasters/zonerenewal.py", ("renewal", "renewalbvd")),
+        ("zones.py", ("renewal", "renewalbvd")),
         # The model builder is every renewal model's, renewalsp one place
         # a patch.
         ("model/zones.py", ("renewal", "renewalbvd", "renewalsp")),
@@ -248,7 +248,7 @@ def test_zone_code_keys_the_models_that_run_it(
         )
     models = ("renewal", "renewalbvd", "renewalsp", "randomwalknowcast")
     before = {m: store.code_digest(m, tmp_path) for m in models}
-    path = tmp_path / "src/bdbvhubrenewal" / rel
+    path = tmp_path / "packages/nowcastrenewal/src/nowcastrenewal" / rel
     path.write_text(path.read_text() + "\n_EDITED = 1\n")
     after = {m: store.code_digest(m, tmp_path) for m in models}
     assert {m for m in models if after[m] != before[m]} == set(moved)

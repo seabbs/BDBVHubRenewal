@@ -208,19 +208,20 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
 
     src = "src/bdbvhubrenewal"
+    renewal = "packages/nowcastrenewal/src/nowcastrenewal"
     before = digests()
     # The zone variants share a module, so share a key, and renewalsp,
     # in the province module they build on, has its own.
     assert before["renewal"] == before["renewalbvd"]
     assert before["renewal"] != before["renewalsp"]
     assert before["renewal"] != before["randomwalknowcast"]
-    edit(f"{src}/forecasters/renewal.py")
+    edit(f"{renewal}/forecaster.py")
     after = digests()
     assert after["randomwalknowcast"] == before["randomwalknowcast"]
     assert after["renewal"] != before["renewal"]
     assert after["renewalsp"] != before["renewalsp"]
     before = after
-    edit(f"{src}/model/observation.py")
+    edit(f"{renewal}/model/observation.py")
     after = digests()
     assert after["renewal"] != before["renewal"]
     before = after
