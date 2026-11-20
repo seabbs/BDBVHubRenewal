@@ -47,7 +47,7 @@ out$settings[, names(stack) := stack]
 message(sprintf(
   "%d of %d simulations in %.1f s (epinowcast %s, grid %s)",
   nrow(out$settings), n, as.numeric(Sys.time() - t0, units = "secs"),
-  grid$epinowcast_sha, grid$name
+  grid$epinowcast_sha, args[[1]]
 ))
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 write_atomic <- function(rows, name, ext) {

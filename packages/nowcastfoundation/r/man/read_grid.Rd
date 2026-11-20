@@ -7,7 +7,7 @@
 read_grid(path)
 }
 \arguments{
-\item{path}{A grid config file (YAML), as \code{config/finetune/grids/r7.yaml}.}
+\item{path}{A grid config file (YAML), as \code{config/finetune/grid.yaml}.}
 }
 \value{
 The grid as a list: \code{factors}, \code{distributions}, \code{shares},

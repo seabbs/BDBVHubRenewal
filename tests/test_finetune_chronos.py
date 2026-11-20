@@ -623,7 +623,7 @@ def test_workers_take_the_trainer_block_settings():
     )
     try:
         lags = {"daily": (28,)}
-        init_worker(100, lags, ("daily",), grid="r7", loss_days=7)
+        init_worker(100, lags, ("daily",), loss_days=7)
         assert finetune_chronos.PARENTS is not None
         assert finetune_chronos.LOSS_HORIZON_DAYS == 7
         assert finetune_chronos.MAX_SERIES == 100
@@ -675,8 +675,10 @@ def test_three_day_source_cuts_three_day_blocks(tmp_path, monkeypatch):
     assert blocks
     for b in blocks:
         assert b["source"] == "3day"
-        # D runs 5-16 steps of 3 days.
-        assert 5 <= _d(b) <= 16
+        # D is drawn from 5-16 steps of 3 days, capped at the history
+        # before an early cut-off.
+        assert 1 <= _d(b) <= 16
+    assert max(_d(b) for b in blocks) >= 5
 
 
 def test_blocks_predict_their_own_horizon_in_whole_patches(tmp_path):
@@ -1303,7 +1305,7 @@ def test_evaluation_cadence_defaults_to_the_recipe_s():
     import finetune_stream as fs
 
     args = fs.build_parser().parse_args(
-        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r7"]
+        ["sims", "out", "--held-out-seeds", "1", "2"]
     )
     assert args.eval_every == fs.ft.EVAL_EVERY == 100
     assert args.by_source_every == fs.BY_SOURCE_EVERY == 200
@@ -1315,11 +1317,11 @@ def test_evaluation_cadence_defaults_to_the_recipe_s():
         fs.check_cadence(0, 0)
 
 
-def test_a_grid_with_no_file_is_refused():
+def test_a_missing_grid_file_is_refused(tmp_path):
     import finetune_chronos
 
-    with pytest.raises(ValueError, match="r99"):
-        finetune_chronos.use_design("r99")
+    with pytest.raises(FileNotFoundError, match=r"nowhere\.yaml"):
+        finetune_chronos.use_grid(tmp_path / "nowhere.yaml")
 
 
 def test_the_trainer_takes_its_design_from_the_grid():
@@ -1327,11 +1329,11 @@ def test_the_trainer_takes_its_design_from_the_grid():
     import finetune_stream as fs
 
     args = fs.build_parser().parse_args(
-        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r7"]
+        ["sims", "out", "--held-out-seeds", "1", "2"]
     )
     assert args.sources is None
     try:
-        finetune_chronos.use_design(args.grid)
+        finetune_chronos.use_grid(args.grid_file)
         assert tuple(args.sources or finetune_chronos.SOURCE_SHARES) == (
             "daily",
             "weekly",
@@ -1393,10 +1395,10 @@ def _counts_of(places, days=140):
     return counts
 
 
-def test_r7_blocks_are_whole_systems_never_cut(monkeypatch):
+def test_blocks_are_whole_systems_never_cut(monkeypatch):
     from finetune_chronos import NATIONAL, outbreak_blocks
 
-    ft.use_design("r7")
+    ft.use_grid()
     try:
         monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 0.2)
         places = [f"P{p}-A{a}" for p in range(1, 4) for a in range(1, 3)]
@@ -1428,11 +1430,9 @@ def test_parents_come_from_the_grid_file(monkeypatch):
     from finetune_chronos import NATIONAL, outbreak_blocks
 
     grid = yaml.safe_load(
-        (
-            Path(__file__).parents[1] / "config/finetune/grids/r7.yaml"
-        ).read_text()
+        (Path(__file__).parents[1] / "config/finetune/grid.yaml").read_text()
     )
-    ft.use_design("r7")
+    ft.use_grid()
     try:
         # The grid's weights of each kind of parent, and its named
         # distributions of the share and the lag.
@@ -1464,3 +1464,24 @@ def test_parents_come_from_the_grid_file(monkeypatch):
     finally:
         ft.PARENTS = None
     assert ft.PARENTS is None
+
+
+def test_early_cut_offs_take_as_many_lags_as_history_allows(monkeypatch):
+    # A lag longer than the history before a cut-off is capped to it, so
+    # an early cut-off is kept, not skipped.
+    from finetune_chronos import NATIONAL, outbreak_blocks
+
+    monkeypatch.setattr(ft, "SOURCES", ("daily",))
+    monkeypatch.setattr(ft, "MAX_LAGS", {**ft.MAX_LAGS, "daily": (49,)})
+    monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 1.0)
+    counts = _counts_of(["P1", "P2"], days=63)
+    blocks = outbreak_blocks(
+        counts, ["P1", "P2"], np.random.default_rng(0), 1, 4
+    )
+    assert len(blocks) == 4
+    for b in blocks:
+        assert b["places"] == (NATIONAL,)
+        lag = b["n_covariates"] // len(b["places"])
+        # Every lag series and two steps of context fit in the history.
+        assert 1 <= lag < 49
+        assert b["nowcast"] == lag

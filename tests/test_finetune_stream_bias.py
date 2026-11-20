@@ -181,9 +181,7 @@ def test_a_places_period_totals_row_is_in_its_place():
 
 def test_the_bias_learning_rate_of_1e3_reaches_the_optimiser():
     parser = fs.build_parser()
-    args = parser.parse_args(
-        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r7"]
-    )
+    args = parser.parse_args(["sims", "out", "--held-out-seeds", "1", "2"])
     assert args.bias_lr == 1e-3
     model = tiny_model()
     series_bias.attach(model)
