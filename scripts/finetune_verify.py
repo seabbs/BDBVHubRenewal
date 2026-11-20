@@ -36,6 +36,7 @@ NOT_HASHED = (
     "held_out_loss_by_level",
     "held_out_loss_by_source",
     "seconds",
+    "checkpoint_above",
     "real_validation_sha256",
     "real_validation_loss",
     "real_validation_loss_nowcast",

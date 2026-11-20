@@ -144,9 +144,13 @@ def test_ragged_lags_stop_below_the_truth_delay(
     # releases began on 2026-10-09, so at 5 weeks no lag 0 to 2 value of a
     # zone fell in the context, Chronos-2 read partial counts as levels,
     # and the forecasts and scores were worse.
+    # The models now estimate the lag count from the data by default
+    # (test_foundation_lags.py); this is the fixed cap the SI compares.
     store: list = []
     model = dataclasses.replace(
-        get_model(f"fm_chronos_{source}_ragged"), sample=_recording(store)
+        get_model(f"fm_chronos_{source}_ragged"),
+        sample=_recording(store),
+        lags=MAX_LAG[source],
     )
     model.forecast(task)
     groups, _ = store[0]
@@ -265,7 +269,7 @@ def test_gives_no_delay(name: str, task: ForecastTask) -> None:
 
 @pytest.mark.parametrize("source", SOURCES)
 def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
-    lags = MAX_LAG[source]
+    lags = get_model(f"fm_chronos_{source}_ragged").lag_count(task)
     # The country, the provinces and their zones are each a target.
     n_places = 1 + len(task.locations) + len(_zones(task))
     seen: dict[str, tuple] = {}

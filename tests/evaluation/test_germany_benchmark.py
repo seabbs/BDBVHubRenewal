@@ -485,7 +485,7 @@ def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
     # tasks before the next date's are built.
     events: list[tuple[str, str]] = []
 
-    def tasks(_triangle, date, _n, _seed, _root):
+    def tasks(_triangle, date, _n, _seed, _root, _horizons):
         events.append(("build", date))
         return [date]
 
@@ -499,3 +499,27 @@ def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
     dates = ["2021-10-04", "2021-10-05", "2021-10-06"]
     de.germany_forecasts(["randomwalknowcast"], pd.DataFrame(), dates, 10, 1)
     assert events == [e for d in dates for e in (("build", d), ("forecast", d))]
+
+
+def test_forecasts_pass_their_horizons_and_store_them_apart(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from bdbvhubrenewal.evaluation import germany as de
+
+    seen: list[tuple[int, ...]] = []
+
+    def tasks(_triangle, _date, _n, _seed, horizons=HORIZONS):
+        seen.append(tuple(horizons))
+        return []
+
+    monkeypatch.setattr(de, "nowcast_tasks", tasks)
+    monkeypatch.setattr(de, "get_model", lambda name: name)
+    wide = tuple(range(28, -29, -1))
+    for h in (wide, HORIZONS):
+        de.germany_forecasts(
+            ["randomwalknowcast"], pd.DataFrame(), ["2021-10-04"], 10, 1,
+            tmp_path, horizons=h,
+        )  # fmt: skip
+    assert seen == [wide, tuple(HORIZONS)]
+    # Each set of horizons has its own stored tasks.
+    assert len(list(tmp_path.rglob("*.pkl.gz"))) == 2

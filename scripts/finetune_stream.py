@@ -753,6 +753,17 @@ def tensors(block: dict) -> dict:
     }
 
 
+def checkpoint_threshold(args: argparse.Namespace) -> int:
+    """Return the series above which a step is checkpointed.
+
+    `--checkpoint-above` if given (a machine setting, `CHECKPOINT_ABOVE`),
+    else what the memory budget allows without checkpointing.
+    """
+    if args.checkpoint_above is not None:
+        return int(args.checkpoint_above)
+    return ft.checkpoint_above(args.memory_gb)
+
+
 def checkpoint_large_batches(above: int) -> None:
     """Recompute encoder activations in backward for large batches.
 
@@ -779,6 +790,33 @@ def checkpoint_large_batches(above: int) -> None:
         return forward(self, hidden_states, **kwargs)
 
     Chronos2EncoderBlock.forward = checkpointed
+
+
+INPUT_PATCH = 16
+"""Steps in one of Chronos-2's input patches."""
+
+
+def trim_context(batch: dict) -> dict:
+    """Return a batch without its leading context patches that no row observes.
+
+    Blocks are left-padded to `ft.CONTEXT` with missing values, and early in
+    an outbreak most of the context is missing in every row. Chronos-2 masks
+    a patch with no observation out of time and group attention, its time
+    encoding counts back from the context's end, and its rotary positions
+    are relative, so cutting whole such patches from the left leaves the
+    loss and gradients as they were, while the step works on fewer tokens.
+    At least one patch is kept.
+    """
+    import torch
+
+    context = batch["context"]
+    seen = (~torch.isnan(context)).any(dim=0)
+    width = context.shape[1]
+    first = int(seen.to(torch.int8).argmax()) if bool(seen.any()) else width
+    keep = max(INPUT_PATCH, -(-(width - first) // INPUT_PATCH) * INPUT_PATCH)
+    if keep >= width:
+        return batch
+    return {**batch, "context": context[:, width - keep :]}
 
 
 class ByLength:
@@ -828,7 +866,7 @@ class ByLength:
         batch = self.data[length]._build_batch([self.local[i] for i in indices])
         if self.bias:
             batch["series_rows"] = block_rows([self.inputs[i] for i in indices])
-        return batch
+        return trim_context(batch)
 
     def indices(self):
         """Yield every block's index once, in batches of one length.
@@ -1419,6 +1457,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-gain", type=float, default=0.01)
     parser.add_argument("--stop-from", type=int, default=8000)
     parser.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
+    # Series above which a step recomputes activations in backward (unset:
+    # from --memory-gb). Memory only: the steps and blocks are the same.
+    parser.add_argument("--checkpoint-above", type=int, default=None)
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
     # The series bias (nowcastfoundation.series_bias): learned
@@ -1564,7 +1605,7 @@ def main() -> None:
     (out / "outbreaks-held-out.txt").write_text("\n".join(held) + "\n")
     # Checkpointing and the largest block follow from the memory budget,
     # so held-out blocks are cut to the same size as training blocks.
-    checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
+    checkpoint_large_batches(checkpoint_threshold(args))
     ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
     pool = ProcessPoolExecutor(
         args.cut_workers,
@@ -2030,6 +2071,7 @@ def main() -> None:
                 "tokens": seen.get("tokens", 0),
                 "skipped_blocks": skipped,
                 "memory_gb": args.memory_gb,
+                "checkpoint_above": checkpoint_threshold(args),
             }
             key = ft._settings_hash(settings)
             settings["hash"] = key
