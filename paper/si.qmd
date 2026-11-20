@@ -273,11 +273,16 @@ At the largest checkpoint tested their median loss is {{< meta evidence.scale_fl
 Large series are unchanged, with median loss {{< meta evidence.scale_floor.sims.n4000.large.median_loss.none >}} and {{< meta evidence.scale_floor.sims.n4000.large.median_loss.floor >}}.
 Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.
 
-The ragged layout's lag series run to 4 weeks or 28 days.
-Lags run to the truth delay do worse with short release histories.
-On the German development half, the national WIS relative to `randomwalknowcast` is {{< meta evidence.lag.germany.fm_chronos_daily_ragged.capped >}} with the 4-week cap and {{< meta evidence.lag.germany.fm_chronos_daily_ragged.longer >}} with lags to the truth delay for the daily zero-shot model, and {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.capped >}} and {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.longer >}} for the weekly one.
-On the BDBV release backtest it is {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.capped >}} and {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.longer >}} for the daily zero-shot model, and {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.capped >}} and {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.longer >}} for the weekly one.
-BDBV's zones have few weekly releases, so with the longer horizon no recent lag of a zone falls in the model's context.
+::: {.callout-note title="Plan"}
+- The number of lag series is chosen from the data being forecast, for the zero-shot and fine-tuned models alike.
+- We estimate the reporting delay's 99% point from the reference steps complete at the cut-off, from 28 days or 4 weeks to 112 days or 16 weeks before it, pooled over the task's places, and round it up to whole steps.
+- The estimate reads no release after the cut-off.
+- The lag count is the smaller of this estimate and the history available, keeping two steps of context before the longest lag.
+- With no complete steps, no counts in them, or a 99% point not reached within 112 days, we use as many lags as the history allows.
+- A user can set a fixed count or another quantile instead.
+- In training, a block whose drawn lag needs more history than its cut-off has is capped at that history rather than skipped, so early cut-offs are kept.
+- We compare this lag count with a fixed cap of 4 weeks or 28 days on the German development half.
+:::
 
 To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (`fm_chronos_daily_ragged_real` and `fm_chronos_weekly_ragged_real`).
 It was trained on the German data and the BDBV data together.
@@ -516,7 +521,6 @@ The copula weight of the walk baselines was set on the Ebola release backtest be
 | Choice | Value | Set on |
 |---|---|---|
 | Floor on Chronos-2's scale at inference | None, Chronos-2's default | Held-out simulations |
-| Lag cap of the ragged layout | 4 weeks or 28 days | German first half and the BDBV release backtest |
 | Copula shrinkage weight $w$ | 10, the weakest of 0, 10, 30 and 100, which scored within 1% of one another | Ebola release backtest |
 | Realism checks of the simulation grid | Grid ranges | German development half and published ranges for other diseases |
 
