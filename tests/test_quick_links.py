@@ -35,7 +35,7 @@ def _readme() -> str:
 
 
 def _home_groups() -> list[list[tuple[str, str]]]:
-    rows = [r for r in _home().split("\n\n")[1:] if HOME_LINK.search(r)]
+    rows = [r for r in _home().split("\n\n") if HOME_LINK.search(r)]
     return [HOME_LINK.findall(r) for r in rows]
 
 
