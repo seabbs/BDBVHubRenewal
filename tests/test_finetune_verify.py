@@ -118,10 +118,64 @@ def test_the_code_names_are_the_paths_first_hashed():
         "scripts/finetune_chronos.py",
         "src/bdbvhubrenewal/forecasters/finetune.py",
     }
-    # Every engine file is hashed.
-    engine = Path(__file__).parents[1] / ft.ENGINE / "R"
-    hashed = {p for p in ft.SIMULATOR if p.startswith(ft.ENGINE + "/R/")}
-    assert hashed == {f"{ft.ENGINE}/R/{p.name}" for p in engine.glob("*.R")}
     root = Path(__file__).parents[1]
     for path in (*ft.CODE.values(), ft.FOUNDATION_PATH):
         assert (root / path).exists(), path
+
+
+def test_every_engine_file_is_hashed_by_glob(tmp_path, monkeypatch):
+    import finetune_chronos as ft
+
+    engine = Path(__file__).parents[1] / ft.ENGINE / "R"
+    hashed = {p for p in ft.SIMULATOR if p.startswith(ft.ENGINE + "/R/")}
+    assert hashed == {f"{ft.ENGINE}/R/{p.name}" for p in engine.glob("*.R")}
+    # A new engine file is hashed without listing it.
+    (tmp_path / ft.ENGINE / "R").mkdir(parents=True)
+    for name in ("a.R", "new.R"):
+        (tmp_path / ft.ENGINE / "R" / name).write_text("")
+    monkeypatch.setattr(ft, "ROOT", tmp_path)
+    files = ft.simulator_files("g.yaml")
+    assert files[0] == "g.yaml"
+    assert f"{ft.ENGINE}/R/new.R" in files
+
+
+def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
+    monkeypatch,
+):
+    import finetune_chronos as ft
+
+    assert ft.SIMULATOR[0] == ft.workflow_grid_file()
+    monkeypatch.setattr(ft, "SIMULATOR", ft.SIMULATOR)
+    monkeypatch.setattr(ft, "CODE", ft.CODE)
+    # use_design sets the run's parents globally: put them back after.
+    monkeypatch.setattr(ft, "PARENTS", ft.PARENTS)
+    ft.use_design("r7")
+    assert ft.SIMULATOR[0] == "config/finetune/grids/r7.yaml"
+    assert "config/finetune/grids/r7.yaml" in ft.CODE
+
+
+def test_r7_hashes_the_files_it_was_first_hashed_with():
+    """The glob gives r7's runs the names their checkpoints hashed."""
+    import finetune_chronos as ft
+
+    engine = "packages/nowcastfoundation/r"
+    first = {
+        "config/finetune/grids/r7.yaml",
+        "workflow/scripts/simulate.R",
+        f"{engine}/DESCRIPTION",
+        *(
+            f"{engine}/R/{name}.R"
+            for name in (
+                "delays",
+                "design",
+                "grid",
+                "infections",
+                "nowcastfoundation-package",
+                "observation",
+                "reporting",
+                "simulate",
+                "utils",
+            )
+        ),
+    }
+    assert set(ft.simulator_files("config/finetune/grids/r7.yaml")) == first
