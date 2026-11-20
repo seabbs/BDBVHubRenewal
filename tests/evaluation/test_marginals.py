@@ -104,15 +104,15 @@ def test_sums_use_the_same_draws_for_every_model(
 
 @needs_torch
 @pytest.mark.usefixtures("fake_chronos")
-def test_daily_sums_come_from_draws_seeded_by_the_seed(
+def test_daily_sums_are_native_quantiles_whatever_the_seed(
     task: ForecastTask,
 ) -> None:
+    # The daily 7-day sums are read from the rolling rows' own quantiles,
+    # so no draws are made and the seed changes nothing.
     model = get_model("fm_chronos_daily_ragged")
     one = forecast_quantiles(model, task, LEVELS, n_draws=200, seed=4)
-    again = forecast_quantiles(model, task, LEVELS, n_draws=200, seed=4)
     other = forecast_quantiles(model, task, LEVELS, n_draws=200, seed=5)
-    pd.testing.assert_frame_equal(one, again)
-    assert not np.array_equal(one["value"], other["value"])
+    pd.testing.assert_frame_equal(one, other)
 
 
 def test_a_sample_model_gives_the_quantiles_of_its_draws(

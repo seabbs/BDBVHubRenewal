@@ -8,6 +8,7 @@ the two sources are never mixed.
 """
 
 import dataclasses
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -215,12 +216,8 @@ def test_one_forecast_gives_daily_draws_from_the_count_rows_too(
     late = daily.loc[daily["date"].isin(future)]
     assert not late.empty
     # The count rows drew 1, the total rows 1000 and up: daily values come
-    # from the count rows, floored at the counts reported.
-    assert (late["value"] < 1000).all()
-    final = dict(zip(group["places"], tri.final, strict=True))
-    for row in late.itertuples():
-        reported = final[row.location][tri.times.index(row.date)]
-        assert row.value == max(1.0, reported)
+    # from the count rows as drawn, not floored at the counts reported.
+    assert (late["value"] == 1.0).all()
     # Every day of the target weeks is there, for every place and sample.
     first = pd.Timestamp(task.target_end_dates[0]) - pd.Timedelta(days=6)
     days = pd.date_range(first, task.target_end_dates[-1]).strftime("%Y-%m-%d")
@@ -276,3 +273,97 @@ def test_the_daily_rolling_rows_hold_every_days_7_day_sum(
     counts, sums = group["target"][:n], group["target"][n:]
     want = foundation.rolling_totals(counts, 7)
     np.testing.assert_array_equal(sums[:, 6:], want[:, 6:])
+
+
+class _LevelPipeline:
+    """Quantiles of each series and step: the step index plus the level."""
+
+    quantiles = (0.1, 0.5, 0.9)
+
+    def predict_quantiles(
+        self, groups, prediction_length, quantile_levels, **_kw
+    ):
+        import torch
+
+        out = []
+        for g in groups:
+            n_var = np.atleast_2d(g["target"]).shape[0]
+            step = torch.arange(prediction_length, dtype=torch.float32)
+            level = torch.tensor(quantile_levels, dtype=torch.float32)
+            out.append((step[:, None] + level[None, :]).expand(n_var, -1, -1))
+        return out, None
+
+
+def _spy_triangle(monkeypatch) -> list:
+    """Keep each triangle the model builds."""
+    seen: list = []
+    real = foundation.hub_triangle
+
+    def spy(*args, **kwargs):
+        seen.append(real(*args, **kwargs))
+        return seen[-1]
+
+    monkeypatch.setattr(foundation, "hub_triangle", spy)
+    return seen
+
+
+def test_daily_7_day_sums_are_the_aggregate_rows_native_quantiles(
+    ft: FoundationModel, task: ForecastTask, monkeypatch
+) -> None:
+    # No draws, no rounding, no floor at the reported count: the 7-day
+    # sum of a week past the context is its aggregate row's own quantile.
+    pytest.importorskip("torch")
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: _LevelPipeline())
+    levels = [0.1, 0.5, 0.9]
+    seen = _spy_triangle(monkeypatch)
+    out = ft.quantiles(task, levels)
+    assert out is not None
+    tri = seen[-1]
+    start = tri.last - ft.lag_count(task) + 1
+    future = [w for w in task.target_end_dates if tri.times.index(w) >= start]
+    rows = out[out["target_end_date"].isin(future)]
+    step = rows["target_end_date"].map(lambda w: tri.times.index(w) - start)
+    np.testing.assert_allclose(rows["value"], step + rows["quantile"])
+
+
+def test_daily_counts_are_the_count_rows_native_quantiles(
+    ft: FoundationModel, task: ForecastTask, monkeypatch
+) -> None:
+    pytest.importorskip("torch")
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: _LevelPipeline())
+    seen = _spy_triangle(monkeypatch)
+    out = ft.daily_quantiles(task, [0.1, 0.5, 0.9])
+    assert set(out.columns) == {"location", "date", "quantile", "value"}
+    tri = seen[-1]
+    start = tri.last - ft.lag_count(task) + 1
+    later = out[out["date"].map(lambda d: tri.times.index(d) >= start)]
+    assert len(later)
+    step = later["date"].map(lambda d: tri.times.index(d) - start)
+    np.testing.assert_allclose(later["value"], step + later["quantile"])
+
+
+def test_the_pipeline_interpolates_to_the_hub_levels_itself(monkeypatch):
+    # One path: the hub levels go to Chronos-2's predict_quantiles, which
+    # interpolates between its own levels; we do not interpolate again.
+    pytest.importorskip("torch")
+    asked = []
+
+    class Spy(_LevelPipeline):
+        def predict_quantiles(
+            self, groups, prediction_length, quantile_levels, **kw
+        ):
+            asked.append(list(quantile_levels))
+            return super().predict_quantiles(
+                groups, prediction_length, quantile_levels, **kw
+            )
+
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: Spy())
+    hub = [0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975]
+    group = {"target": np.zeros((2, 6))}
+    out = foundation.native_sampler(np.array(hub))([group], 3, 1, 0)[0]
+    assert asked == [hub]
+    assert out.shape == (7, 2, 3)
+    np.testing.assert_allclose(
+        out[:, 0, :], np.arange(3)[None, :] + np.array(hub)[:, None]
+    )
+    assert "np.interp" not in Path(foundation.__file__).read_text()

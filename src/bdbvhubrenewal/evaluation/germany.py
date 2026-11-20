@@ -455,7 +455,9 @@ def germany_forecasts(
         }
         every = [t for ts in tasks.values() for t in ts]
         built = [
-            prefetch(m, every) if isinstance(m, FoundationModel) else m
+            prefetch(m, every, QUANTILE_LEVELS)
+            if isinstance(m, FoundationModel)
+            else m
             for m in built
         ]
     keys = ["model", "origin", "location", "target_end_date", "horizon"]

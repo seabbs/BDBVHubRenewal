@@ -234,10 +234,12 @@ def test_quantile_draws_invert_the_quantile_function() -> None:
 
 
 @pytest.mark.parametrize("name", MODELS)
-def test_draws_are_counts_at_least_the_reported(
+def test_draws_are_not_negative_and_not_floored_at_the_reported(
     name: str, task: ForecastTask
 ) -> None:
-    for value in (-50.0, 0.0, 3.0):
+    # Chronos-2's output is kept as it is, at zero or above: not rounded,
+    # and not raised to the counts reported (Sam, 2026-11-20).
+    for value in (-50.0, 0.0, 3.5):
         model = dataclasses.replace(get_model(name), sample=_constant(value))
         out = model.forecast(task)
         check_samples(out, task)
@@ -248,11 +250,15 @@ def test_draws_are_counts_at_least_the_reported(
         }
         values = out["value"].to_numpy()
         assert (values >= 0).all()
-        assert np.array_equal(values, np.round(values))
-        reported = _reported(task, out)
-        assert (values >= reported).all()
-        if value < 0:
-            assert np.array_equal(values, reported)
+    # A draw of 3.5 stays 3.5 where it is read, a draw below what is
+    # reported stays below it.
+    out = dataclasses.replace(get_model(name), sample=_constant(3.5)).forecast(
+        task
+    )
+    assert (out["value"] % 1 != 0).any()
+    low = dataclasses.replace(get_model(name), sample=_constant(0.0))
+    out = low.forecast(task)
+    assert (out["value"].to_numpy() < _reported(task, out)).any()
     # Draws above the reported counts raise the forecast past them.
     high = dataclasses.replace(get_model(name), sample=_constant(1e4))
     out = high.forecast(task)
@@ -872,8 +878,8 @@ def test_zone_samples_come_straight_from_the_block(
 
 
 @pytest.mark.parametrize("layout", LAYOUTS)
-def test_daily_zones_keep_their_counts_with_no_weekly_zone_releases(
-    layout: str, task: ForecastTask, daily_zones: pd.DataFrame
+def test_daily_zones_are_forecast_with_no_weekly_zone_releases(
+    layout: str, task: ForecastTask
 ) -> None:
     bare = dataclasses.replace(task, zone_history=None)
     model = dataclasses.replace(
@@ -883,13 +889,9 @@ def test_daily_zones_keep_their_counts_with_no_weekly_zone_releases(
     check_samples(out, bare)
     own = out.loc[out["location"].map(is_zone)]
     assert set(own["location"]) == set(_zones(task))
-    # Reconciling keeps each zone's published count, so the zones are
-    # floored with no weekly zone release to floor them before.
-    counts = weekly_counts(daily_zones, task.vintage)
-    keys = ["location", "target_end_date"]
-    floor = own.merge(counts, on=keys, how="left")["total"].fillna(0)
-    assert (own["value"].to_numpy() >= floor.to_numpy()).all()
-    assert floor.sum() > 0
+    # The zones are forecast from their daily counts alone, not floored at
+    # them (no floor at the counts reported).
+    assert (own["value"].to_numpy() >= 0).all()
 
 
 def test_a_passing_github_error_is_retried(
