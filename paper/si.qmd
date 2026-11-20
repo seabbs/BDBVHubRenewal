@@ -487,6 +487,7 @@ We score the country and each province by the CRPS and 90% coverage, and each le
 - We score the random walk nowcast's trajectories as submitted.
 - We score trajectories by the energy score on counts and on $\log(x + 1)$ counts.
 - We score Ebola trajectories only at the final held-out evaluation, and German and synthetic trajectories now.
+- Ebola trajectory scores use the same truth as every other Ebola score, with $D$ the 98% point of the hub data's national reporting delay.
 :::
 
 ### Aggregation options
