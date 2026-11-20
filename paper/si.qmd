@@ -344,6 +344,7 @@ The dashboard was built with the help of a large language model.
 ::: {.callout-note title="Plan"}
 - We report cases by reference and report date through epinowcast's observation model.
 - The reporting delay has a drawn family and mean, and differs between places and age groups.
+- In a third of simulations, the mean delay varies by reference weekday, mostly within about 10%.
 - The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change.
 - Figure (planned): "Layer 3, reporting delays. (A) The mean reporting delay by reference date for each kind of delay change. (B) The delay distributions drawn across the grid."
 - Table (planned): "Layer 3, sampling distributions of the reporting delay settings, each with its reason."
@@ -352,14 +353,16 @@ The dashboard was built with the help of a large language model.
 #### Layer 4: the reporting system
 
 ::: {.callout-note title="Plan"}
-- We add report-day effects, and some outbreaks report on weekdays only.
-- Reports can bunch, and reporting shocks add backlogs or outages.
+- Cases are reported every day in half of simulations, on weekdays only in a quarter, on two or three fixed days a week in 15% and on one day a week in 10%, with the days drawn.
+- In half of the simulations reporting every day, the chance of reporting varies by report weekday, mostly by a few percent and up to about 15%, with a tail to strong effects.
+- In a third of simulations, counts vary by reference weekday, mostly by a few percent.
+- Reporting shocks add backlogs or outages.
 - Revisions are not part of epinowcast's model but are true of real data, so we apply them to the release triangle afterwards, in a drawn share of simulations.
 - Some cases are reported in error, appear in releases for a time and are then removed, so a release can exceed the final count.
 - Some cases are filed under a nearby reference day and moved later.
 - The target is still the final count, and lag series can then fall from one lag to the next.
 - Releases follow a daily, 3-day or weekly cadence, some with missed releases, as described with the training blocks.
-- Figure (planned): "Layer 4, the reporting system and revisions. One outbreak through each quirk (none, weekdays only, bunching, backlog, outage and revisions): final counts against the counts reported by the nowcast date."
+- Figure (planned): "Layer 4, the reporting system and revisions. One outbreak through each quirk (every day, weekdays only, fixed days, one day a week, backlog, outage and revisions): final counts against the counts reported by the nowcast date."
 - Table (planned): "Layer 4, sampling distributions of the reporting system settings, each with its reason."
 :::
 
@@ -413,11 +416,8 @@ Sampling distributions of the continuous simulation settings, read from the grid
 
 Outbreak length is drawn from a log-normal distribution with median 30 weeks, and is at least 4 weeks.
 A simulation that fails or reports fewer than 10 cases is redrawn with a new seed.
-Each simulation is checked for impossible or implausible draws, and one that fails is drawn again in its batch, so a round keeps 800 simulations.
-A simulation fails if a stratum has more cases than its population, if its weekly cases by reference date rise more than 1,000-fold in one week, or if its mean reporting delay passes 35 days.
-The check sets no bound on outbreak size.
-Before training, each round's simulations are checked again, and the trainer skips those that fail.
-No simulation is deleted.
+No simulation is rejected for its size, growth or reporting delay.
+We test the simulator so that a stratum never has more cases than its population.
 
 The grid has one known limitation.
 Simulated delays are shorter than the German data's, whose 99% point is {{< meta evidence.realism.delay_q99.Germany_states >}} days against {{< meta evidence.realism.delay_q99.sim_q95 >}} at the 95% point of the simulations.
