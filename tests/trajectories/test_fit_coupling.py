@@ -99,3 +99,18 @@ def test_methods_without_parameters_fit_to_their_name(method):
 def test_an_unknown_method_is_an_error():
     with pytest.raises(ValueError, match="unknown method"):
         fit_coupling(_scores(0.8, 0.4), "schaake")
+
+
+def test_one_series_has_no_series_pairs_so_s_is_zero():
+    fit = fit_coupling(_scores(0.6, 0.0, series=1), "gaussian")
+    assert fit["n_series_pairs"] == 0
+    assert fit["s"] == 0.0
+    assert fit["shrinkage_s"] == 1.0
+    assert fit["rho"] > 0.3
+
+
+def test_s_stays_below_one_as_rho_does():
+    # Identical series correlate fully; the fit keeps s below 1, as rho.
+    one = _scores(0.0, 0.0, series=1)
+    fit = fit_coupling(np.repeat(one, 3, axis=1), "gaussian")
+    assert 0.99 < fit["s"] < 1.0

@@ -1,16 +1,15 @@
-"""Record one round of simulations' summaries, with no thresholds.
+"""Record one round of simulations' summaries.
 
 Summarises each simulation of `ROUND_DIR/sims` (`summaries`): cases,
 strata with cases, the largest stratum's cases over its population, the
 largest week-on-week rise in weekly cases by reference date and the
-reporting delay. The grid sets no thresholds (Sam, lead 13:25), so `check`
-excludes none; its empty `excluded.csv` keeps the file the trainer and the
-releases read, and rounds checked before keep their exclusions.
+reporting delay. The grid sets no thresholds, so no simulation is
+excluded. `excluded.csv` is written empty because the trainer and the
+releases read it.
 
 Records the input table, the exclusions (`excluded.csv`: simulation,
-reason, evidence), the thresholds (`decisions.json`) and a one-line
-summary in `ROUND_DIR/qc/`. Simulations are never deleted. Run from the
-repo root:
+reason, evidence), `decisions.json` and a one-line summary in
+`ROUND_DIR/qc/`. Simulations are never deleted. Run from the repo root:
 
     uv run python scripts/sim_qc.py ROUND_DIR
 """
@@ -24,9 +23,6 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-
-LIMITS: tuple[str, ...] = ()
-"""The thresholds `check` takes, each a required option."""
 
 CELL = [
     "strata",
@@ -129,40 +125,24 @@ def summaries(sim_dir: Path) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def check(table: pd.DataFrame, limits: dict[str, float]) -> pd.DataFrame:
-    """Return the simulations past a threshold: none, as there are none.
-
-    `table` is `summaries`' output and `limits` the grid's thresholds
-    (`LIMITS`, empty). Kept so a round's QC record has the same files.
-    """
-    del table, limits
-    return pd.DataFrame(columns=["simulation", "reason", "evidence"])
-
-
 def main() -> None:
     """Check the round and record everything in its qc/ directory."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("round_dir", type=Path)
-    for key in LIMITS:
-        parser.add_argument(
-            "--" + key.replace("_", "-"), type=float, required=True
-        )
     args = parser.parse_args()
-    limits = {k: getattr(args, k) for k in LIMITS}
     qc = args.round_dir / "qc"
     qc.mkdir(parents=True, exist_ok=True)
     table = summaries(args.round_dir / "sims")
     table.to_csv(qc / "input.csv", index=False)
-    excluded = check(table, limits)
+    excluded = pd.DataFrame(columns=["simulation", "reason", "evidence"])
     excluded.to_csv(qc / "excluded.csv", index=False)
-    n_out = excluded["simulation"].nunique()
+    n_out = 0
     (qc / "decisions.json").write_text(
         json.dumps(
             {
                 "check": "no thresholds (scripts/sim_qc.py)",
-                "limits": limits,
                 "n_simulations": len(table),
-                "excluded": excluded.to_dict("records"),
+                "excluded": [],
             },
             indent=1,
         )

@@ -2,6 +2,7 @@
 
 import inspect
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -110,15 +111,15 @@ def test_released_checkpoints_give_their_hash(name):
     assert settings_problems(settings) == []
 
 
-def test_the_code_names_are_the_paths_first_hashed():
+def test_the_code_names_are_the_files_paths():
     import finetune_chronos as ft
 
     assert set(ft.CODE) == {
-        ft.GRID_NAME,
-        *ft.SIMULATOR[1:],
+        *ft.SIMULATOR,
         "scripts/finetune_chronos.py",
-        "src/bdbvhubrenewal/forecasters/finetune.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune.py",
     }
+    assert all(name == path for name, path in ft.CODE.items())
     root = Path(__file__).parents[1]
     for path in (*ft.CODE.values(), ft.FOUNDATION_PATH):
         assert (root / path).exists(), path
@@ -147,50 +148,20 @@ def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
 
     import finetune_chronos as ft
 
-    assert ft.SIMULATOR[0] == ft.workflow_grid_file() == ft.GRID_FILE_PATH
+    grid = "config/finetune/grid.yaml"
+    assert ft.SIMULATOR[0] == ft.workflow_grid_file() == grid
     monkeypatch.setattr(ft, "SIMULATOR", ft.SIMULATOR)
     monkeypatch.setattr(ft, "CODE", ft.CODE)
     # use_grid sets the run's parents globally: put them back after.
     monkeypatch.setattr(ft, "PARENTS", ft.PARENTS)
     ft.use_grid(ft.GRID_FILE)
-    assert ft.SIMULATOR[0] == ft.GRID_FILE_PATH
-    assert ft.CODE[ft.GRID_NAME] == ft.GRID_FILE_PATH
-    # Another grid file is hashed under its own path.
+    assert ft.SIMULATOR[0] == grid
+    assert ft.CODE[grid] == grid
+    # Another grid file is hashed under its path from the repository.
     other = tmp_path / "other.yaml"
     shutil.copy(ft.GRID_FILE, other)
     ft.use_grid(other)
-    assert ft.SIMULATOR[0] == str(other)
-    assert ft.CODE[str(other)] == str(other)
-    assert ft.GRID_NAME not in ft.CODE
-
-
-def test_the_grid_hashes_the_names_it_was_first_hashed_with():
-    """The glob and the frozen grid name give the names checkpoints hashed."""
-    import finetune_chronos as ft
-
-    engine = "packages/nowcastfoundation/r"
-    first = {
-        "config/finetune/grids/r7.yaml",
-        "workflow/scripts/simulate.R",
-        f"{engine}/DESCRIPTION",
-        *(
-            f"{engine}/R/{name}.R"
-            for name in (
-                "delays",
-                "design",
-                "grid",
-                "infections",
-                "nowcastfoundation-package",
-                "observation",
-                "reporting",
-                "simulate",
-                "utils",
-            )
-        ),
-    }
-    names = set(ft.code_files(ft.simulator_files(ft.GRID_FILE_PATH)))
-    trainer = {
-        "scripts/finetune_chronos.py",
-        "src/bdbvhubrenewal/forecasters/finetune.py",
-    }
-    assert names - trainer == first
+    name = os.path.relpath(other.resolve(), ft.ROOT.resolve())
+    assert ft.SIMULATOR[0] == name
+    assert ft.CODE[name] == name
+    assert grid not in ft.CODE

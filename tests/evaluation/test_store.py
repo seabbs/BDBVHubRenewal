@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import base64
 import dataclasses
 import json
@@ -1348,22 +1347,3 @@ def test_places_key_only_the_models_that_read_them(
     assert store.current_keys(moved, renewal, sampler, "c") != (
         store.current_keys(tasks, renewal, sampler, "c")
     )
-
-
-def test_fit_function_keys_name_moved_modules_by_their_old_name() -> None:
-    # A store function's imports of a moved module (WP2b) keep its dump,
-    # in whatever order isort puts them.
-    def dump(body: str) -> str:
-        tree = ast.parse(f"def fit_files():\n{body}    return 1\n")
-        return store._fit_source(tree.body[0])
-
-    old = (
-        "    from bdbvhubrenewal.forecasters.renewal import FIT_VARIANTS\n"
-        "    from bdbvhubrenewal.submission.fitting import get_config\n"
-    )
-    new = (
-        "    from bdbvhubrenewal.submission.fitting import get_config\n"
-        "    from nowcastrenewal.forecaster import FIT_VARIANTS\n"
-    )
-    assert dump(new) == dump(old)
-    assert dump("    from nowcastrenewal.model import x\n") != dump(old)

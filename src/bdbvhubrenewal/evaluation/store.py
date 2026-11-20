@@ -37,7 +37,6 @@ from __future__ import annotations
 import argparse
 import ast
 import base64
-import copy
 import dataclasses
 import datetime as dt
 import functools
@@ -364,47 +363,8 @@ def _fit_functions(root: Path) -> list[str]:
         missing = sorted(set(names) - set(defs))
         if missing:
             raise ValueError(f"{rel} has no {missing}")
-        out += [_fit_source(defs[name]) for name in names]
+        out += [_strip(ast.unparse(defs[name])) for name in names]
     return out
-
-
-MOVED_MODULES: Final = {
-    "nowcastrenewal.forecaster": "bdbvhubrenewal.forecasters.renewal",
-}
-"""Moved modules (WP2b) by the name they had when the keys were set.
-
-The functions in `FIT_FUNCTIONS` are dumped whole, own-package imports
-included, so an import of a moved module is dumped by its old name and
-the keys hold. This goes at the next refit, when these dumps drop
-own-package imports as `_code_parts` does."""
-
-
-def _fit_source(node: ast.stmt) -> str:
-    """Dump a function in `FIT_FUNCTIONS`, moved modules by their old name.
-
-    Each run of imports is sorted by module name, so a move that puts an
-    import in a new place in isort's order keeps the dump.
-    """
-    node = copy.deepcopy(node)
-    for parent in ast.walk(node):
-        body = getattr(parent, "body", None)
-        if not isinstance(body, list):
-            continue
-        out: list[ast.stmt] = []
-        run: list[ast.ImportFrom] = []
-        for item in [*body, None]:
-            if isinstance(item, ast.ImportFrom):
-                module = item.module or ""
-                item.module = MOVED_MODULES.get(module, item.module)
-                run.append(item)
-                continue
-            run.sort(key=lambda s: s.module or "")
-            out += run
-            run = []
-            if item is not None:
-                out.append(item)
-        parent.body = out  # type: ignore[attr-defined]
-    return _strip(ast.unparse(node))
 
 
 def fit_code(model: str, root: Path | str = ".") -> list[str]:

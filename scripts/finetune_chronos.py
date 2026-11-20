@@ -16,6 +16,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 
@@ -143,12 +144,10 @@ def use_grid(grid_file: Path | str = GRID_FILE) -> None:
     if not path.is_file():
         raise FileNotFoundError(f"no grid file at {path}")
     PARENTS = grid_parents(path)
-    # The run's own grid file is hashed.
-    try:
-        name = str(path.resolve().relative_to(ROOT))
-    except ValueError:
-        name = str(path)
-    SIMULATOR = simulator_files(name)
+    # Named relative to the repository, so the hash does not depend on
+    # where the checkout is.
+    name = os.path.relpath(path.resolve(), ROOT.resolve())
+    SIMULATOR = simulator_files(Path(name).as_posix())
     CODE = code_files(SIMULATOR)
 
 
@@ -250,13 +249,6 @@ def max_series(budget_gb: float) -> int:
 ENGINE = "packages/nowcastfoundation/r"
 """The simulator engine, whose R files and description are hashed."""
 
-GRID_NAME = "config/finetune/grids/r7.yaml"
-"""The grid file's name in `code_sha256`: its path when checkpoints were
-first hashed, kept so moving it changes no checkpoint's hash (`CODE`)."""
-
-GRID_FILE_PATH = "config/finetune/grid.yaml"
-"""The grid file's path from the repository root, hashed as `GRID_NAME`."""
-
 WRAPPER = "workflow/scripts/simulate.R"
 """The simulate rule's wrapper around the engine."""
 
@@ -288,21 +280,13 @@ def workflow_grid_file() -> str:
 
 
 def code_files(simulator: tuple[str, ...]) -> dict[str, str]:
-    """Return `CODE` for a simulator's files.
-
-    The grid file (`GRID_FILE_PATH`) is named `GRID_NAME`, its path when
-    checkpoints were first hashed.
-    """
-    return {
-        **{
-            GRID_NAME if path == GRID_FILE_PATH else path: path
-            for path in simulator
-        },
-        "scripts/finetune_chronos.py": "scripts/finetune_chronos.py",
-        "src/bdbvhubrenewal/forecasters/finetune.py": (
-            "packages/nowcastfoundation/src/nowcastfoundation/finetune.py"
-        ),
-    }
+    """Return `CODE` for a simulator's files, each named by its path."""
+    files = (
+        *simulator,
+        "scripts/finetune_chronos.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune.py",
+    )
+    return {path: path for path in files}
 
 
 SIMULATOR = simulator_files(workflow_grid_file())
@@ -311,12 +295,8 @@ own (`use_grid`)."""
 
 CODE = code_files(SIMULATOR)
 """Files the checkpoint depends on, hashed into its settings: each
-file's name in `code_sha256`, then where it is now.
-
-A name is the file's path when checkpoints were first hashed and never
-changes, so moving a file changes no checkpoint's hash: update its path
-here only. The paths go into the settings outside the hash
-(`code_paths`), for `finetune_verify`."""
+file's name in `code_sha256`, then its path. The paths also go into the
+settings outside the hash (`code_paths`), for `finetune_verify`."""
 
 TRAINER = "scripts/finetune_stream.py"
 """The trainer's name in `code_sha256` (its path is its own file)."""
