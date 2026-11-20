@@ -47,6 +47,17 @@ rule b:
 """
 
 
+# macOS's /usr/bin/rsync (openrsync): no --ignore-missing-args.
+OPENRSYNC = """#!/bin/sh
+for a in "$@"; do
+  case "$a" in --ignore-missing-args)
+    echo "rsync: unrecognized option --ignore-missing-args" >&2; exit 1;;
+  esac
+done
+echo "openrsync: protocol version 29"
+"""
+
+
 def _git(where, *args):
     subprocess.run(
         ["git", "-C", str(where), *args],
@@ -80,7 +91,7 @@ def setup(tmp_path):
     return coord, worker, roots, state
 
 
-def _run(coord, worker_spec, croot, state):
+def _run(coord, worker_spec, croot, state, path=None):
     local = coord.parent / "local.env"
     local.write_text(f"COMPUTE=ssh\nROOT={croot}\nWORKERS={worker_spec}\n")
     (state / "budgets.json").write_text(
@@ -95,6 +106,8 @@ def _run(coord, worker_spec, croot, state):
         "REMOTE_POLL": "1",
         "WORKER_SNAKEMAKE": f"{py} -m snakemake",
     }
+    if path:
+        env["PATH"] = f"{path}{os.pathsep}{env['PATH']}"
     return subprocess.run(
         [
             py,
@@ -162,6 +175,22 @@ def test_an_unreachable_worker_fails_at_submit(setup):
     assert got.returncode != 0
     assert not (croot / "b.txt").exists()
     assert "nohost.invalid" in got.stderr + got.stdout
+
+
+def test_an_rsync_that_cannot_copy_fails_at_submit(setup, tmp_path):
+    # The coordinator's rsync is checked before any job goes to a
+    # worker, so a job is not run there only for its copies to fail.
+    coord, worker, (croot, wroot), state = setup
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "rsync"
+    fake.write_text(OPENRSYNC)
+    fake.chmod(0o755)
+    got = _run(coord, f"w=local:{wroot}:{worker}", croot, state, bin_dir)
+    assert got.returncode != 0
+    assert not (wroot / "a.txt").exists()
+    assert "--ignore-missing-args" in got.stderr + got.stdout
+    assert str(fake) in got.stderr + got.stdout
 
 
 def test_a_job_still_running_on_the_worker_is_not_started_twice(setup):

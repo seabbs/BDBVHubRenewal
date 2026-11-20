@@ -23,6 +23,8 @@ it runs and its outputs, log and `params.copy_back` files pulled back
 after, all at the same paths under the worker's ROOT or checkout. Its
 checkout must be at the coordinator's commit. It runs with the
 coordinator's run settings (`job_env`) and its own machine settings.
+The coordinator's rsync must be GNU rsync 3.1 or later
+(`rsync_problem`); submit refuses such a job otherwise.
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ import hashlib
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -313,6 +316,44 @@ def job_command(
         + f" {snakemake} "
         + " ".join(q(a) for a in argv)
         + " </dev/null"
+    )
+
+
+RSYNC_FLAGS = ("--ignore-missing-args",)
+"""The rsync options a job's copies use beyond `-a` and `-e`: GNU rsync
+3.1 or later. macOS's /usr/bin/rsync (openrsync) rejects them."""
+
+
+def rsync_problem() -> str | None:
+    """Return why this machine's rsync cannot copy a job's files, or None.
+
+    It must take `RSYNC_FLAGS`, checked by running it with them.
+    """
+    path = shutil.which("rsync")
+    if path is None:
+        return "no rsync on PATH; a job's copies need GNU rsync >= 3.1"
+    got = subprocess.run(
+        [path, *RSYNC_FLAGS, "--version"], capture_output=True, text=True
+    )
+    if got.returncode == 0:
+        return None
+    said = (got.stderr or got.stdout).strip().splitlines()
+    return (
+        f"{path} does not take {' '.join(RSYNC_FLAGS)}"
+        + (f" ({said[0]})" if said else "")
+        + "; a job's copies need GNU rsync >= 3.1 first on PATH"
+    )
+
+
+def copies(worker: Worker, root: str, checkout: str | Path) -> bool:
+    """Whether a job on `worker` has its files copied (rsync).
+
+    All but a local worker on this ROOT and checkout.
+    """
+    return not (
+        worker.local
+        and Path(worker.root) == Path(root)
+        and Path(worker.checkout) == Path(checkout)
     )
 
 

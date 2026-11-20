@@ -280,3 +280,37 @@ def test_a_job_on_a_worker_reads_nothing_from_the_session(tmp_path):
     )
     assert got.returncode == 0, got.stderr
     assert got.stdout == ""
+
+
+OPENRSYNC = """#!/bin/sh
+for a in "$@"; do
+  case "$a" in --ignore-missing-args)
+    echo "rsync: unrecognized option --ignore-missing-args" >&2; exit 1;;
+  esac
+done
+echo "openrsync: protocol version 29"
+"""
+
+
+def test_an_rsync_without_the_flags_the_copies_use_is_named(
+    tmp_path, monkeypatch
+):
+    # macOS's /usr/bin/rsync (openrsync) rejects --ignore-missing-args,
+    # so every copy of a job on a worker would fail after it ran.
+    fake = tmp_path / "rsync"
+    fake.write_text(OPENRSYNC)
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    got = compute.rsync_problem()
+    assert str(fake) in got
+    assert "--ignore-missing-args" in got
+    assert "3.1" in got
+
+
+def test_no_rsync_on_the_path_is_named(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert "no rsync" in compute.rsync_problem()
+
+
+def test_gnu_rsync_takes_the_flags_the_copies_use():
+    assert compute.rsync_problem() is None
