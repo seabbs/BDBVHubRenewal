@@ -11,4 +11,6 @@ Build a model from the registry and forecast a task with it. See [Getting starte
 
 ::: nowcastfoundation.forecaster
 
+::: nowcastfoundation.backends.chronos2
+
 ::: nowcastfoundation.checkpoints

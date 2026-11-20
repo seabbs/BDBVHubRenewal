@@ -1,0 +1,11 @@
+INHERIT: ../mkdocs-base.yml
+site_name: nowcastbaselines
+site_description: The random walk and the random walk nowcast.
+site_url: https://samabbott.co.uk/bdbv-hub-modelling/nowcastbaselines/
+edit_uri: edit/main/packages/nowcastbaselines/docs/
+
+nav:
+  - Getting started: index.md
+  - How to: how-to.md
+  - Reference: reference.md
+  - How it is used in the workflow: workflow.md

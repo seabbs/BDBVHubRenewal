@@ -1,0 +1,11 @@
+INHERIT: ../mkdocs-base.yml
+site_name: nowcasteval
+site_description: Scores for sample and quantile forecasts, backtests and model comparison.
+site_url: https://samabbott.co.uk/bdbv-hub-modelling/nowcasteval/
+edit_uri: edit/main/packages/nowcasteval/docs/
+
+nav:
+  - Getting started: index.md
+  - How to: how-to.md
+  - Reference: reference.md
+  - How it is used in the workflow: workflow.md
