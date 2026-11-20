@@ -220,3 +220,113 @@ def test_a_state_with_other_pairs_is_not_resumed(tmp_path):
     series_bias.attach(fresh)
     with pytest.raises(ValueError, match="code it was trained with"):
         fs.lora_model(fresh, fs.lora_config(True), tmp_path / "adapter")
+
+
+@pytest.mark.parametrize("checkpointed", [False, True])
+def test_the_bias_added_in_time_chunks_trains_alike(monkeypatch, checkpointed):
+    from chronos.chronos2.layers import GroupSelfAttention
+    from chronos.chronos2.model import Chronos2EncoderBlock
+    from chronos_toy import batch_of
+
+    # Restored after the test, as the trainer's checkpointing patches it.
+    monkeypatch.setattr(
+        Chronos2EncoderBlock, "forward", Chronos2EncoderBlock.forward
+    )
+    if checkpointed:
+        fs.checkpoint_large_batches(0)
+    torch.manual_seed(0)
+    model = tiny_model()
+    series_bias.attach(model)
+    with torch.no_grad():
+        for p in getattr(model, series_bias.BIAS_MODULE).parameters():
+            p.copy_(torch.randn_like(p))
+    model.train()
+    batch = batch_of(toy_block())
+    rows = series_bias.block_rows(range(N_PLACES), N_PLACES * LAG, [-1, 0, 0])
+    group = next(
+        m for m in model.modules() if isinstance(m, GroupSelfAttention)
+    )
+    calls = []
+    group.self_attention.q.register_forward_hook(lambda *_: calls.append(1))
+
+    def step(chunk: int):
+        monkeypatch.setattr(series_bias, "CHUNK_ELEMENTS", chunk)
+        model.zero_grad()
+        calls.clear()
+        with series_bias.assigned(model, rows):
+            loss = model(
+                context=batch["context"],
+                group_ids=batch["group_ids"],
+                future_covariates=batch["future_covariates"],
+                num_output_patches=batch["num_output_patches"],
+                future_target=batch["future_target"],
+            ).loss
+            loss.backward()
+        grads = {
+            n: p.grad.clone()
+            for n, p in model.named_parameters()
+            if p.grad is not None
+        }
+        return loss.detach(), grads, len(calls)
+
+    loss, grads, whole_calls = step(10**12)
+    # One time step at a time: the group attention runs once a step.
+    loss_c, grads_c, chunk_calls = step(1)
+    assert chunk_calls > whole_calls
+    torch.testing.assert_close(loss_c, loss)
+    assert grads_c.keys() == grads.keys()
+    assert any(series_bias.BIAS_MODULE in n for n in grads)
+    for n in grads:
+        torch.testing.assert_close(grads_c[n], grads[n], msg=n)
+
+
+def test_each_chunk_s_attention_is_recomputed_in_backward(monkeypatch):
+    # The mask plus bias of a chunk is rebuilt in backward, not kept, so
+    # a layer never holds the whole (time, heads, rows, rows) sum; the
+    # step trains as without it.
+    from chronos.chronos2.layers import GroupSelfAttention
+    from chronos_toy import batch_of
+
+    torch.manual_seed(0)
+    model = tiny_model()
+    series_bias.attach(model)
+    with torch.no_grad():
+        for p in getattr(model, series_bias.BIAS_MODULE).parameters():
+            p.copy_(torch.randn_like(p))
+    model.train()
+    batch = batch_of(toy_block())
+    rows = series_bias.block_rows(range(N_PLACES), N_PLACES * LAG, [-1, 0, 0])
+    group = next(
+        m for m in model.modules() if isinstance(m, GroupSelfAttention)
+    )
+    calls = []
+    group.self_attention.q.register_forward_hook(lambda *_: calls.append(1))
+    monkeypatch.setattr(series_bias, "CHUNK_ELEMENTS", 1)
+
+    def step(checkpointed: bool):
+        monkeypatch.setattr(series_bias, "CHECKPOINT_CHUNKS", checkpointed)
+        model.zero_grad()
+        calls.clear()
+        with series_bias.assigned(model, rows):
+            loss = model(
+                context=batch["context"],
+                group_ids=batch["group_ids"],
+                future_covariates=batch["future_covariates"],
+                num_output_patches=batch["num_output_patches"],
+                future_target=batch["future_target"],
+            ).loss
+            loss.backward()
+        grads = {
+            n: p.grad.clone()
+            for n, p in model.named_parameters()
+            if p.grad is not None
+        }
+        return loss.detach(), grads, len(calls)
+
+    loss, grads, kept_calls = step(False)
+    loss_c, grads_c, recomputed_calls = step(True)
+    assert recomputed_calls == 2 * kept_calls
+    torch.testing.assert_close(loss_c, loss)
+    assert grads_c.keys() == grads.keys()
+    for n in grads:
+        torch.testing.assert_close(grads_c[n], grads[n], msg=n)

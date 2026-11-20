@@ -15,8 +15,10 @@ for any number of places.
 Chronos-2's encoder builds one additive group mask, `(time, 1, q, k)`
 over the batch axis (`Chronos2Encoder._construct_and_invert_group_time_mask`),
 which each layer's `GroupSelfAttention` adds to its scores. `attach`
-hooks each `GroupSelfAttention` to add its layer's bias to that mask,
-from the rows' places and parents set by `assigned`. Rows are the ragged
+wraps each layer's group attention to add its layer's bias to that mask,
+from the rows' places and parents set by `assigned`, a few time steps at
+a time (`CHUNK_ELEMENTS`), so the `(time, heads, q, k)` sum is never held
+whole. Rows are the ragged
 layout's order: the targets, then each place's lags in turn
 (`row_places`); rows that Chronos-2 repeats for long horizons
 repeat their place. The biases train beside the LoRA adapter as one of
@@ -56,6 +58,19 @@ __all__ = [
 
 BIAS_MODULE: Final = "series_bias"
 """Name of the bias module, PEFT's `modules_to_save` entry."""
+
+CHUNK_ELEMENTS = 2**24
+"""Most elements of the mask plus bias built at once in a layer's group
+attention (64 MB in fp32): the time steps are taken in chunks of this
+many `heads x rows x rows`. Group attention is independent across time
+steps, so the chunks give the same outputs, and each chunk's mask is one
+contiguous tensor, which lets PyTorch's memory-efficient attention
+kernel run where the device has one."""
+
+CHECKPOINT_CHUNKS = True
+"""Whether, while training, each chunk's group attention is recomputed in
+backward (`torch.utils.checkpoint`), so autograd keeps only its inputs and
+not the chunk's mask plus bias; the gradients are the same."""
 
 _STATE: Final = "_series_bias_state"
 """Attribute of a model with the bias holding the next batch's rows."""
@@ -219,18 +234,19 @@ def has_bias(model: Any) -> bool:
 
 
 def attach(model: Any, pairs: Sequence[str] = PAIRS) -> None:
-    """Add a zero bias to a Chronos-2 model and hook its group attention.
+    """Add a zero bias to a Chronos-2 model and wrap its group attention.
 
     One bias per kind of pair in `pairs` (`PAIRS`, or those an adapter
     holds, `adapter_pairs`).
 
-    Each `GroupSelfAttention`'s forward pre-hook adds its layer's bias to
-    the group mask, from the rows set by `assigned`. A block recomputed in
-    backward (gradient checkpointing) recomputes the bias from the same
-    rows, so they must stay assigned until backward is done; the bias is
-    then never held per layer between forward and backward.
+    Each `GroupSelfAttention`'s attention adds its layer's bias to the
+    group mask, from the rows set by `assigned`, over chunks of time steps
+    (`CHUNK_ELEMENTS`). A block recomputed in backward (gradient
+    checkpointing) recomputes the bias from the same rows, so they must
+    stay assigned until backward is done; the bias is then never held per
+    layer between forward and backward.
     """
-    from chronos.chronos2.layers import GroupSelfAttention
+    from chronos.chronos2.layers import AttentionOutput, GroupSelfAttention
 
     if has_bias(model):
         raise ValueError("the model already has the series bias")
@@ -249,31 +265,59 @@ def attach(model: Any, pairs: Sequence[str] = PAIRS) -> None:
             f"{len(groups)} group attention layers, not {config.num_layers}"
         )
 
-    def hook(layer: int) -> Callable[..., Any]:
-        def add(
-            _module: Any, args: tuple[Any, ...], kwargs: dict[str, Any]
+    def wrap(layer: int, attention: Any) -> Callable[..., Any]:
+        forward = attention.forward
+
+        def biased(
+            hidden_states: Any, mask: Any, *args: Any, **kwargs: Any
         ) -> Any:
+            import torch
+            from torch.utils.checkpoint import checkpoint
+
             rows = getattr(model, _STATE)["rows"]
             if rows is None:
-                return None
-            hidden = args[0]
-            mask = kwargs["attention_mask"]
-            n_rows, n = hidden.shape[0], rows.shape[-1]
+                return forward(hidden_states, mask, *args, **kwargs)
+            # Group attention runs along the rows: (time, rows, d_model).
+            n_rows, n = hidden_states.shape[1], rows.shape[-1]
             if n_rows % n:
                 raise ValueError(f"{n_rows} rows but places for {n}")
-            rows = rows.to(hidden.device).repeat_interleave(n_rows // n, dim=-1)
+            rows = rows.to(hidden_states.device).repeat_interleave(
+                n_rows // n, dim=-1
+            )
             module = getattr(model, BIAS_MODULE)
-            masks = pair_masks(rows[0], rows[1], module.pairs)
-            bias = module(layer, masks)
-            return args, {
-                **kwargs,
-                "attention_mask": mask + bias[None].to(mask.dtype),
-            }
+            bias = module(layer, pair_masks(rows[0], rows[1], module.pairs))
+            bias = bias[None].to(mask.dtype)
+            steps = hidden_states.shape[0]
+            size = max(1, CHUNK_ELEMENTS // bias[0].numel())
 
-        return add
+            def run(hidden: Any, chunk: Any) -> Any:
+                return forward(hidden, chunk + bias, *args, **kwargs)
+
+            def part(t: int) -> Any:
+                hidden = hidden_states[t : t + size]
+                chunk = mask[t : t + size] if mask.shape[0] > 1 else mask
+                if CHECKPOINT_CHUNKS and torch.is_grad_enabled():
+                    # Backward rebuilds the chunk's mask plus bias rather
+                    # than keeping it.
+                    return checkpoint(run, hidden, chunk, use_reentrant=False)
+                return run(hidden, chunk)
+
+            if size >= steps:
+                return part(0)
+            parts = [part(t) for t in range(0, steps, size)]
+            weights = [p.attn_weights for p in parts]
+            return AttentionOutput(
+                hidden_states=torch.cat([p.hidden_states for p in parts]),
+                attn_weights=(
+                    torch.cat(weights) if weights[0] is not None else None
+                ),
+            )
+
+        return biased
 
     for layer, group in enumerate(groups):
-        group.register_forward_pre_hook(hook(layer), with_kwargs=True)
+        attention = group.self_attention
+        attention.forward = wrap(layer, attention)
 
 
 @contextmanager
