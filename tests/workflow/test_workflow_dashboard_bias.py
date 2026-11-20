@@ -202,7 +202,7 @@ def test_each_run_shows_the_relations_it_logged(tmp_path):
         values = [[0.1, 0.2], [0.3, 0.4]]
         rels = {k: {"values": values} for k in ("same", "up", "down")}
         if extra:
-            rels["self_"] = {"values": values}
+            rels["across_"] = {"values": values}
         (tmp_path / key / "train" / "history.json").write_text(
             json.dumps([{"step": 100, "bias": rels}])
         )
@@ -212,8 +212,8 @@ def test_each_run_shows_the_relations_it_logged(tmp_path):
         r["key"]: {k for k, v in r["pts"].items() if v} for r in got["runs"]
     }
     assert held == {
-        "a": {"same", "up", "down", "self"},
+        "a": {"same", "up", "down", "across"},
         "b": {"same", "up", "down"},
     }
-    assert [p["key"] for p in got["pairs"]] == ["same", "up", "down", "self"]
-    assert got["col"]["self"] == bias.OTHER
+    assert [p["key"] for p in got["pairs"]] == ["same", "up", "down", "across"]
+    assert got["col"]["across"] == bias.OTHER
