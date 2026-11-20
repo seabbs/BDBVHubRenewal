@@ -103,13 +103,11 @@ draw_design <- function(grid, weeks = NULL) {
       weeks = weeks,
       n_places = n_places,
       n_ages = n_ages,
-      # The weekdays reports are made on: every day, Monday to Friday, two
-      # or three drawn days, or one drawn day.
       report_weekdays = switch(cell$report_days,
         daily = "all",
         weekdays = paste(week[1:5], collapse = ";"),
         fixed_days = paste(
-          week[sort(sample.int(7L, sample(2:3, 1L)))], collapse = ";"
+          week[sort(sample.int(5L, sample(2:3, 1L)))], collapse = ";"
         ),
         weekly = week[sample.int(7L, 1L)]
       )

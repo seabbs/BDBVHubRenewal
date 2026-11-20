@@ -13,7 +13,7 @@ test_that("categorical settings are drawn at the grid's shares", {
   expect_equal(share("revisions", "yes"), 0.3, tolerance = 0.03)
   expect_equal(share("observation", "poisson"), 0.2, tolerance = 0.03)
   expect_false(any(c("process", "gt_shape") %in% names(grid$factors)))
-  # One report-days factor (lead 13:25): no separate reporting or bunching.
+  # One report-days factor: no separate reporting or bunching.
   expect_false(any(c("reporting", "bunching") %in% names(grid$factors)))
   expect_false(any(grepl("^bunch", c(names(grid$distributions), names(grid$counts)))))
 })
@@ -118,7 +118,7 @@ test_that("every factor has a layer and aggregates are drawn from the grid", {
 
 test_that("a draw is redrawn only when it fails or reports too few cases", {
   grid <- test_grid()
-  # No sim QC thresholds (Sam, lead 13:25): size, weekly rises and mean
+  # No sim QC thresholds: size, weekly rises and mean
   # delays are left as drawn.
   expect_null(grid$qc)
   expect_false(exists("qc_reason", envir = asNamespace("nowcastfoundation")))
@@ -147,7 +147,7 @@ test_that("the reporting delay may vary by reference weekday", {
   expect_gt(v$delay_dow_sd, 0)
 })
 
-test_that("weekday effects are rare and mostly small (lead 13:24)", {
+test_that("weekday effects are rare and mostly small", {
   grid <- test_grid()
   share <- function(f) {
     w <- unlist(grid$factors[[f]])
@@ -177,6 +177,7 @@ test_that("each report-days level reports on its weekdays", {
     seen[[d$report_days]] <- c(seen[[d$report_days]], length(on))
     if (d$report_days == "daily") expect_equal(on, "all")
     if (d$report_days == "weekdays") expect_equal(on, week[1:5])
+    if (d$report_days == "fixed_days") expect_true(all(on %in% week[1:5]))
     if (d$report_days != "daily") expect_true(all(on %in% week))
   }
   expect_setequal(unique(seen$fixed_days), 2:3)

@@ -152,7 +152,7 @@ LORA_TARGETS = (
 
 
 BIAS_CODE = {
-    "src/bdbvhubrenewal/forecasters/series_bias.py": (
+    "packages/nowcastfoundation/src/nowcastfoundation/series_bias.py": (
         "packages/nowcastfoundation/src/nowcastfoundation/series_bias.py"
     ),
 }

@@ -265,7 +265,8 @@ def fit_coupling(scores: np.ndarray, method: str) -> dict[str, Any]:
     over every pair in the scores, shrunk towards zero (independence) by
     the Ledoit-Wolf intensity estimated from the pairs themselves
     (`_shrunk_correlation`). $s$ is floored at zero, as `couple`'s
-    exchangeable copula needs. No parameter is fixed in advance.
+    exchangeable copula needs, and both stay below 1. No parameter is
+    fixed in advance.
 
     Parameters
     ----------
@@ -309,7 +310,7 @@ def fit_coupling(scores: np.ndarray, method: str) -> dict[str, Any]:
     return {
         "method": method,
         "rho": float(np.clip(rho, -bound, bound)),
-        "s": float(np.clip(s, 0.0, 1.0)),
+        "s": float(np.clip(s, 0.0, bound)),
         "shrinkage_rho": shrink_rho,
         "shrinkage_s": shrink_s,
         "n_origins": int(n_origins),

@@ -50,12 +50,6 @@ def git_commit():
 # From simulate.smk.
 
 SIM = config["simulate"]
-# The sim QC's thresholds as scripts/sim_qc.py's options: the grid's `qc`,
-# none since Sam's 13:25 decision.
-SIM_QC_ARGS = " ".join(
-    f"--{k.replace('_', '-')} {v}"
-    for k, v in (simulator.read_grid(SIM["grid_file"]).get("qc") or {}).items()
-)
 REMOTE = LOCAL["REMOTE"]
 REMOTE_ROUNDS = f"{LOCAL['REMOTE_ROOT'] or LOCAL['ROOT']}/rounds"
 
