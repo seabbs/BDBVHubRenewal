@@ -189,14 +189,15 @@ simulate_outbreak <- function(grid, design, v, ctx) {
     parameters$expl_beta_sd <- array(v$reference_dow_sd)
   }
 
-  # Report date: day-of-week effects, or reports on given weekdays.
+  # Report date: every day (with a weekday effect, or none), or reports on
+  # given weekdays only.
   gc()
   structural <- NULL
   report_terms <- NULL
-  if (design$reporting == "daily") {
+  if (design$report_days == "daily") {
     if (design$report_dow == "yes") report_terms <- "(1 | day_of_week)"
   } else {
-    on <- strsplit(design$report_days, ";")[[1]]
+    on <- strsplit(design$report_weekdays, ";")[[1]]
     structural <- epinowcast::enw_structural_reporting_metadata(pobs)
     structural[, report := as.integer(weekdays(report_date) %in% on)]
     structural <- structural[, .(.group, date, report_date, report)]
@@ -214,15 +215,6 @@ simulate_outbreak <- function(grid, design, v, ctx) {
         report := 0L
       ]
     }
-  }
-  if (design$bunching == "yes") {
-    if (is.null(structural)) {
-      structural <- epinowcast::enw_structural_reporting_metadata(pobs)
-      structural[, report := 1L]
-    }
-    held <- bunch_dates(structural, v)
-    structural[report_date %in% held, report := 0L]
-    v$bunch_dates <- as.character(held)
   }
   report <- epinowcast::enw_report(
     non_parametric = as_formula(FALSE, report_terms),

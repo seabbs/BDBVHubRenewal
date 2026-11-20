@@ -95,7 +95,8 @@ draw_design <- function(grid, weeks = NULL) {
       n_ages <- min(n_ages, m %/% 2L)
     }
   }
-  days <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+  week <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+    "Saturday", "Sunday")
   c(
     list(grid = grid$name),
     cell,
@@ -103,12 +104,16 @@ draw_design <- function(grid, weeks = NULL) {
       weeks = weeks,
       n_places = n_places,
       n_ages = n_ages,
-      report_days = if (cell$reporting == "weekdays") {
-        k <- min(length(days), draw_count(grid, "report_days"))
-        paste(days[sort(sample.int(length(days), k))], collapse = ";")
-      } else {
-        "all"
-      }
+      # The weekdays reports are made on: every day, Monday to Friday, two
+      # or three drawn days, or one drawn day.
+      report_weekdays = switch(cell$report_days,
+        daily = "all",
+        weekdays = paste(week[1:5], collapse = ";"),
+        fixed_days = paste(
+          week[sort(sample.int(7L, sample(2:3, 1L)))], collapse = ";"
+        ),
+        weekly = week[sample.int(7L, 1L)]
+      )
     )
   )
 }
@@ -265,10 +270,6 @@ draw_values <- function(grid, design) {
   # Layer 4: the reporting system.
   v$reference_dow_sd <- ds("reference_dow_sd")
   v$dow_sd <- ds("dow_sd")
-  v$bunch_every <- ds("bunch_every")
-  n_bunch <- max(1L, round(weeks / v$bunch_every))
-  v$bunch_at <- sort(ds("bunch_at", n_bunch))
-  v$bunch_len <- draw_count(grid, "bunch_days", n_bunch)
   places <- if (design$shocks == "none") {
     integer(0)
   } else {
