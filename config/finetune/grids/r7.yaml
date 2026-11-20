@@ -44,11 +44,11 @@ floors:
   min_cases: 10
 # The sim QC's plausibility thresholds: a simulation past one is drawn
 # again in its batch (`qc_reason`), and the round's QC (scripts/sim_qc.py)
-# checks them again. Cases per stratum with cases (draws' median), the
-# largest week-on-week rise in weekly cases by reference date, and the
-# mean reporting delay.
+# checks them again. The largest week-on-week rise in weekly cases by
+# reference date, and the mean reporting delay. Size has no threshold: only
+# more reported cases in a stratum than its population is rejected, as an
+# impossible draw (#408 item 10).
 qc:
-  max_cases_per_stratum: 500000
   max_weekly_jump: 1000
   max_mean_delay_days: 35
 shares:

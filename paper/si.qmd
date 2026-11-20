@@ -414,7 +414,9 @@ Sampling distributions of the continuous simulation settings, read from the grid
 Outbreak length is drawn from a log-normal distribution with median 30 weeks, and is at least 4 weeks.
 A simulation that fails or reports fewer than 10 cases is redrawn with a new seed.
 Each simulation is checked against fixed thresholds, and one that fails is drawn again in its batch, so a round keeps 800 simulations.
-A simulation fails if its cases per stratum pass 500,000, if its weekly cases by reference date rise more than 1,000-fold in one week, or if its mean reporting delay passes 35 days.
+A simulation fails if a stratum reports more cases than its population, if its weekly cases by reference date rise more than 1,000-fold in one week, or if its mean reporting delay passes 35 days.
+The size check rejects only impossible draws, and outbreak size has no cap.
+The r7 rounds were also checked against a cap of 500,000 cases per stratum, which later rounds dropped.
 Before training, each round's simulations are checked again, and the trainer skips those that fail.
 No simulation is deleted.
 

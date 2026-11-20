@@ -15,6 +15,15 @@ test_that("a batch simulates outbreaks through epinowcast", {
   expect_setequal(unique(out$latent$outbreak), out$settings$outbreak)
   expect_true(all(c("infections", "onsets", "r", "reff", "date") %in% names(out$latent)))
   expect_true(all(out$counts$reference_date <= out$counts$report_date))
+  # Each stratum's population is recorded with its location, for the QC.
+  for (k in seq_len(nrow(out$settings))) {
+    where <- strsplit(out$settings$stratum_location[k], ";")[[1]]
+    size <- strsplit(as.character(out$settings$stratum_population[k]), ";")[[1]]
+    expect_equal(length(where), length(size))
+    seen <- unique(out$counts[outbreak == out$settings$outbreak[k] |
+      startsWith(outbreak, paste0(out$settings$outbreak[k], "-")), location])
+    expect_true(all(seen %in% where))
+  }
 })
 
 test_that("independent strata share the outbreak's dates", {
@@ -33,6 +42,8 @@ test_that("independent strata share the outbreak's dates", {
   skip_if(is.null(run$out), "no outbreak in this draw")
   first <- run$out$latent[, .(start = min(date), end = max(date)), by = location]
   expect_equal(data.table::uniqueN(first$start), 1L)
+  expect_equal(run$out$values$stratum_location, sprintf("P%02d", 1:3))
+  expect_length(run$out$values$stratum_population, 3L)
 })
 
 test_that("a draw reporting fewer than min_cases is drawn again", {

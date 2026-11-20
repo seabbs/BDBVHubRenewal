@@ -1,20 +1,21 @@
 """Check one round of simulations against fixed plausibility thresholds.
 
 Summarises each simulation of `ROUND_DIR/sims` (`summaries`) and excludes
-those past a threshold (`check`), each with its reason and evidence: cases
-per stratum (the median total over draws, over the strata with cases),
-the largest week-on-week rise in weekly cases by reference date, and the
-mean reporting delay. The thresholds and why they are set as they are
-live in the grid file (`qc`, the one `simulate.grid_file` names); the
-workflow passes them.
+those past a threshold (`check`), each with its reason and evidence: more
+cases in a stratum than its population (the median total over draws; only
+where the settings give each stratum's population), the largest
+week-on-week rise in weekly cases by reference date, and the mean
+reporting delay. Size has no other threshold (#408 item 10). The
+thresholds and why they are set as they are live in the grid file
+(`qc`, the one `simulate.grid_file` names); the workflow passes them.
 
 Records the input table, the exclusions (`excluded.csv`: simulation,
 reason, evidence), the thresholds (`decisions.json`) and a one-line
 summary in `ROUND_DIR/qc/`. Simulations are never deleted; the trainer
 skips the excluded ones. Run from the repo root:
 
-    uv run python scripts/sim_qc.py ROUND_DIR --max-cases-per-stratum N
-        --max-weekly-jump N --max-mean-delay-days N
+    uv run python scripts/sim_qc.py ROUND_DIR --max-weekly-jump N
+        --max-mean-delay-days N
 """
 
 from __future__ import annotations
@@ -23,11 +24,12 @@ import argparse
 import json
 import math
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
-LIMITS = ("max_cases_per_stratum", "max_weekly_jump", "max_mean_delay_days")
+LIMITS = ("max_weekly_jump", "max_mean_delay_days")
 """The thresholds `check` takes, each a required option."""
 
 CELL = [
@@ -50,6 +52,33 @@ CELL = [
     "delay_places",
     "strata_link",
 ]
+
+
+def cases_over_population(counts: pd.DataFrame, settings: Any) -> float:
+    """Return the largest ratio of a stratum's cases to its population.
+
+    Cases are each stratum's median total over draws. NaN unless the
+    settings give each stratum's location and population
+    (`stratum_location`, `stratum_population`, ";"-separated).
+    """
+    try:
+        where = str(settings["stratum_location"]).split(";")
+        size = [
+            float(x) for x in str(settings["stratum_population"]).split(";")
+        ]
+    except (KeyError, TypeError, ValueError):
+        return float("nan")
+    if len(where) != len(size):
+        return float("nan")
+    population = pd.Series(size, index=where)
+    cases = (
+        counts.groupby(["location", "outbreak"])["count"]
+        .sum()
+        .groupby("location")
+        .median()
+    )
+    ratio = cases / population.reindex(cases.index)
+    return float(ratio.max()) if ratio.notna().any() else float("nan")
 
 
 def summaries(sim_dir: Path) -> pd.DataFrame:
@@ -86,6 +115,7 @@ def summaries(sim_dir: Path) -> pd.DataFrame:
                     "cases_min": float(per_draw.min()),
                     "cases_max": float(per_draw.max()),
                     "strata_with_cases": c["location"].nunique(),
+                    "cases_over_population": cases_over_population(c, s),
                     "weeks": int(first.size),
                     "peak_weekly": float(first.max()),
                     "max_weekly_log_growth": float(growth.max())
@@ -106,22 +136,18 @@ def summaries(sim_dir: Path) -> pd.DataFrame:
 def check(table: pd.DataFrame, limits: dict[str, float]) -> pd.DataFrame:
     """Return the simulations past a threshold, with reason and evidence.
 
-    `table` is `summaries`' output; `limits` holds `max_cases_per_stratum`,
-    `max_weekly_jump` and `max_mean_delay_days`. A simulation past several
+    `table` is `summaries`' output; `limits` holds `max_weekly_jump` and
+    `max_mean_delay_days`. A simulation past several
     thresholds is listed once per threshold.
     """
     table = table.reset_index(drop=True)
-    per_stratum = table["cases_median"] / table["strata_with_cases"].clip(
-        lower=1
-    )
     jump = math.log(limits["max_weekly_jump"])
     rules = [
         (
-            per_stratum > limits["max_cases_per_stratum"],
-            f"cases per stratum above {limits['max_cases_per_stratum']:,.0f}",
+            table["cases_over_population"] > 1,
+            "cases in a stratum above its population",
             lambda i: (
-                f"cases_per_stratum={per_stratum[i]:.0f}, "
-                f"strata_with_cases={table['strata_with_cases'][i]}"
+                f"cases_over_population={table['cases_over_population'][i]:.2f}"
             ),
         ),
         (
