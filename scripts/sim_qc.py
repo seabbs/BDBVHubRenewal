@@ -42,7 +42,7 @@ CELL = [
     "delay_family",
     "delay_form",
     "delay_change",
-    "reporting",
+    "report_days",
     "shocks",
     "mixing",
     "imports",
