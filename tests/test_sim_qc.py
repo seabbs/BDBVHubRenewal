@@ -15,9 +15,12 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import sim_qc  # noqa: E402
 from test_finetune_chronos import _sim_dir  # noqa: E402
 
-LIMITS = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())[
+# The thresholds live in the run's grid file (`qc`), which the workflow
+# config names (`simulate.grid_file`).
+GRID_FILE = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())[
     "simulate"
-]["qc"]
+]["grid_file"]
+LIMITS = yaml.safe_load((ROOT / GRID_FILE).read_text())["qc"]
 
 
 def _table(**changes):
