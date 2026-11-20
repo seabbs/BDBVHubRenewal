@@ -42,8 +42,8 @@ import numpy as np
 import pandas as pd
 
 from bdbvhubrenewal.forecasters import series_bias
-from bdbvhubrenewal.forecasters.chain import start_weeks
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
+from nowcastbaselines.chain import start_weeks
+from nowcastbaselines.randomwalk import RandomWalk
 from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,

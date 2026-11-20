@@ -6,11 +6,7 @@ import jax
 import numpy as np
 import pytest
 
-from bdbvhubrenewal.forecasters.walk import (
-    random_walk,
-    walk_noise,
-    walk_variance,
-)
+from nowcastbaselines.walk import random_walk, walk_noise, walk_variance
 
 
 def test_steps_are_cumulative_within_a_sample() -> None:

@@ -142,7 +142,7 @@ def zone_target(task: ForecastTask) -> pd.DataFrame:
 
 def _zone_walk_task(task: ForecastTask) -> ForecastTask:
     """Return the random walks' zone task, which finds the silent zones."""
-    from bdbvhubrenewal.forecasters.zones import zone_task
+    from nowcastbaselines.zones import zone_task
     from nowcastutils.snapshots import weekly_counts
 
     daily = _daily_zones()

@@ -342,7 +342,7 @@ def zones_need_not_sum(name: str | None) -> bool:
     the country (`own_national`). Every other model splits its provinces
     across the zones, so its zones must sum to them.
     """
-    from bdbvhubrenewal.forecasters.zones import walks_own_zones
+    from nowcastbaselines.zones import walks_own_zones
 
     return walks_own_zones(name) or own_national(name)
 
@@ -353,7 +353,7 @@ def _zone_rows(
     """Tidy zone samples, and with `check` check they sum to provinces."""
     if zones is None or zones.empty:
         return prov.iloc[:0]
-    from bdbvhubrenewal.forecasters.zones import check_zone_coherence
+    from nowcastbaselines.zones import check_zone_coherence
 
     zone = zones[list(prov.columns)].copy()
     zone["target_end_date"] = zone["target_end_date"].astype(str)

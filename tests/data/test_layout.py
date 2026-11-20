@@ -117,7 +117,7 @@ def test_model_code_imports_no_hub_zone_module() -> None:
     for module in (
         "nowcastutils.base",
         "bdbvhubrenewal.forecasters.foundation",
-        "bdbvhubrenewal.forecasters.zones",
+        "nowcastbaselines.zones",
         "bdbvhubrenewal.forecasters.renewal",
         "nowcasteval.nowcast",
     ):

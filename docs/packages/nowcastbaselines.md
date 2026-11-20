@@ -3,7 +3,7 @@
 The random walk and the random walk nowcast, for weekly counts revised as later releases report more cases.
 { .page-subtitle }
 
-Until the package split, nowcastbaselines is `bdbvhubrenewal.forecasters` (`randomwalk`, `randomwalknowcast`) with `bdbvhubrenewal.baselinenowcast` ([Packages](index.md)).
+Until the package split, nowcastbaselines is `bdbvhubrenewal.forecasters` (`randomwalk`, `randomwalknowcast`) with `nowcastbaselines.baselinenowcast` ([Packages](index.md)).
 
 ## Install
 

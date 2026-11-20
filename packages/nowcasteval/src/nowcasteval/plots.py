@@ -948,7 +948,7 @@ def baseline_share(
     pandas.DataFrame
         Columns `location`, `age` (days since onset) and `share`.
     """
-    from bdbvhubrenewal.forecasters.chain import Settings, build_origin
+    from nowcastbaselines.chain import Settings, build_origin
     from nowcastutils.snapshots import snapshot_arrays
 
     snap = snapshot_arrays(daily, vintage, tuple(locations))
@@ -1369,7 +1369,7 @@ def plot_delay_check(
         A place's label says at how many ages it uses its own delay
         factor and not its parent's.
     """
-    from bdbvhubrenewal.forecasters.chain import Settings, build_origin
+    from nowcastbaselines.chain import Settings, build_origin
     from nowcastutils.snapshots import snapshot_arrays
 
     snap = snapshot_arrays(daily, vintage, tuple(locations))

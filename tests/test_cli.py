@@ -880,7 +880,7 @@ def test_cli_fit_store_archives_what_each_model_submits(
     flat_model: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from bdbvhubrenewal.evaluation import store
-    from bdbvhubrenewal.forecasters.zones import with_zones
+    from nowcastbaselines.zones import with_zones
     from nowcastutils import base
 
     flat = base._REGISTRY[flat_model].factory

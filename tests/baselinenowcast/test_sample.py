@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from bnc_helpers import Case, read, read_ints
 
-from bdbvhubrenewal.baselinenowcast import (
+from nowcastbaselines.baselinenowcast import (
     apply_delay,
     baselinenowcast,
     combine_obs_with_pred,

@@ -29,11 +29,7 @@ from pathlib import Path
 import pandas as pd
 
 from bdbvhubrenewal.data.simulate import SimulatedOutbreak
-from bdbvhubrenewal.forecasters.zones import (
-    ZoneAllocator,
-    zone_draws,
-    zone_task,
-)
+from nowcastbaselines.zones import ZoneAllocator, zone_draws, zone_task
 from nowcasteval.backtest import (
     BacktestConfig,
     energy_tasks,

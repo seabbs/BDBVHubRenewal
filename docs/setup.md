@@ -57,8 +57,8 @@ from bdbvhubrenewal.data import (
 from nowcasteval import backtest as bt
 from nowcasteval.nowcast import relative_crps, release_backtest
 from bdbvhubrenewal.forecasters import NATIONAL
-from bdbvhubrenewal.forecasters.chain import Settings
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk, RandomWalkNowcast
+from nowcastbaselines.chain import Settings
+from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcasteval.plots import plot_location_grid
 
 # Settings to change.

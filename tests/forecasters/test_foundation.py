@@ -25,7 +25,6 @@ from bdbvhubrenewal.forecasters import (
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters.chain import NoWalkSpread
 from bdbvhubrenewal.forecasters.foundation import (
     LAYOUTS,
     MAX_LAG,
@@ -34,8 +33,9 @@ from bdbvhubrenewal.forecasters.foundation import (
     hub_triangle,
     quantile_draws,
 )
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalk
-from bdbvhubrenewal.forecasters.zones import (
+from nowcastbaselines.chain import NoWalkSpread
+from nowcastbaselines.randomwalk import RandomWalk
+from nowcastbaselines.zones import (
     ZoneAllocator,
     check_zone_coherence,
     zones_for_model,

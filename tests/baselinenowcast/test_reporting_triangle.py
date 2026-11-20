@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from bnc_helpers import Case, from_na, read, read_vec
 
-from bdbvhubrenewal.baselinenowcast import (
+from nowcastbaselines.baselinenowcast import (
     allocate_reference_times,
     apply_reporting_structure,
     get_reporting_structure,
