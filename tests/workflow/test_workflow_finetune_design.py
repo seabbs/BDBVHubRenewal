@@ -70,12 +70,12 @@ def test_a_round_is_800_simulations():
     )
 
 
-def _trainer_args(tmp_path, finetune=None):
+def _trainer_args(tmp_path, finetune=None, machine=""):
     """The trainer's arguments in the dry run of segment n100."""
     pytest.importorskip("snakemake")
     snakemake = Path(sys.executable).parent / "snakemake"
     local = tmp_path / "local.env"
-    local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
+    local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n{machine}")
     target = tmp_path / "checkpoints" / "slots" / "train" / "n100"
     # The real validation blocks are made from data a test run lacks.
     real = tmp_path / "real-validation.pkl"
@@ -198,3 +198,16 @@ def test_development_scores_no_bdbv_blocks(tmp_path):
     assert "zero_shot_real" not in config
     args = _trainer_args(tmp_path, {"real_validation": None})
     assert "--real-validation" not in args
+
+
+def test_a_machine_sets_the_checkpoint_threshold(tmp_path):
+    pytest.importorskip("pandas")
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import finetune_stream as fs
+
+    args = fs.build_parser().parse_args(_trainer_args(tmp_path))
+    assert args.checkpoint_above is None
+    args = fs.build_parser().parse_args(
+        _trainer_args(tmp_path, machine="CHECKPOINT_ABOVE=0\n")
+    )
+    assert args.checkpoint_above == 0
