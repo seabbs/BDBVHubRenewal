@@ -9,7 +9,8 @@ import pandas as pd
 import pytest
 
 from bdbvhub.models import get_model
-from bdbvhubrenewal.data.germany import (
+from nowcasteval.backtest import run_forecasts
+from nowcastgermany.data import (
     HORIZONS,
     OFFSETS,
     hub_forecasts,
@@ -20,7 +21,6 @@ from bdbvhubrenewal.data.germany import (
     place_code,
     read_triangle,
 )
-from nowcasteval.backtest import run_forecasts
 from nowcastutils.base import NATIONAL
 
 FIXTURE = (

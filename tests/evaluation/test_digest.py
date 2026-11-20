@@ -18,7 +18,7 @@ def _digest_tree(root: Path) -> dict[str, Path]:
     for name in ("pyproject.toml", "uv.lock"):
         shutil.copy(ROOT / name, root / name)
     files = {
-        "code": root / "src/bdbvhubrenewal/evaluation/a.py",
+        "code": root / "packages/bdbvhub/src/bdbvhub/a.py",
         "report": root / "packages/bdbvhub/src/bdbvhub/reporting/report.py",
         "data": root / "data/target.csv",
         "sources": root / "data/sources.json",
@@ -49,7 +49,7 @@ def test_backtest_digest_follows_what_a_backtest_reads(
         before = after
 
 
-SOURCES = [ROOT / "src", *sorted(ROOT.glob("packages/*/src"))]
+SOURCES = sorted(ROOT.glob("packages/*/src"))
 
 
 def _module(rel: str) -> str:
@@ -224,7 +224,7 @@ def test_model_code_follows_imports_into_workspace_packages(
     # the walk resolves each top-level package to its own source folder.
     from bdbvhub.store.digest import model_code
 
-    for folder in ("src", "packages"):
+    for folder in ("packages",):
         shutil.copytree(
             ROOT / folder,
             tmp_path / folder,

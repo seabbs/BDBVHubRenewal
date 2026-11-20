@@ -12,8 +12,8 @@ import pandas as pd
 import pytest
 
 from bdbvhub.cli import main
-from bdbvhubrenewal.evaluation.germany import load_germany_config
 from nowcasteval import plots
+from nowcastgermany.evaluation import load_germany_config
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "reporting" / "fixtures"

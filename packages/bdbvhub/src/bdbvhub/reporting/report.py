@@ -58,8 +58,6 @@ from bdbvhub.reporting.zone_nowcast import (
     zone_nowcast,
 )
 from bdbvhub.store.store import ZONE_FITS_FILE, samplers, stored_models
-from bdbvhubrenewal.evaluation.germany import load_germany_config
-from bdbvhubrenewal.reporting.germany import germany_page
 from nowcasteval.backtest import (
     BacktestConfig,
     check_distinct,
@@ -124,6 +122,8 @@ from nowcasteval.scoresummary import (
 from nowcasteval.scoring import summarise_scores
 from nowcasteval.tables import filter_table, markdown_table, sortable_table
 from nowcastfoundation.simulate import simulate_outbreak
+from nowcastgermany.evaluation import load_germany_config
+from nowcastgermany.reporting import germany_page
 from nowcastrenewal.bvd import BVD_REPO, bvd_for_vintage
 from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
 from nowcastutils.base import NATIONAL, ForecastTask, get_model, list_models

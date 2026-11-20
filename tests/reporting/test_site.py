@@ -124,7 +124,7 @@ def test_the_pages_list_only_shown_models() -> None:
 
 
 def test_hidden_models_leave_the_germany_page(tmp_path: Path) -> None:
-    from bdbvhubrenewal.reporting import germany
+    from nowcastgermany import reporting as germany
 
     pd.DataFrame(
         {

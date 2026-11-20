@@ -11,7 +11,7 @@ Fine-tuning runs locally, not on CI.
 ## Install
 
 ```sh
-uv add "bdbvhubrenewal @ git+https://github.com/seabbs/bdbv-hub-modelling"
+uv add "nowcastfoundation @ git+https://github.com/seabbs/bdbv-hub-modelling#subdirectory=packages/nowcastfoundation"
 uv add chronos-forecasting==2.3.2 "peft>=0.17" "torch>=2.7"
 ```
 

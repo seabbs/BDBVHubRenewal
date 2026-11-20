@@ -63,7 +63,7 @@ def tasks(
 def _copy_repo(tmp_path: Path) -> Path:
     for name in ("pyproject.toml", "uv.lock"):
         shutil.copy(ROOT / name, tmp_path / name)
-    for folder in ("src", "packages"):
+    for folder in ("packages",):
         shutil.copytree(
             ROOT / folder,
             tmp_path / folder,

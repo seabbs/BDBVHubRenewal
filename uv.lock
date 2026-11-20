@@ -23,6 +23,7 @@ members = [
     "nowcastbaselines",
     "nowcasteval",
     "nowcastfoundation",
+    "nowcastgermany",
     "nowcastrenewal",
     "nowcastutils",
 ]
@@ -210,6 +211,7 @@ dependencies = [
     { name = "nowcastbaselines" },
     { name = "nowcasteval" },
     { name = "nowcastfoundation" },
+    { name = "nowcastgermany" },
     { name = "nowcastrenewal" },
     { name = "nowcastutils" },
     { name = "numpy" },
@@ -226,6 +228,7 @@ requires-dist = [
     { name = "nowcastbaselines", editable = "packages/nowcastbaselines" },
     { name = "nowcasteval", editable = "packages/nowcasteval" },
     { name = "nowcastfoundation", editable = "packages/nowcastfoundation" },
+    { name = "nowcastgermany", editable = "packages/nowcastgermany" },
     { name = "nowcastrenewal", editable = "packages/nowcastrenewal" },
     { name = "nowcastutils", editable = "packages/nowcastutils" },
     { name = "numpy", specifier = ">=1.26,<3" },
@@ -238,7 +241,7 @@ requires-dist = [
 [[package]]
 name = "bdbvhubrenewal"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "bdbvhub" },
     { name = "jax" },
@@ -246,6 +249,7 @@ dependencies = [
     { name = "nowcastbaselines" },
     { name = "nowcasteval" },
     { name = "nowcastfoundation" },
+    { name = "nowcastgermany" },
     { name = "nowcastrenewal" },
     { name = "nowcastutils" },
     { name = "numpy" },
@@ -299,6 +303,7 @@ requires-dist = [
     { name = "nowcastbaselines", editable = "packages/nowcastbaselines" },
     { name = "nowcasteval", editable = "packages/nowcasteval" },
     { name = "nowcastfoundation", editable = "packages/nowcastfoundation" },
+    { name = "nowcastgermany", editable = "packages/nowcastgermany" },
     { name = "nowcastrenewal", editable = "packages/nowcastrenewal" },
     { name = "nowcastutils", editable = "packages/nowcastutils" },
     { name = "numpy", specifier = ">=1.26,<3" },
@@ -2290,6 +2295,29 @@ requires-dist = [
     { name = "nowcastutils", editable = "packages/nowcastutils" },
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "pandas", specifier = ">=2.1,<4" },
+]
+
+[[package]]
+name = "nowcastgermany"
+version = "0.1.0"
+source = { editable = "packages/nowcastgermany" }
+dependencies = [
+    { name = "nowcasteval" },
+    { name = "nowcastfoundation" },
+    { name = "nowcastutils" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "scipy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "nowcasteval", editable = "packages/nowcasteval" },
+    { name = "nowcastfoundation", editable = "packages/nowcastfoundation" },
+    { name = "nowcastutils", editable = "packages/nowcastutils" },
+    { name = "numpy", specifier = ">=1.26,<3" },
+    { name = "pandas", specifier = ">=2.1,<4" },
+    { name = "scipy", specifier = ">=1.11,<2" },
 ]
 
 [[package]]

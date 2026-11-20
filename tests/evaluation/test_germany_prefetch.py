@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.germany import read_triangle
-from bdbvhubrenewal.evaluation.germany import germany_forecasts
 from nowcastfoundation import forecaster as foundation
+from nowcastgermany.data import read_triangle
+from nowcastgermany.evaluation import germany_forecasts
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("torch") is None, reason="needs torch"
@@ -83,7 +83,7 @@ def test_tasks_are_built_once_and_reused(
 ) -> None:
     # Every checkpoint scores the same German tasks: built once into
     # `tasks_dir`, then read back, with the same forecasts.
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     triangle = read_triangle(FIXTURE)
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _Pipeline())

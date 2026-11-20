@@ -32,7 +32,7 @@ __all__ = [
 ]
 
 REPORT_ONLY: Final = (
-    "src/bdbvhubrenewal/reporting/germany.py",
+    "packages/nowcastgermany/src/nowcastgermany/reporting.py",
     "packages/nowcastfoundation/src/nowcastfoundation/live_checkpoint_page.py",
     "packages/nowcasteval/src/nowcasteval/nowcast_plots.py",
     "packages/bdbvhub/src/bdbvhub/reporting/report.py",
@@ -44,12 +44,12 @@ REPORT_ONLY: Final = (
 """Modules only the `report` command runs, so no backtest reads them."""
 
 BACKTEST_INPUTS: Final = (
-    "src/bdbvhubrenewal",
     "packages/nowcastutils/src",
     "packages/nowcasteval/src",
     "packages/nowcastbaselines/src",
     "packages/nowcastfoundation/src",
     "packages/nowcastrenewal/src",
+    "packages/nowcastgermany/src",
     "packages/bdbvhub/src",
     "config",
     "data",

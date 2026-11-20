@@ -9,4 +9,4 @@ Plot data, forecasts and scores, and write the docs figures and tables. See [Get
 
 ::: bdbvhub.reporting.report
 
-::: bdbvhubrenewal.reporting.germany
+::: nowcastgermany.reporting

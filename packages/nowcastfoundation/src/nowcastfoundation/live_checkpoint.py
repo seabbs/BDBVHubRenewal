@@ -111,7 +111,7 @@ def newest(scores: pd.DataFrame, run: str) -> dict[str, tuple[str, int]]:
 
 def live_tags(scores: pd.DataFrame, run: str = LIVE_RUN) -> dict[str, int]:
     """Return each release tag of the live run with its simulations."""
-    from bdbvhubrenewal.evaluation.germany_store import release_tag
+    from nowcastgermany.store import release_tag
 
     rows = scores.loc[scores["run"] == run, ["checkpoint", "outbreaks"]]
     rows = rows.drop_duplicates("checkpoint")

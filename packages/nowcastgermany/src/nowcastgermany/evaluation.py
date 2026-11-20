@@ -13,7 +13,7 @@ The first half is for developing and checking our setup; the second is
 held out for the paper (`nowcast_dates`).
 
 `germany_forecasts` runs our models on the tasks of each nowcast date
-(`bdbvhubrenewal.data.germany.nowcast_tasks`), for the sums ending on
+(`nowcastgermany.data.nowcast_tasks`), for the sums ending on
 every day from 0 to 28 days back (`HORIZONS`, one task pair per weekday
 offset), and keeps their quantiles at
 `QUANTILE_LEVELS`: a model's own where it gives them, else those of its
@@ -46,7 +46,11 @@ import pandas as pd
 from scipy.stats import norm
 
 from bdbvhub.models import get_model, list_models
-from bdbvhubrenewal.data.germany import (
+from nowcasteval.marginals import forecast_quantiles
+from nowcasteval.nowcast import rolling_truth
+from nowcasteval.scoring import relative_skill, score_quantiles
+from nowcastfoundation.forecaster import FoundationModel, prefetch
+from nowcastgermany.data import (
     ALL_AGES,
     GERMANY,
     HORIZONS,
@@ -57,10 +61,6 @@ from bdbvhubrenewal.data.germany import (
     level,
     nowcast_tasks,
 )
-from nowcasteval.marginals import forecast_quantiles
-from nowcasteval.nowcast import rolling_truth
-from nowcasteval.scoring import relative_skill, score_quantiles
-from nowcastfoundation.forecaster import FoundationModel, prefetch
 from nowcastutils.base import ForecastTask
 
 log = logging.getLogger(__name__)
@@ -414,7 +414,7 @@ def germany_forecasts(
         Registered model names.
     triangle : pandas.DataFrame
         Counts by Meldedatum and report date
-        (`bdbvhubrenewal.data.germany.read_triangle`).
+        (`nowcastgermany.data.read_triangle`).
     dates : sequence of str
         Nowcast dates.
     n_samples, seed : int

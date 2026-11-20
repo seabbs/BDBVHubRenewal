@@ -268,6 +268,7 @@ KEY_PACKAGES: Final = (
     "nowcastbaselines",
     "nowcastfoundation",
     "nowcastrenewal",
+    "nowcastgermany",
     "bdbvhub",
 )
 """The workspace's packages, whose import lines leave a fit key: their

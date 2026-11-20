@@ -12,8 +12,9 @@ import pytest
 from scipy.stats import norm
 
 from bdbvhub.models import list_models
-from bdbvhubrenewal.data.germany import HORIZONS, hub_target, read_triangle
-from bdbvhubrenewal.evaluation.germany import (
+from nowcasteval.nowcast import rolling_truth
+from nowcastgermany.data import HORIZONS, hub_target, read_triangle
+from nowcastgermany.evaluation import (
     PAPER_COLUMNS,
     QUANTILE_LEVELS,
     SCORE_COLUMNS,
@@ -28,7 +29,6 @@ from bdbvhubrenewal.evaluation.germany import (
     team_forecasts,
     with_truth,
 )
-from nowcasteval.nowcast import rolling_truth
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = (

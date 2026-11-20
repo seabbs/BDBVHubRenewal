@@ -326,15 +326,15 @@ def germany_sensitivity(
     """
     from pathlib import Path
 
-    from bdbvhubrenewal.data.germany import (
+    from nowcasteval.nowcast import rolling_truth
+    from nowcastgermany import evaluation as de
+    from nowcastgermany.data import (
         AGE_GROUPS,
         hub_forecasts,
         hub_target,
         hub_triangle,
         nowcast_tasks,
     )
-    from bdbvhubrenewal.evaluation import germany as de
-    from nowcasteval.nowcast import rolling_truth
 
     cfg = de.load_germany_config(config_path)
     triangle = hub_triangle(Path(data) / Path(cfg.triangle).name)

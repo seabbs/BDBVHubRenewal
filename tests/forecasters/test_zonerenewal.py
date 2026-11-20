@@ -241,7 +241,7 @@ def test_zone_code_keys_the_models_that_run_it(
 
     for name in ("pyproject.toml", "uv.lock"):
         shutil.copy(ROOT / name, tmp_path / name)
-    for folder in ("src", "packages"):
+    for folder in ("packages",):
         shutil.copytree(
             ROOT / folder,
             tmp_path / folder,

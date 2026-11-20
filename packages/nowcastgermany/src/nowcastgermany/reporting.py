@@ -14,7 +14,7 @@ date on or after it (`held_out_leaks`), which CI checks again on the built
 site (`scripts/check_germany_site.py`).
 The configured hidden models start switched off.
 The fine-tuned models' forecasts come from the store
-(`bdbvhubrenewal.evaluation.germany_store`); the page names the checkpoint
+(`nowcastgermany.store`); the page names the checkpoint
 shown (`germany-ft.md`).
 """
 
@@ -35,17 +35,17 @@ from bdbvhub.reporting.explorer import (
     write_explorer,
 )
 from bdbvhub.reporting.site import site_models
-from bdbvhubrenewal.data.germany import PLACE_NAMES, level
-from bdbvhubrenewal.evaluation.germany import (
+from nowcasteval.plots import DASHES, MODEL_COLOURS, MODEL_STYLE, model_style
+from nowcasteval.scorechart import write_score_chart
+from nowcasteval.scoresummary import summary_html, summary_rows
+from nowcasteval.tables import sortable_table
+from nowcastgermany.data import PLACE_NAMES, level
+from nowcastgermany.evaluation import (
     TEAM_NAMES,
     GermanyConfig,
     nowcast_dates,
     relative_scores,
 )
-from nowcasteval.plots import DASHES, MODEL_COLOURS, MODEL_STYLE, model_style
-from nowcasteval.scorechart import write_score_chart
-from nowcasteval.scoresummary import summary_html, summary_rows
-from nowcasteval.tables import sortable_table
 
 __all__ = [
     "LEVELS",

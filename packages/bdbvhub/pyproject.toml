@@ -19,10 +19,13 @@ dependencies = [
   "nowcastbaselines",
   "nowcastfoundation",
   "nowcastrenewal",
+  "nowcastgermany",
 ]
 
 [project.scripts]
 bdbvhub = "bdbvhub.cli:main"
+# The command's name before the packages split.
+bdbvhubrenewal = "bdbvhub.cli:main"
 
 [tool.uv.sources]
 nowcastutils = { workspace = true }
@@ -30,6 +33,7 @@ nowcasteval = { workspace = true }
 nowcastbaselines = { workspace = true }
 nowcastfoundation = { workspace = true }
 nowcastrenewal = { workspace = true }
+nowcastgermany = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.8,<0.14"]

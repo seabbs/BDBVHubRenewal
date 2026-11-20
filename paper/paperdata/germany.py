@@ -2,7 +2,7 @@
 
 `bdbvhubrenewal germany-backtest`, `germany-teams` and `germany-paper`
 write our models' and the hub teams' nowcasts as the paper's long table,
-`paper-forecasts.csv.gz` (`bdbvhubrenewal.evaluation.germany`).
+`paper-forecasts.csv.gz` (`nowcastgermany.evaluation`).
 `forecasts` reads one or more of them. `observations` gives the 7-day sums
 as each day's data gave them, from the hub's reporting triangle, with
 age groups as strata of Germany as in the forecasts.
@@ -14,8 +14,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pandas as pd
-from bdbvhubrenewal.data.germany import GERMANY, STATES, hub_triangle
-from bdbvhubrenewal.evaluation.germany import asof_sums, paper_forecasts
+from nowcastgermany.data import GERMANY, STATES, hub_triangle
+from nowcastgermany.evaluation import asof_sums, paper_forecasts
 
 __all__ = ["extra_table", "forecasts", "observations"]
 

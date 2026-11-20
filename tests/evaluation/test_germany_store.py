@@ -10,8 +10,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.germany import load_germany_config
-from bdbvhubrenewal.evaluation.germany_store import (
+from nowcastfoundation.checkpoint import GERMANY_UNIT
+from nowcastgermany.evaluation import load_germany_config
+from nowcastgermany.store import (
     STORED_MODELS,
     choose_checkpoint,
     development_rows,
@@ -19,7 +20,6 @@ from bdbvhubrenewal.evaluation.germany_store import (
     release_tag,
     write_stored,
 )
-from nowcastfoundation.checkpoint import GERMANY_UNIT
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = load_germany_config(ROOT / "config" / "germany.toml")

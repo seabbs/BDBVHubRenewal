@@ -5,8 +5,6 @@ on:
     branches: [main]
     paths:
       - 'paper/**'
-      - 'src/bdbvhubrenewal/evaluation/**'
-      - 'src/bdbvhubrenewal/data/**'
       - 'packages/**'
       - 'config/germany.toml'
       - 'workflow/flowlib/**'
@@ -16,8 +14,6 @@ on:
   pull_request:
     paths:
       - 'paper/**'
-      - 'src/bdbvhubrenewal/evaluation/**'
-      - 'src/bdbvhubrenewal/data/**'
       - 'packages/**'
       - 'config/germany.toml'
       - 'workflow/flowlib/**'

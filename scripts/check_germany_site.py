@@ -13,8 +13,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from bdbvhubrenewal.evaluation.germany import load_germany_config
-from bdbvhubrenewal.reporting.germany import held_out_leaks
+from nowcastgermany.evaluation import load_germany_config
+from nowcastgermany.reporting import held_out_leaks
 
 ROOT = Path(__file__).resolve().parents[1]
 

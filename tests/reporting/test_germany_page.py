@@ -8,11 +8,11 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.germany import (
+from nowcastgermany.evaluation import (
     SCORE_COLUMNS,
     load_germany_config,
 )
-from bdbvhubrenewal.reporting.germany import germany_page
+from nowcastgermany.reporting import germany_page
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = load_germany_config(ROOT / "config" / "germany.toml")
@@ -166,8 +166,8 @@ def test_page_says_when_not_run(tmp_path: Path) -> None:
 
 
 def test_every_model_has_its_own_colour_and_dash() -> None:
-    from bdbvhubrenewal.evaluation.germany import TEAM_NAMES
-    from bdbvhubrenewal.reporting.germany import model_styles
+    from nowcastgermany.evaluation import TEAM_NAMES
+    from nowcastgermany.reporting import model_styles
 
     models = [*CONFIG.models, *TEAM_NAMES.values()]
     styles = model_styles(models, CONFIG.models)
@@ -257,7 +257,7 @@ def test_the_page_says_when_no_ft_checkpoint_is_stored(
 
 
 def test_the_page_writes_no_held_out_date(tmp_path: Path) -> None:
-    from bdbvhubrenewal.reporting.germany import held_out_leaks
+    from nowcastgermany.reporting import held_out_leaks
 
     res = tmp_path / "germany"
     _scores(res)
@@ -270,7 +270,7 @@ def test_the_page_writes_no_held_out_date(tmp_path: Path) -> None:
 
 
 def test_the_leak_check_finds_held_out_dates(tmp_path: Path) -> None:
-    from bdbvhubrenewal.reporting.germany import held_out_leaks
+    from nowcastgermany.reporting import held_out_leaks
 
     split = CONFIG.split_date
     ok = tmp_path / "ok.json"
@@ -294,7 +294,7 @@ def test_the_leak_check_finds_held_out_dates(tmp_path: Path) -> None:
 def test_the_page_refuses_to_write_a_held_out_date(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhubrenewal.reporting import germany as page
+    from nowcastgermany import reporting as page
 
     res = tmp_path / "germany"
     _scores(res)
@@ -357,7 +357,7 @@ def test_the_summary_names_no_truth_vintage(tmp_path: Path) -> None:
 
 
 def test_the_leak_check_covers_truth_vintages(tmp_path: Path) -> None:
-    from bdbvhubrenewal.reporting.germany import held_out_leaks
+    from nowcastgermany.reporting import held_out_leaks
 
     path = tmp_path / "scoresummary-germany-latest.json"
     path.write_text(json.dumps({"releases": ["2022-03-21"]}))

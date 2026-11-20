@@ -1975,8 +1975,8 @@ def _compare_hub(args: argparse.Namespace) -> int:
 
 
 def _germany_backtest(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.data.germany import hub_triangle
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
+    from nowcastgermany.data import hub_triangle
 
     config = de.load_germany_config(args.config)
     dates = de.nowcast_dates(config, held_out=args.held_out)
@@ -2005,8 +2005,8 @@ def _germany_backtest(args: argparse.Namespace) -> int:
 
 
 def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
-    from bdbvhubrenewal.evaluation import germany as de
     from nowcasteval import pairing
+    from nowcastgermany import evaluation as de
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -2047,8 +2047,8 @@ def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
 
 
 def _germany_teams(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.data.germany import hub_triangle
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
+    from nowcastgermany.data import hub_triangle
 
     config = de.load_germany_config(args.config)
     data = Path(args.data)
@@ -2071,8 +2071,8 @@ def _germany_teams(args: argparse.Namespace) -> int:
 
 
 def _germany_asof(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.data.germany import hub_triangle
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
+    from nowcastgermany.data import hub_triangle
 
     config = de.load_germany_config(args.config)
     triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
@@ -2085,7 +2085,7 @@ def _germany_asof(args: argparse.Namespace) -> int:
 
 
 def _germany_paper(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     config = de.load_germany_config(args.config)
     res = Path(args.results)
@@ -2109,10 +2109,10 @@ def _germany_paper(args: argparse.Namespace) -> int:
 
 
 def _germany_ft_load(args: argparse.Namespace) -> int:
-    from bdbvhubrenewal.evaluation import germany as de
-    from bdbvhubrenewal.evaluation import germany_store as gs
     from nowcastfoundation import forecaster as foundation
     from nowcastfoundation import live_checkpoint as lc
+    from nowcastgermany import evaluation as de
+    from nowcastgermany import store as gs
 
     config = de.load_germany_config(args.config)
     spec = foundation.finetuned_spec(args.finetune)
@@ -2239,7 +2239,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "zone-backtest":
         return _zone_backtest(args)
     if args.command == "germany-fetch":  # pragma: no cover - network
-        from bdbvhubrenewal.evaluation.germany import (
+        from nowcastgermany.evaluation import (
             fetch_germany,
             load_germany_config,
         )

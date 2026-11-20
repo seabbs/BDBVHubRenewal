@@ -17,4 +17,4 @@ Load the hub data, build forecast vintages and simulate outbreaks to test models
 
 ::: bdbvhub.data.zones
 
-::: bdbvhubrenewal.data.germany
+::: nowcastgermany.data
