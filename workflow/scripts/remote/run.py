@@ -156,6 +156,19 @@ def elsewhere(cfg: dict, worker: compute.Worker, rec: dict) -> int:
     return rc
 
 
+def tell(runner_log: Path, logs: list[str]) -> None:
+    """Append the runner's log to a failed job's logs.
+
+    The log Snakemake's error names then says why, even when the runner
+    refused the job before it ran.
+    """
+    text = runner_log.read_text() if runner_log.is_file() else ""
+    for path in logs:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with Path(path).open("a") as log:
+            log.write(f"\n[remote runner]\n{text}")
+
+
 def main() -> int:
     """Run job `sys.argv[1]`, writing its exit code; return it."""
     jid = sys.argv[1]
@@ -178,10 +191,14 @@ def main() -> int:
         else:
             rc = elsewhere(cfg, worker, rec)
     finally:
+        if rc != 0:
+            say(f"exit {rc}")
+            tell(state / f"{jid}.log", files(rec["job"].get("log")))
         tmp = state / f"{jid}.exit.tmp"
         tmp.write_text(f"{rc}\n")
         tmp.replace(state / f"{jid}.exit")
-        say(f"exit {rc}")
+        if rc == 0:
+            say(f"exit {rc}")
     return rc
 
 
