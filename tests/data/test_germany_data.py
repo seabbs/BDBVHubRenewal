@@ -299,3 +299,25 @@ def test_hub_target_is_each_7_day_sum_as_each_release_reports_it(
 )
 def test_levels_are_the_paper_s(place: str, want: str) -> None:
     assert level(place) == want
+
+
+def test_tasks_take_the_horizons_asked_for(triangle: pd.DataFrame) -> None:
+    # Days after the nowcast date are forecast weeks; each offset keeps
+    # the horizons whose weeks end on its weekday.
+    horizons = tuple(range(28, -29, -1))
+    tasks = nowcast_tasks(
+        triangle, NOWCAST, n_samples=20, seed=1, horizons=horizons
+    )
+    by_offset = [tasks[2 * k] for k in range(7)]
+    for k, task in enumerate(by_offset):
+        ref = task.reference_date
+        got = [
+            (dt.date.fromisoformat(w) - ref).days for w in task.target_end_dates
+        ]
+        assert got == [h for h in sorted(horizons) if (-h - k) % 7 == 0]
+    ahead = {
+        (dt.date.fromisoformat(w) - t.reference_date).days
+        for t in by_offset
+        for w in t.target_end_dates
+    }
+    assert max(ahead) == 28
