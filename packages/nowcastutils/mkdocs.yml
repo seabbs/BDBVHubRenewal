@@ -1,0 +1,11 @@
+INHERIT: ../mkdocs-base.yml
+site_name: nowcastutils
+site_description: Releases, snapshots, location hierarchies, the forecast task and sample trajectories.
+site_url: https://samabbott.co.uk/bdbv-hub-modelling/nowcastutils/
+edit_uri: edit/main/packages/nowcastutils/docs/
+
+nav:
+  - Getting started: index.md
+  - How to: how-to.md
+  - Reference: reference.md
+  - How it is used in the workflow: workflow.md

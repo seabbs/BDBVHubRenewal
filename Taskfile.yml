@@ -101,6 +101,18 @@ tasks:
       - task: getting-started
       - task: paper
       - uv run mkdocs build --strict
+      - task: package-docs
+
+  package-docs:
+    desc: Build each package's own docs site into _site/<package>/ (as CI does)
+    cmds:
+      - for: {var: SITES}
+        cmd: >-
+          uv run mkdocs build --strict -f {{.ITEM}}
+          -d "$PWD/_site/$(basename "$(dirname {{.ITEM}})")"
+    vars:
+      SITES:
+        sh: ls packages/*/mkdocs.yml
 
 
   serve:
