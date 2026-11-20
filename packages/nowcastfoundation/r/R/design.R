@@ -98,7 +98,6 @@ draw_design <- function(grid, weeks = NULL) {
   week <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
     "Saturday", "Sunday")
   c(
-    list(grid = grid$name),
     cell,
     list(
       weeks = weeks,

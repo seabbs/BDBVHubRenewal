@@ -1,4 +1,4 @@
-# Grid r7 of the fine-tuning simulations: the simulator engine
+# The grid of the fine-tuning simulations: the simulator engine
 # (packages/nowcastfoundation/r) reads every factor, sampling distribution,
 # share and floor from here, and the paper's grid tables and figures read
 # the same file. Four layers: infections; observation (infection to
@@ -16,7 +16,6 @@
 #   definition, base plus a Poisson with `mean`; `rates`: Poisson means.
 # - `floors`: the only floors on drawn values, and the fewest reported
 #   cases a simulation may have before it is drawn again.
-name: r7
 epinowcast_sha: e084b080
 # The simulator's memory: at most `max_strata` strata (places by ages) up to
 # 28 weeks, fewer in longer series. Independent strata are each a

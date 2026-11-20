@@ -1,5 +1,5 @@
 test_that("categorical settings are drawn at the grid's shares", {
-  grid <- r7()
+  grid <- test_grid()
   set.seed(1)
   cells <- lapply(1:20000, function(i) draw_cell(grid))
   share <- function(k, level) mean(vapply(cells, `[[`, "", k) == level)
@@ -19,7 +19,7 @@ test_that("categorical settings are drawn at the grid's shares", {
 })
 
 test_that("every distribution is named, has a layer and a reason", {
-  grid <- r7()
+  grid <- test_grid()
   known <- c("lognormal", "normal", "halfnormal", "gamma", "beta", "uniform")
   d <- grid$distributions
   expect_true(all(vapply(d, function(x) x$dist %in% known, TRUE)))
@@ -32,7 +32,7 @@ test_that("every distribution is named, has a layer and a reason", {
 })
 
 test_that("draws are not truncated", {
-  grid <- r7()
+  grid <- test_grid()
   set.seed(1)
   x <- draw_setting(grid, "delay_mean", 1e5)
   expect_true(min(x) < 1 && max(x) > 21)
@@ -40,7 +40,7 @@ test_that("draws are not truncated", {
 })
 
 test_that("series run a median 30 weeks and at least 4", {
-  grid <- r7()
+  grid <- test_grid()
   set.seed(2)
   w <- vapply(1:3000, function(i) draw_design(grid)$weeks, 1)
   expect_gte(min(w), 4)
@@ -49,7 +49,7 @@ test_that("series run a median 30 weeks and at least 4", {
 })
 
 test_that("values keep the gamma shape below 2 and periods a month", {
-  grid <- r7()
+  grid <- test_grid()
   set.seed(3)
   for (g in 0:400) {
     d <- draw_design(grid)
@@ -65,7 +65,7 @@ test_that("values keep the gamma shape below 2 and periods a month", {
 })
 
 test_that("late places are among the places with cases", {
-  grid <- r7()
+  grid <- test_grid()
   set.seed(4)
   for (g in 0:300) {
     d <- draw_design(grid)
@@ -76,7 +76,7 @@ test_that("late places are among the places with cases", {
 })
 
 test_that("a draw is redrawn if it reports fewer than the grid's minimum", {
-  grid <- r7()
+  grid <- test_grid()
   expect_equal(grid$floors$min_cases, 10)
   expect_equal(redraw_reason(9.5, grid), "fewer than 10 cases")
   expect_equal(redraw_reason(0, grid), "fewer than 10 cases")
@@ -84,7 +84,7 @@ test_that("a draw is redrawn if it reports fewer than the grid's minimum", {
 })
 
 test_that("every simulated system fits the trainer's block budget whole", {
-  grid <- r7()
+  grid <- test_grid()
   set.seed(11)
   locs <- leaves <- numeric(0)
   for (i in 1:5000) {
@@ -106,7 +106,7 @@ test_that("a system's locations are the country, group totals and leaves", {
 })
 
 test_that("every factor has a layer and aggregates are drawn from the grid", {
-  grid <- r7()
+  grid <- test_grid()
   expect_setequal(names(grid$factor_layers), names(grid$factors))
   layers <- c("strata", "infections", "observation", "delays", "reporting")
   expect_true(all(unlist(grid$factor_layers) %in% layers))
@@ -117,7 +117,7 @@ test_that("every factor has a layer and aggregates are drawn from the grid", {
 })
 
 test_that("a draw is redrawn only when it fails or reports too few cases", {
-  grid <- r7()
+  grid <- test_grid()
   # No sim QC thresholds (Sam, lead 13:25): size, weekly rises and mean
   # delays are left as drawn.
   expect_null(grid$qc)
@@ -127,7 +127,7 @@ test_that("a draw is redrawn only when it fails or reports too few cases", {
 })
 
 test_that("strata of one outbreak can share its length and calendar offset", {
-  grid <- r7()
+  grid <- test_grid()
   set.seed(12)
   d <- draw_design(grid, weeks = 11L)
   expect_equal(d$weeks, 11L)
@@ -136,7 +136,7 @@ test_that("strata of one outbreak can share its length and calendar offset", {
 })
 
 test_that("the reporting delay may vary by reference weekday", {
-  grid <- r7()
+  grid <- test_grid()
   expect_setequal(names(grid$factors$delay_dow), c("no", "yes"))
   expect_equal(grid$factor_layers$delay_dow, "delays")
   d <- grid$distributions$delay_dow_sd
@@ -148,7 +148,7 @@ test_that("the reporting delay may vary by reference weekday", {
 })
 
 test_that("weekday effects are rare and mostly small (lead 13:24)", {
-  grid <- r7()
+  grid <- test_grid()
   share <- function(f) {
     w <- unlist(grid$factors[[f]])
     unname(w["yes"] / sum(w))
@@ -166,7 +166,7 @@ test_that("weekday effects are rare and mostly small (lead 13:24)", {
 })
 
 test_that("each report-days level reports on its weekdays", {
-  grid <- r7()
+  grid <- test_grid()
   week <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
     "Saturday", "Sunday")
   set.seed(8)

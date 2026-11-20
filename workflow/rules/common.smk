@@ -108,9 +108,9 @@ def batch_files(wc):
     return {"arrived": rules.await_batch.output[0].format(**wc)}
 
 
-def grid_name():
-    """The grid the simulator runs (its config's `name`)."""
-    return simulator.grid_name(GRID_FILE)
+def grid_id():
+    """The grid file the simulator runs, as its manifest identifier."""
+    return simulator.grid_id(GRID_FILE)
 
 
 # From finetune.smk.
@@ -452,7 +452,7 @@ def write_record(input, output, params, wildcards):
         round_=r,
         seed=s,
         kind="block",
-        grid=grid_name(),
+        grid=grid_id(),
         commit=git_commit(),
         draws=SIM["draws"],
         batch=SIM["batch"],
@@ -490,7 +490,7 @@ def push_record(input, output, params, wildcards):
         round_=r,
         seed=s,
         kind="block",
-        grid=grid_name(),
+        grid=grid_id(),
         commit=git_commit(),
         draws=SIM["draws"],
         batch=SIM["batch"],
