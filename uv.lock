@@ -2242,6 +2242,8 @@ dependencies = [
     { name = "nowcastutils" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "pyyaml" },
+    { name = "scipy" },
 ]
 
 [package.metadata]
@@ -2252,6 +2254,8 @@ requires-dist = [
     { name = "nowcastutils", editable = "packages/nowcastutils" },
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "pandas", specifier = ">=2.1,<4" },
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "scipy", specifier = ">=1.11,<2" },
 ]
 
 [[package]]
