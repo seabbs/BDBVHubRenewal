@@ -147,15 +147,8 @@ def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
     assert ft.SIMULATOR[0] == ft.workflow_grid_file()
     monkeypatch.setattr(ft, "SIMULATOR", ft.SIMULATOR)
     monkeypatch.setattr(ft, "CODE", ft.CODE)
-    # use_design sets the run's design globally: put it all back after.
-    for name in (
-        "DESIGN",
-        "SOURCE_SHARES",
-        "CADENCES",
-        "WHOLE_SYSTEM",
-        "PARENTS",
-    ):
-        monkeypatch.setattr(ft, name, getattr(ft, name))
+    # use_design sets the run's parents globally: put them back after.
+    monkeypatch.setattr(ft, "PARENTS", ft.PARENTS)
     ft.use_design("r7")
     assert ft.SIMULATOR[0] == "config/finetune/grids/r7.yaml"
     assert "config/finetune/grids/r7.yaml" in ft.CODE

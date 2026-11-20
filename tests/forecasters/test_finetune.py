@@ -614,3 +614,30 @@ def test_a_late_parent_lags_by_its_drawn_days() -> None:
     # Whole days, at least one, around the median of 7.
     assert min(lags) >= 1
     assert 5 <= np.median(lags) <= 9
+
+
+def test_unallocated_thinning_keeps_each_cumulative_within_the_country() -> (
+    None
+):
+    # A place's kept count, cumulated by report date, never goes negative
+    # nor above the country's: removals take back only kept reports.
+    from nowcastfoundation.finetune import country_counts
+
+    rows = []
+    for k, onset in enumerate(pd.date_range("2026-09-01", periods=200)):
+        onset_rows = [(1, 0), (-1, 1)] if k % 2 else [(2, 0), (-2, 2), (3, 4)]
+        for n, delay in onset_rows:
+            report = onset + pd.Timedelta(days=delay)
+            rows.append(("A", onset, report, n))
+    counts = pd.DataFrame(
+        rows, columns=["location", "reference_date", "report_date", "count"]
+    )
+    places, total = country_counts(
+        counts, "unallocated", np.random.default_rng(1)
+    )
+    assert total.equals(counts)
+    keys = ["location", "reference_date"]
+    kept = places.sort_values("report_date").groupby(keys)["count"].cumsum()
+    full = counts.sort_values("report_date").groupby(keys)["count"].cumsum()
+    assert (kept >= 0).all()
+    assert (kept <= full.loc[kept.index]).all()

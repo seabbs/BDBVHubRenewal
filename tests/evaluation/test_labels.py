@@ -232,12 +232,12 @@ def test_dashboard_colour_maps_are_shared_and_distinct() -> None:
 
     from nowcasteval import labels
 
-    # Every relation a run may train; layouts as the trainer's r6 design.
+    # Every relation a run may train; layouts as the trainer's block design.
     assert list(labels.RELATION_COLOURS) == ["self", "same", "up", "down"]
     sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
     import finetune_chronos as ft
 
-    assert set(labels.LAYOUT_COLOURS) == set(ft.DESIGNS["r6"]["source_shares"])
+    assert set(labels.LAYOUT_COLOURS) == set(ft.BLOCK_DESIGN["source_shares"])
     for colours in (
         labels.RELATION_COLOURS,
         labels.LAYOUT_COLOURS,

@@ -12,8 +12,12 @@ import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-UNMARKED = "r5"
-"""The grid of a release whose notes name none: r5's came before marks."""
+UNMARKED = "unmarked"
+"""The grid of a release whose notes name none: an earlier grid's, from
+before releases were marked, so no grid uploads into it."""
+
+RETIRED = "retired"
+"""The owner of a round an earlier grid used (`retired_rounds`)."""
 
 
 def resolve(ft: dict[str, Any], table: Mapping[str, Any]) -> dict[str, Any]:
@@ -38,8 +42,17 @@ def resolve(ft: dict[str, Any], table: Mapping[str, Any]) -> dict[str, Any]:
     return ft
 
 
-def owner(round_: int, table: Mapping[str, Any]) -> str | None:
-    """Return the grid a round belongs to, or None for an unlisted round."""
+def owner(
+    round_: int,
+    table: Mapping[str, Any],
+    retired: Mapping[str, int] | None = None,
+) -> str | None:
+    """Return the grid a round belongs to, or None for an unlisted round.
+
+    A round in `retired` (`first` to `last`) is `RETIRED`'s.
+    """
+    if retired and retired["first"] <= round_ <= retired["last"]:
+        return RETIRED
     for grid, entry in table.items():
         own = (
             *entry["rounds"],
@@ -53,11 +66,14 @@ def owner(round_: int, table: Mapping[str, Any]) -> str | None:
 
 
 def check_release(
-    rounds: Iterable[int], grid: str, table: Mapping[str, Any]
+    rounds: Iterable[int],
+    grid: str,
+    table: Mapping[str, Any],
+    retired: Mapping[str, int] | None = None,
 ) -> None:
     """Raise if `grid`'s simulator would release another grid's round."""
     for r in rounds:
-        other = owner(int(r), table)
+        other = owner(int(r), table, retired)
         if other is not None and other != grid:
             raise ValueError(
                 f"round {r} is grid {other}'s; the simulator is grid "
@@ -66,6 +82,6 @@ def check_release(
 
 
 def release_grid(notes: str) -> str:
-    """Return the grid a release's notes name (`Grid r6.`), else r5."""
+    """Return the grid a release's notes name (`Grid r7.`), else `UNMARKED`."""
     found = re.search(r"\bGrid (r\d+)\.", notes or "")
     return found.group(1) if found else UNMARKED

@@ -17,6 +17,7 @@ from bdbvhubrenewal.forecasters import ForecastTask, get_model
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastfoundation import forecaster as foundation
 from nowcastfoundation import series_bias
+from nowcastfoundation.backends import chronos2
 from nowcastfoundation.forecaster import (
     FoundationModel,
     HubTriangle,
@@ -102,7 +103,7 @@ def test_a_total_row_joins_its_places_bias_group():
 def test_inference_rows_carry_the_total_rows_places():
     tri = daily_tri()
     group = layout_block(tri, "ragged", PLACES, 10, period=week_rows(tri))
-    place, parent = foundation._group_rows(group)
+    place, parent = chronos2._group_rows(group)
     assert list(place[:4]) == [0, 1, 0, 1]
     assert list(parent[:4]) == [-1, 0, -1, 0]
     # The lags, in Chronos-2's sorted row order, keep their place.
