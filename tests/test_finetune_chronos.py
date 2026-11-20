@@ -1402,14 +1402,15 @@ def test_blocks_are_whole_systems_never_cut(monkeypatch):
         assert got
         # The whole system, or the country alone; never a subset.
         assert set(got) == {whole, (NATIONAL,)}
-        # A system over the series cap is skipped and said, not cut.
+        # No block is skipped for its size (Sam, 2026-11-20: skipping
+        # biases training): a large system is kept whole.
         monkeypatch.setattr(ft, "MAX_SERIES", 10)
         empty: list[str] = []
         blocks = outbreak_blocks(
             counts, places, np.random.default_rng(0), 3, empty=empty
         )
-        assert all(b["places"] == (NATIONAL,) for b in blocks)
-        assert any("over the series cap" in e for e in empty)
+        assert any(b["places"] == whole for b in blocks)
+        assert not any("series cap" in e for e in empty)
     finally:
         ft.PARENTS = None
 

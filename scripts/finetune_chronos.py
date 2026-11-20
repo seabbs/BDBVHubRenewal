@@ -730,13 +730,6 @@ def outbreak_blocks(
                 if empty is not None:
                     empty.append(f"{source} cut {j}: {', '.join(places)}")
                 continue
-            if block["n_targets"] + block["n_covariates"] > MAX_SERIES:
-                if empty is not None:
-                    empty.append(
-                        f"{source} cut {j}: {len(places)} places over "
-                        f"the series cap ({MAX_SERIES})"
-                    )
-                continue
             if block["start"] < 2:
                 continue
             if QUIET_MIN_CASES is not None and quiet(
