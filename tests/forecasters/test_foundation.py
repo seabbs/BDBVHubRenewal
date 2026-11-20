@@ -284,14 +284,16 @@ def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
     assert complete["target"].shape[0] == n_places
     assert "future_covariates" not in complete
     ragged, horizon = seen["ragged"]
-    # The targets are the hub-target series only; the lag series are
-    # covariates, with no copy of a target, of the places with cases.
-    assert ragged["target"].shape[0] == n_places
+    # The targets are the hub-target series and, for the daily source,
+    # each place's 7-day rolling sums; the lag series are covariates of
+    # every place, those with no cases too, as the fine-tuned model has.
+    rows = 2 if source == "daily" else 1
+    assert ragged["target"].shape[0] == rows * n_places
     future = ragged["future_covariates"]
     assert ragged["past_covariates"].keys() == future.keys()
     lagged = {name.rsplit("_lag_", 1)[0] for name in future}
-    assert lagged == _with_cases(task)
-    assert len(lagged) < n_places
+    assert lagged == set(ragged["places"])
+    assert _with_cases(task) < lagged
     assert len(future) == len(lagged) * lags
     for name, values in future.items():
         d = int(name.rsplit("_", 1)[1])
