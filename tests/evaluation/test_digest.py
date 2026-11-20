@@ -149,7 +149,9 @@ def test_model_code_leaves_out_other_models() -> None:
     from bdbvhubrenewal.evaluation.digest import model_code
 
     code = set(model_code("randomwalk", ROOT))
-    assert "src/bdbvhubrenewal/forecasters/renewal.py" not in code
+    assert (
+        "packages/nowcastrenewal/src/nowcastrenewal/forecaster.py" not in code
+    )
     assert (
         "packages/nowcastbaselines/src/nowcastbaselines/randomwalk.py" in code
     )

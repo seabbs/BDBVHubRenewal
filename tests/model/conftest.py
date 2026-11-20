@@ -13,9 +13,9 @@ from bdbvhubrenewal.data import (  # noqa: E402
     PROVINCE_POPULATIONS,
 )
 from bdbvhubrenewal.data.delays import hub_delay_pmf  # noqa: E402
-from bdbvhubrenewal.model import MAIN  # noqa: E402
-from bdbvhubrenewal.model.inputs import vintage_from_tables  # noqa: E402
 from nowcastfoundation.simulate import simulate_outbreak  # noqa: E402
+from nowcastrenewal.model import MAIN  # noqa: E402
+from nowcastrenewal.model.inputs import vintage_from_tables  # noqa: E402
 
 # Vintage dates as days after the simulation start (each a Saturday).
 VINTAGE_DAYS = (166, 206)

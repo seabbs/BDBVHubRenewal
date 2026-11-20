@@ -6,7 +6,7 @@
   with `chain` (the daily chain ladder), `pooling`, `obs` and `walk`.
 - `renewal`: the renewal variants, the per-province `renewalsp`, and the
   adapter from a `ForecastTask` to the PyRenew model in
-  `bdbvhubrenewal.model`.
+  `nowcastrenewal.model`.
 - `foundation`: the pretrained Chronos-2 model on two layouts of the hub
   target's releases.
 - `zonerenewal`: `renewal` and `renewalbvd` fitted on health zones, with
@@ -20,10 +20,10 @@ To add a variant, write a class with `name` and `forecast(task)` and call
 `register_model` in its module, then import that module here.
 """
 
-from bdbvhubrenewal.forecasters.renewal import VARIANTS, RenewalModel
-from bdbvhubrenewal.forecasters.zonerenewal import ZoneRenewalModel
 from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcastfoundation.forecaster import FoundationModel
+from nowcastrenewal.forecaster import VARIANTS, RenewalModel
+from nowcastrenewal.zones import ZoneRenewalModel
 from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,

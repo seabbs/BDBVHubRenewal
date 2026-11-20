@@ -124,7 +124,7 @@ stratum_values <- function(grid, structure, n, name, probability = FALSE) {
   )
 }
 
-# Log R of a path on `n` days: r6's shapes on log R, the weekly walk
+# Log R of a path on `n` days: the shapes on log R, the weekly walk
 # around R = 1 (endemic), or a start at the amplitude decaying onto that
 # walk (an early outbreak brought under control).
 path_log_r <- function(n, kind, v) {
@@ -257,13 +257,13 @@ renewal_infections <- function(start, gt, log_r, population, mixing = NULL,
   list(infections = out, r = r, reff = reff, susceptible = left)
 }
 
-# r7's expected onsets (ascertained infections) on the generation time's
-# span plus `n` days, for `simulate_outbreak`. Strata weights are r6's
-# (`stratum_sd`, quiet places none). Each place's population is split over
+# Expected onsets (ascertained infections) on the generation time's
+# span plus `n` days, for `simulate_outbreak`. Strata weights are
+# drawn (`stratum_sd`, quiet places none). Each place's population is split over
 # its ages by their weights. An early window starts each stratum with
 # cases from a seed on the last day before it (at least 1); an endemic or
 # established one runs at the drawn level over the span. Late places,
-# r6's import kinds (in units of the seed or level) and a trickle of
+# the import kinds (in units of the seed or level) and a trickle of
 # imports into every stratum with cases come in as imports. Returns the
 # onsets, the infections and the values with each stratum's population
 # and the attack rate added.

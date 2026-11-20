@@ -8,7 +8,7 @@ from pyrenew.deterministic import DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 from pyrenew.randomvariable import DistributionalVariable
 
-from bdbvhubrenewal.model import (
+from nowcastrenewal.model import (
     HazardDelay,
     NonCentredRandomWalk,
     PooledInitialValue,

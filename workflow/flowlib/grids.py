@@ -1,44 +1,30 @@
-"""Each simulation grid's rounds, so no two grids share a round.
+"""The grid's rounds, so no round is simulated twice.
 
-A round's number sets its seeds and its release (`sims-r<N>`), so a grid
-that reused another's rounds would draw the same seeds and overwrite its
-published batches. `grid_rounds` in workflow/config.yaml gives each grid
-its training rounds, validation and test rounds and training sources.
+A round's number sets its seeds and its release (`sims-r<N>`), so
+simulating a round again would draw the same seeds and overwrite its
+published batches. `grid_rounds` in workflow/config.yaml gives the grid's
+training rounds, validation and test rounds and training sources;
+`retired_rounds` gives the rounds of the grid's earlier versions.
 """
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-UNMARKED = "unmarked"
-"""The grid of a release whose notes name none: an earlier grid's, from
-before releases were marked, so no grid uploads into it."""
+GRID = "grid"
+"""The owner of one of the grid's rounds (`grid_rounds`)."""
 
 RETIRED = "retired"
-"""The owner of a round an earlier grid used (`retired_rounds`)."""
+"""The owner of a round an earlier version of the grid used
+(`retired_rounds`)."""
 
 
 def resolve(ft: dict[str, Any], table: Mapping[str, Any]) -> dict[str, Any]:
-    """Fill a run's unset rounds, validation round and sources from its grid.
-
-    Raises
-    ------
-    ValueError
-        If the run's grid has no entry and a setting is unset.
-    """
-    keys = ("rounds", "validation_round", "sources")
-    unset = [k for k in keys if ft.get(k) is None]
-    if not unset:
-        return ft
-    if ft["grid"] not in table:
-        raise ValueError(
-            f"grid {ft['grid']} has no entry in grid_rounds; "
-            f"set finetune {', '.join(unset)} or add it"
-        )
-    for key in unset:
-        ft[key] = table[ft["grid"]][key]
+    """Fill a run's unset rounds, validation round and sources."""
+    for key in ("rounds", "validation_round", "sources"):
+        if ft.get(key) is None:
+            ft[key] = table[key]
     return ft
 
 
@@ -47,41 +33,31 @@ def owner(
     table: Mapping[str, Any],
     retired: Mapping[str, int] | None = None,
 ) -> str | None:
-    """Return the grid a round belongs to, or None for an unlisted round.
+    """Return who a round belongs to, or None for an unlisted round.
 
-    A round in `retired` (`first` to `last`) is `RETIRED`'s.
+    A round in `retired` (`first` to `last`) is `RETIRED`'s, and one of
+    the grid's rounds is `GRID`'s.
     """
     if retired and retired["first"] <= round_ <= retired["last"]:
         return RETIRED
-    for grid, entry in table.items():
-        own = (
-            *entry["rounds"],
-            entry["validation_round"],
-            entry.get("test_round"),
-            entry.get("topup_round"),
-        )
-        if round_ in own:
-            return grid
-    return None
+    own = (
+        *table["rounds"],
+        table["validation_round"],
+        table.get("test_round"),
+        table.get("topup_round"),
+    )
+    return GRID if round_ in own else None
 
 
 def check_release(
     rounds: Iterable[int],
-    grid: str,
     table: Mapping[str, Any],
     retired: Mapping[str, int] | None = None,
 ) -> None:
-    """Raise if `grid`'s simulator would release another grid's round."""
+    """Raise if the simulator would release a retired round."""
     for r in rounds:
-        other = owner(int(r), table, retired)
-        if other is not None and other != grid:
+        if owner(int(r), table, retired) == RETIRED:
             raise ValueError(
-                f"round {r} is grid {other}'s; the simulator is grid "
-                f"{grid}'s, so releasing it would overwrite sims-r{r}"
+                f"round {r} is an earlier grid's, so releasing it would "
+                f"overwrite sims-r{r}"
             )
-
-
-def release_grid(notes: str) -> str:
-    """Return the grid a release's notes name (`Grid r7.`), else `UNMARKED`."""
-    found = re.search(r"\bGrid (r\d+)\.", notes or "")
-    return found.group(1) if found else UNMARKED

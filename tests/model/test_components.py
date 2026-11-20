@@ -11,7 +11,7 @@ from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 from pyrenew.randomvariable import DistributionalVariable
 
-from bdbvhubrenewal.model import (
+from nowcastrenewal.model import (
     CensoredPMF,
     FixedTimeVarying,
     HazardDelay,
@@ -27,7 +27,7 @@ from bdbvhubrenewal.model import (
     onset_expectations,
     pooled_walk,
 )
-from bdbvhubrenewal.model.observation import backsample
+from nowcastrenewal.model.observation import backsample
 
 from .numpy_reference import (
     expected_imputed_onsets,
@@ -369,7 +369,7 @@ def test_censored_pmf_matches_primarycensored(family, mean, cv):
 
 
 def test_onsets_are_infections_convolved_with_the_incubation_period():
-    from bdbvhubrenewal.model.observation import OnsetStreams
+    from nowcastrenewal.model.observation import OnsetStreams
 
     eta = incubation_period()
     streams = OnsetStreams(
@@ -402,7 +402,7 @@ def test_censored_pmf_rv_gives_the_closed_form_at_its_parameters():
 
 
 def test_censored_pmf_rv_samples_its_mean_and_sd():
-    from bdbvhubrenewal.model.observation import OnsetStreams
+    from nowcastrenewal.model.observation import OnsetStreams
 
     rv = CensoredPMF(
         "incubation",
@@ -469,8 +469,8 @@ def test_hazard_delay_smoothness_prior_allows_real_fits():
 
 def test_generation_interval_matches_bvdoutbreaksize():
     # BVDOutbreakSize's prior means (priors.jl): mean 15.3, SD 9.3 days.
-    from bdbvhubrenewal.model.model import GI_MEAN, GI_SD, generation_interval
     from nowcastfoundation.simulate import SimulationSettings
+    from nowcastrenewal.model.model import GI_MEAN, GI_SD, generation_interval
 
     assert (GI_MEAN, GI_SD) == (15.3, 9.3)
     np.testing.assert_allclose(

@@ -49,4 +49,3 @@ __all__ = [
     "submission",
     "to_hub_table",
 ]
-__version__ = "0.1.0"

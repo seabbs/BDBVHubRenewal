@@ -1,6 +1,6 @@
 #' Read a simulation grid
 #'
-#' @param path A grid config file (YAML), as `config/finetune/grids/r7.yaml`.
+#' @param path A grid config file (YAML), as `config/finetune/grid.yaml`.
 #' @return The grid as a list: `factors`, `distributions`, `shares`,
 #'   `rates`, `counts`, `floors`, `constants` and the rest of the file.
 #' @export

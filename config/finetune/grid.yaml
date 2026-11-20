@@ -1,9 +1,9 @@
-# Grid r7 of the fine-tuning simulations: the simulator engine
+# The grid of the fine-tuning simulations: the simulator engine
 # (packages/nowcastfoundation/r) reads every factor, sampling distribution,
 # share and floor from here, and the paper's grid tables and figures read
 # the same file. Four layers: infections; observation (infection to
 # reference event, ascertainment, count noise); reporting delays; and the
-# reporting system (report days, bunching, shocks, revisions).
+# reporting system (report days, shocks, revisions).
 #
 # - `factors`: the categorical settings, each a categorical distribution
 #   over its levels (weights; a level with weight k is k times as likely
@@ -16,7 +16,6 @@
 #   definition, base plus a Poisson with `mean`; `rates`: Poisson means.
 # - `floors`: the only floors on drawn values, and the fewest reported
 #   cases a simulation may have before it is drawn again.
-name: r7
 epinowcast_sha: e084b080
 # The simulator's memory: at most `max_strata` strata (places by ages) up to
 # 28 weeks, fewer in longer series. Independent strata are each a
@@ -42,15 +41,9 @@ floors:
   # A draw reporting fewer cases than this (over its draws' mean) is drawn
   # again, as are draws that error.
   min_cases: 10
-# The sim QC's plausibility thresholds: a simulation past one is drawn
-# again in its batch (`qc_reason`), and the round's QC (scripts/sim_qc.py)
-# checks them again. The largest week-on-week rise in weekly cases by
-# reference date, and the mean reporting delay. Size has no threshold: only
-# more reported cases in a stratum than its population is rejected, as an
-# impossible draw (#408 item 10).
-qc:
-  max_weekly_jump: 1000
-  max_mean_delay_days: 35
+# No sim QC thresholds (Sam, lead 13:25): a draw is drawn again only if it
+# errors or reports fewer than `floors$min_cases` cases. That cases never
+# exceed a stratum's population (without variants) is a simulator test.
 shares:
   controlled: 0.5      # early outbreaks brought towards R = 1
   drift: 0.3           # non-endemic settings with a slow drift in R
@@ -66,7 +59,6 @@ counts:
   place_lag_days: {base: 0, mean: 10}
   mixing_switch_days: {base: 7, mean: 7}
   import_pulses: {base: 1, mean: 1}
-  bunch_days: {base: 1, mean: 0.5}
   shock_places: {base: 1, mean: 0.5}
   shocks_per_place: {base: 1, mean: 0.5}
   shock_weeks: {base: 1, mean: 1}
@@ -80,7 +72,6 @@ counts:
   places_by_ages: {base: 4, mean: 2}
   ages: {base: 2, mean: 2}
   ages_by_places: {base: 3, mean: 1}
-  report_days: {base: 1, mean: 0.5}
 # How aggregates relate to their strata in training blocks (the trainer's
 # parents, finetune.country_counts): the exact sum, the sum less an
 # unallocated share reported only at the parent (cases of unknown place or
@@ -114,8 +105,7 @@ factor_layers:
   delay_dow: delays
   reference_dow: reporting
   report_dow: reporting
-  reporting: reporting
-  bunching: reporting
+  report_days: reporting
   shocks: reporting
   revisions: reporting
 constants:
@@ -210,12 +200,15 @@ factors:
     periodic: 1
     walk: 1
     slowdown: 1
-  reporting:
-    daily: 7
-    weekdays: 3
-  bunching:
-    'no': 17
-    'yes': 3
+  # Report days (lead 13:25): every day in half (with a report-date weekday
+  # effect in half of these, `report_dow`), Monday to Friday in a quarter,
+  # two or three fixed days a week in 15% and one day a week in 10% (days
+  # drawn).
+  report_days:
+    daily: 10
+    weekdays: 5
+    fixed_days: 3
+    weekly: 2
   revisions:
     'no': 7
     'yes': 3
@@ -640,12 +633,6 @@ distributions:
     upper: 1.0
     layer: delays
     why: a slowdown, more often later in the outbreak
-  bunch_every:
-    dist: lognormal
-    median: 7.2
-    sdlog: 0.36
-    layer: reporting
-    why: a reporting bunch every 4 to 13 weeks
   shock_mult:
     dist: lognormal
     median: 3.1
@@ -670,14 +657,6 @@ distributions:
     sdlog: 0.5
     layer: delays
     why: the mean delay by reference weekday mostly within 10%
-  bunch_at:
-    dist: beta
-    a: 2.0
-    b: 2.0
-    lower: 0.0
-    upper: 1.0
-    layer: reporting
-    why: bunches away from the ends
   shock_at:
     dist: beta
     a: 3.0

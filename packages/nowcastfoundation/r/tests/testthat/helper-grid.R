@@ -1,8 +1,8 @@
-# The r7 grid config, from the repository root.
+# The grid config, from the repository root.
 grid_file <- function() {
-  testthat::test_path("..", "..", "..", "..", "..", "config", "finetune", "grids", "r7.yaml")
+  testthat::test_path("..", "..", "..", "..", "..", "config", "finetune", "grid.yaml")
 }
-r7 <- function() read_grid(grid_file())
+test_grid <- function() read_grid(grid_file())
 
 # A strata table of `places` places by `ages` ages, as epinowcast orders
 # its groups.
