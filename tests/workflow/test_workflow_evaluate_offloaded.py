@@ -108,3 +108,47 @@ def test_a_checkpoint_with_no_base_loss_fails_clearly(tmp_path, fake):
     where = checkpoint_at(tmp_path / "train", 500, 31)
     with pytest.raises(SystemExit, match="base Chronos-2 loss"):
         mod.main(["checkpoint", str(where), "--device", "cpu"])
+
+
+def test_steps_with_no_snapshots_in_its_segment_fails(tmp_path, fake):
+    # Snapshots never copied in (an rsync that failed) must not pass.
+    mod, calls = fake
+    where = checkpoint_at(tmp_path / "train", 100, 400)
+    with pytest.raises(SystemExit, match="no step snapshot"):
+        mod.main(
+            ["steps", str(where), "--device", "cpu", "--eval-every", "200"]
+        )
+    assert calls["evals"] == []
+
+
+def test_steps_fails_when_a_due_step_s_snapshot_is_missing(tmp_path, fake):
+    mod, _calls = fake
+    train = tmp_path / "train"
+    snapshot(train, 0, ["start"])
+    where = checkpoint_at(train, 100, 400)
+    with pytest.raises(SystemExit, match="step-0000200"):
+        mod.main(
+            ["steps", str(where), "--device", "cpu", "--eval-every", "200"]
+        )
+
+
+def test_steps_passes_a_segment_with_no_due_step(tmp_path, fake):
+    mod, calls = fake
+    train = tmp_path / "train"
+    first = checkpoint_at(train, 100, 150)
+    second = checkpoint_at(train, 200, 190)
+    snapshot(train, 0, ["start"])
+    mod.main(["steps", str(first), "--device", "cpu", "--eval-every", "200"])
+    mod.main(
+        [
+            "steps",
+            str(second),
+            "--prev",
+            str(first),
+            "--device",
+            "cpu",
+            "--eval-every",
+            "200",
+        ]
+    )
+    assert [c[1] for c in calls["evals"]] == [["start"]]

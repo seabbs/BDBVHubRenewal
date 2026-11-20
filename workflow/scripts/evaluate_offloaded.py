@@ -1,7 +1,7 @@
 """Score an offloaded run's snapshots and checkpoints (rules/evaluate.smk).
 
     python workflow/scripts/evaluate_offloaded.py steps TRAIN/n<N> \
-        [--prev TRAIN/n<M>]
+        [--prev TRAIN/n<M>] [--eval-every K]
     python workflow/scripts/evaluate_offloaded.py checkpoint TRAIN/n<N>
 
 `steps` scores segment n<N>'s step snapshots, `checkpoint` its adapter, with
@@ -55,11 +55,45 @@ def score(base, adapter: Path, blocks, kinds, batch_size, real, device):
     return losses, time.perf_counter() - tick
 
 
-def steps(where: Path, prev: Path | None, device: str, real) -> None:
+def missing(train: Path, after: int, upto: int, every: int | None) -> list[str]:
+    """Return the segment's due steps with neither snapshot nor result.
+
+    With `every`, each step after `after` up to `upto` that is a multiple
+    of it is due; without, the segment must hold at least one.
+    """
+    evals = train / "evals"
+
+    def found(step: int) -> bool:
+        name = f"step-{step:07d}"
+        return (evals / name / "request.json").exists() or (
+            evals / f"{name}.json"
+        ).exists()
+
+    if every is None:
+        held = [
+            p
+            for p in evals.glob("step-*")
+            if not p.name.endswith(".tmp")
+            and after < evaluations.step_of(p.with_suffix("")) <= upto
+        ]
+        return [] if held else ["any step"]
+    due = range((after // every + 1) * every, upto + 1, every)
+    return [f"step-{k:07d}" for k in due if not found(k)]
+
+
+def steps(
+    where: Path,
+    prev: Path | None,
+    device: str,
+    real,
+    every: int | None = None,
+) -> None:
     """Score segment `where`'s step snapshots that have no result yet.
 
     The segment's steps are those after checkpoint `prev`'s (from step 0
-    for the first) up to its own.
+    for the first) up to its own. A due step with neither snapshot nor
+    result fails the job: its snapshots were not copied in, and scoring
+    nothing must not mark the segment done.
     """
     train = where.parent
     upto = json.loads((where / "settings.json").read_text())["steps"]
@@ -68,6 +102,13 @@ def steps(where: Path, prev: Path | None, device: str, real) -> None:
         if prev is not None
         else -1
     )
+    gone = missing(train, after, upto, every)
+    if gone:
+        raise SystemExit(
+            f"{where}: no step snapshot or result for {', '.join(gone[:5])}"
+            f"{' ...' if len(gone) > 5 else ''} in {train / 'evals'}"
+            " (were the trainer's snapshots copied in?)"
+        )
     todo = evaluations.pending(train, after, upto)
     if not todo:
         fs.log(f"{where.name}: no step snapshots to score")
@@ -139,12 +180,17 @@ def main(argv: Sequence[str] | None = None) -> None:
     p.add_argument("where", type=Path)
     p.add_argument("--prev", type=Path)
     p.add_argument("--device", default="auto")
+    p.add_argument(
+        "--eval-every",
+        type=int,
+        help="the trainer's --eval-every: each multiple must be scored",
+    )
     p.add_argument("--real-validation", type=Path)
     args = p.parse_args(argv)
     device = torch_device(args.device)
     real = fs.load_blocks(args.real_validation) if args.real_validation else []
     if args.what == "steps":
-        steps(args.where, args.prev, device, real)
+        steps(args.where, args.prev, device, real, args.eval_every)
     else:
         checkpoint(args.where, device, real)
 
