@@ -296,7 +296,10 @@ def job_command(
     """Return the shell command running `job` on `worker`.
 
     A run of the job still alive there (its ssh dropped) is not joined by
-    a second (exit 75); the pid file names this run's Snakemake.
+    a second (exit 75); the pid file names this run's Snakemake. Its
+    stdin is /dev/null: under `ssh -tt` it would be the session's
+    terminal, and a shell the job starts would then be interactive (an
+    rc file may attach tmux and wait there for ever).
     """
     q = shlex.quote
     pid = q(remote_pid_file(worker, job))
@@ -309,6 +312,7 @@ def job_command(
         + " ".join(f"{k}={q(v)}" for k, v in env.items())
         + f" {snakemake} "
         + " ".join(q(a) for a in argv)
+        + " </dev/null"
     )
 
 
