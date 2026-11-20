@@ -651,18 +651,22 @@ def delay_lags(
 ) -> int:
     """Return the release lags that hold `quantile` of a step's reports.
 
-    The delay is estimated from the releases in `rows` alone (no later
-    data) and only from steps old enough to be complete: the
-    `DELAY_WINDOW` steps `DELAY_LOOKBACK` steps before the latest
-    release's cut-off, whose counts at every lag below the lookback are
-    known by then, pooled over `places`. Recent steps, which have not yet
-    seen their long delays, are left out, so the estimate is not biased
-    short by right truncation. The lag count is one more than the
-    smallest lag whose share of the step's latest count reaches
-    `quantile`, and never more than the history allows (`history_lags`).
-    With too little history for complete steps, no count in them, or no
-    lag reaching `quantile` within the lookback, it is the most lags the
-    history allows.
+    One lag count for the block: the largest over `places` of each
+    place's delay, one more than the smallest lag whose share of the
+    place's latest count reaches `quantile`. Each place's delay is read
+    from the releases in `rows` alone (no later data) and only from steps
+    old enough to be complete: the `DELAY_WINDOW` steps `DELAY_LOOKBACK`
+    steps before the latest release's cut-off, whose counts at every lag
+    below the lookback are known by then. Recent steps, which have not
+    yet seen their long delays, are left out, so the estimate is not
+    biased short by right truncation. A low-count place can only
+    underestimate its delay, so it never raises the block's. The count
+    is never more than the history allows (`history_lags`). A place
+    whose reports do not reach `quantile` within the lookback, or a block
+    with too little history for complete steps or no count in them,
+    takes the most lags the history allows. Training blocks
+    (`nowcastfoundation.finetune.training_block`) and forecasts use this
+    one rule.
 
     Parameters
     ----------
@@ -671,7 +675,7 @@ def delay_lags(
     source : str
         One of `SOURCES`.
     places : sequence of str
-        Places whose reports are pooled.
+        The block's places.
     last_time : str
         Last step of the grid.
     quantile : float
@@ -696,17 +700,17 @@ def delay_lags(
     if first < 0:
         return most
     steps = list(range(first, tri.last - back + 1))
-    seen = tri.partial[:, steps, :].reshape(-1, back)
-    # A lag no release fell on carries the count of the lag before it.
-    seen = pd.DataFrame(seen).ffill(axis=1).fillna(0.0).to_numpy()
-    final = tri.final[:, steps].sum()
-    if final <= 0:
-        return most
-    share = seen.sum(axis=0) / final
-    reached = np.flatnonzero(share >= quantile - 1e-12)
-    if not reached.size:
-        return most
-    return min(int(reached[0]) + 1, most)
+    lags = []
+    for p in range(len(places)):
+        final = tri.final[p, steps].sum()
+        if final <= 0:
+            continue
+        # A lag no release fell on carries the count of the lag before it.
+        seen = pd.DataFrame(tri.partial[p, steps, :]).ffill(axis=1)
+        share = seen.fillna(0.0).to_numpy().sum(axis=0) / final
+        reached = np.flatnonzero(share >= quantile - 1e-12)
+        lags.append(int(reached[0]) + 1 if reached.size else most)
+    return min(max(lags), most) if lags else most
 
 
 def history_lags(tri: HubTriangle) -> int:

@@ -15,6 +15,7 @@ from typing import Any, Final
 import numpy as np
 import pandas as pd
 
+from nowcastfoundation import forecaster
 from nowcastfoundation.forecaster import (
     HubTriangle,
     hub_triangle,
@@ -509,7 +510,7 @@ def training_block(
     source: str,
     places: Sequence[str],
     cutoffs: Sequence[str],
-    max_lag: int,
+    max_lag: int | None = None,
     ahead_weeks: int = AHEAD_WEEKS,
     totals: bool = False,
     parent: str = "exact",
@@ -535,8 +536,12 @@ def training_block(
     cutoffs : sequence of str
         Cut-offs of the releases up to the cut, ISO format, at the
         block's release cadence (`release_days`).
-    max_lag : int
-        Release lag $D$ in the source's steps.
+    max_lag : int, optional
+        Release lag $D$ in the source's steps. By default the rule
+        forecasts use (`nowcastfoundation.forecaster.delay_lags`), read
+        from the block's own releases up to the cut: the largest of its
+        places' truncation-aware 99% delays, at most the history before
+        the cut-off. A binned source takes it in whole bins.
     ahead_weeks : int
         Weeks after the cut-off's week to the last step.
     totals : bool
@@ -580,6 +585,12 @@ def training_block(
     )
     if not rows["location"].isin(places).any():
         return None
+    if max_lag is None:
+        # The rule a forecast uses, on the releases up to the cut.
+        lag_steps = forecaster.delay_lags(
+            rows, "daily" if on_days else source, places, end.isoformat()
+        )
+        max_lag = max(1, -(-lag_steps // BINNED.get(source, 1)))
     if period is not None or window is not None:
         tri = hub_triangle(
             rows, "daily", places, end.isoformat(), max_lag=max_lag

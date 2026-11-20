@@ -129,3 +129,18 @@ def test_a_model_takes_a_fixed_lag_count_or_a_quantile(monkeypatch) -> None:
     monkeypatch.setattr(forecaster, "hub_triangle", spy)
     assert model.lags(_releases(200), ("A",), "2026-07-19") == 4
     assert np.all(np.array(seen) > 4)
+
+
+def test_the_block_takes_the_largest_place_delay() -> None:
+    # Place A reports within 4 days, place B within 21: the block takes
+    # B's, so neither loses its late reports.
+    a = _releases(200)
+
+    def slow(d):
+        return 10_000 * (1 - 0.8 ** (d + 1))
+
+    b = _releases(200, reported=slow).assign(location="B")
+    rows = pd.concat([a, b], ignore_index=True)
+    last = rows["cutoff"].max()
+    assert delay_lags(a, "daily", ("A",), last) == 4
+    assert delay_lags(rows, "daily", ("A", "B"), last) == 21
