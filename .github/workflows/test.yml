@@ -104,6 +104,37 @@ jobs:
             --submission "$(ls output/candidates/main/model-output/*/*.csv)"
           uv run bdbvhubrenewal coherence
 
+  # Live checks of the simulator's PyRenew components against the R
+  # packages they stand in for (tests/model/r_live.py): epinowcast's own
+  # Stan functions, primarycensored and the R engine. R_LIVE_REQUIRED
+  # makes a missing package fail rather than skip.
+  r-live:
+    runs-on: ubuntu-latest
+    env:
+      R_LIVE_REQUIRED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          jax-scope: r-live
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          use-public-rspm: true
+          extra-repositories: https://stan-dev.r-universe.dev
+      # epinowcast at the engine's pin (packages/nowcastfoundation/r).
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          packages: |
+            epinowcast/epinowcast@e084b080
+            primarycensored@1.6.0
+            any::cmdstanr
+            any::jsonlite
+          dependencies: '"hard"'
+      - name: Install CmdStan
+        run: Rscript -e 'cmdstanr::install_cmdstan(cores = 2)'
+      - name: Live R checks
+        run: uv run pytest -q tests/model/test_reporting_delays.py
+
   # The simulator engine's testthat suite (packages/nowcastfoundation/r).
   # Its hard dependencies only: the tests that run epinowcast skip without
   # the pinned epinowcast (ENW_LIB), so they run where it is installed.
