@@ -34,6 +34,7 @@ from jax.typing import ArrayLike
 from .mixing import count_mixing
 
 __all__ = [
+    "DEPLETIONS",
     "Depletion",
     "ExponentialDepletion",
     "LinearDepletion",
@@ -87,6 +88,13 @@ class ExponentialDepletion:
     ) -> Array:
         """Return each stratum's new infections, at most its susceptibles."""
         return jnp.minimum(-s * jnp.expm1(-r * force / pop) + imports, s)
+
+
+DEPLETIONS: dict[str, Depletion] = {
+    "linear": LinearDepletion(),
+    "exponential": ExponentialDepletion(),
+}
+"""The depletions by name."""
 
 
 def _vec(x: Sequence[float] | ArrayLike) -> Array:
