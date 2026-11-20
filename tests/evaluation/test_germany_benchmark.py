@@ -109,8 +109,10 @@ def test_the_later_half_of_the_dates_is_held_out() -> None:
 def test_our_quantiles_are_the_samples_quantiles_at_the_hub_s_levels(
     forecasts: pd.DataFrame,
 ) -> None:
+    from bdbvhubrenewal.evaluation.germany import FORECAST_LEVELS
+
     per = forecasts.groupby(["model", "origin", "location", "horizon"])
-    assert (per["quantile"].apply(tuple) == QUANTILE_LEVELS).all()
+    assert (per["quantile"].apply(tuple) == FORECAST_LEVELS).all()
     assert per["value"].is_monotonic_increasing.all()
 
 
@@ -292,7 +294,8 @@ def test_paper_table_follows_the_paper_schema(
         paper["origin_date"]
     )
     assert (days.dt.days == paper["horizon"]).all()
-    assert len(paper) == len(forecasts)
+    hub = forecasts["quantile"].round(6).isin(QUANTILE_LEVELS)
+    assert len(paper) == hub.sum()
 
 
 def test_asof_sums_are_the_data_each_nowcast_date_saw(
@@ -499,6 +502,43 @@ def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
     dates = ["2021-10-04", "2021-10-05", "2021-10-06"]
     de.germany_forecasts(["randomwalknowcast"], pd.DataFrame(), dates, 10, 1)
     assert events == [e for d in dates for e in (("build", d), ("forecast", d))]
+
+
+def test_forecasts_carry_the_90_interval_beside_the_hub_levels(
+    forecasts: pd.DataFrame,
+) -> None:
+    from bdbvhubrenewal.evaluation.germany import (
+        FORECAST_LEVELS,
+        QUANTILE_LEVELS,
+        paper_forecasts,
+    )
+
+    assert set(FORECAST_LEVELS) == {*QUANTILE_LEVELS, 0.05, 0.95}
+    assert set(forecasts["quantile"].round(6)) == set(FORECAST_LEVELS)
+    # The paper's table keeps the hub's levels, which it scores.
+    paper = paper_forecasts(forecasts)
+    assert set(paper["quantile_level"].round(6)) == set(QUANTILE_LEVELS)
+
+
+def test_scores_add_90_coverage_and_keep_wis_on_the_hub_levels(
+    forecasts: pd.DataFrame, scores: pd.DataFrame
+) -> None:
+    from bdbvhubrenewal.evaluation.germany import QUANTILE_LEVELS
+
+    hub = forecasts[forecasts["quantile"].round(6).isin(QUANTILE_LEVELS)]
+    on_hub = score_germany(hub, truth_delay=10)
+    keys = ["model", "origin", "location", "target_end_date"]
+    both = scores.merge(on_hub, on=keys, suffixes=("", "_hub"))
+    assert len(both) == len(scores)
+    np.testing.assert_allclose(both["wis"], both["wis_hub"])
+    # The 90% interval is the 5% and 95% quantiles.
+    wide = forecasts.pivot_table(
+        index=keys, columns="quantile", values="value"
+    ).reset_index()
+    got = scores.merge(wide, on=keys)
+    inside = (got[0.05] <= got["truth"]) & (got["truth"] <= got[0.95])
+    np.testing.assert_array_equal(got["coverage_90"], inside.astype(float))
+    assert on_hub["coverage_90"].isna().all()
 
 
 def test_forecasts_pass_their_horizons_and_store_them_apart(
