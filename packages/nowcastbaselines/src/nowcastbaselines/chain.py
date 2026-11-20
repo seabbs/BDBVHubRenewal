@@ -62,7 +62,7 @@ import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.baselinenowcast import (
+from nowcastbaselines.baselinenowcast import (
     fill_row,
     growth,
     log_factors,
@@ -70,17 +70,10 @@ from bdbvhubrenewal.baselinenowcast import (
     preprocess_negative_values,
     window_pairs,
 )
-from bdbvhubrenewal.forecasters.introductions import (
-    introduction_rates,
-    silent_places,
-)
-from bdbvhubrenewal.forecasters.obs import fit_sizes
-from bdbvhubrenewal.forecasters.pooling import (
-    MIN_LEVEL,
-    pool_matrix,
-    source_index,
-)
-from bdbvhubrenewal.forecasters.walk import walk_noise, walk_variance
+from nowcastbaselines.introductions import introduction_rates, silent_places
+from nowcastbaselines.obs import fit_sizes
+from nowcastbaselines.pooling import MIN_LEVEL, pool_matrix, source_index
+from nowcastbaselines.walk import walk_noise, walk_variance
 from nowcastutils.base import ModelUnavailableError
 from nowcastutils.snapshots import SnapshotArrays, week_sum, weekly_sums
 

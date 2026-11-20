@@ -75,15 +75,15 @@ def test_code_digest_keeps_its_key_when_modules_move(tmp_path: Path) -> None:
     # The packages move (WP2b) renames modules and rewrites import lines
     # without changing what a fit runs, so no stored fit refits.
     root = _copy_repo(tmp_path)
-    src = root / "src/bdbvhubrenewal/forecasters"
+    src = root / "packages/nowcastbaselines/src/nowcastbaselines"
     before = store.code_digest("randomwalk", root)
     (src / "walk.py").rename(src / "steps.py")
     for name in ("chain.py", "introductions.py", "randomwalk.py"):
         path = src / name
         path.write_text(
             path.read_text().replace(
-                "bdbvhubrenewal.forecasters.walk import",
-                "bdbvhubrenewal.forecasters.steps import",
+                "nowcastbaselines.walk import",
+                "nowcastbaselines.steps import",
             )
         )
     moved = store.code_digest("randomwalk", root)
@@ -117,7 +117,7 @@ def test_code_digest_keeps_its_key_when_a_function_moves(
     # Splitting a module (WP2a) moves functions between files, with the
     # third-party imports they use, so no stored fit refits.
     root = _copy_repo(tmp_path)
-    src = root / "src/bdbvhubrenewal/forecasters"
+    src = root / "packages/nowcastbaselines/src/nowcastbaselines"
     before = store.code_digest("randomwalknowcast", root)
     names = {"walk_noise", "walk_variance"}
     cut = _cut_defs(src / "walk.py", names)
@@ -132,8 +132,8 @@ def test_code_digest_keeps_its_key_when_a_function_moves(
     chain = src / "chain.py"
     chain.write_text(
         chain.read_text().replace(
-            "bdbvhubrenewal.forecasters.walk import walk_noise",
-            "bdbvhubrenewal.forecasters.noise import walk_noise",
+            "nowcastbaselines.walk import walk_noise",
+            "nowcastbaselines.noise import walk_noise",
         )
     )
     assert store.code_digest("randomwalknowcast", root) == before
@@ -143,24 +143,26 @@ def test_code_digest_keeps_its_key_when_a_module_moves_package(
     tmp_path: Path,
 ) -> None:
     # The packages move (WP2b) puts modules in new packages that re-export
-    # them from `__init__.py`.
+    # them from `__init__.py`. The target's own `__init__.py` holds only
+    # a docstring, as every workspace package's does.
     root = _copy_repo(tmp_path)
-    pkg = root / "src/bdbvhubrenewal"
+    pkg = root / "packages/nowcastutils/src/nowcastutils"
+    base = root / "packages/nowcastbaselines/src/nowcastbaselines"
     before = store.code_digest("randomwalknowcast", root)
     (pkg / "walks").mkdir()
-    (pkg / "forecasters/walk.py").rename(pkg / "walks/steps.py")
+    (base / "walk.py").rename(pkg / "walks/steps.py")
     names = ["random_walk", "random_walks", "walk_noise", "walk_variance"]
     (pkg / "walks/__init__.py").write_text(
         '"""Random walks."""\n\n'
-        f"from bdbvhubrenewal.walks.steps import {', '.join(names)}\n\n"
+        f"from nowcastutils.walks.steps import {', '.join(names)}\n\n"
         f"__all__ = {names!r}\n"
     )
     for name in ("chain.py", "introductions.py", "randomwalk.py"):
-        path = pkg / "forecasters" / name
+        path = base / name
         path.write_text(
             path.read_text().replace(
-                "bdbvhubrenewal.forecasters.walk import",
-                "bdbvhubrenewal.walks import",
+                "nowcastbaselines.walk import",
+                "nowcastutils.walks import",
             )
         )
     assert store.code_digest("randomwalknowcast", root) == before
@@ -170,7 +172,7 @@ def test_code_digest_follows_third_party_imports(tmp_path: Path) -> None:
     # Only the package's own import lines leave the key: the same names
     # from another library are other code.
     root = _copy_repo(tmp_path)
-    walk = root / "src/bdbvhubrenewal/forecasters/walk.py"
+    walk = root / "packages/nowcastbaselines/src/nowcastbaselines/walk.py"
     before = store.code_digest("randomwalknowcast", root)
     walk.write_text(
         walk.read_text().replace(
@@ -261,15 +263,15 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
         return {m: store.code_digest(m, root) for m in models}
 
     def edit(rel: str) -> None:
-        path = root / "src/bdbvhubrenewal" / rel
+        path = root / rel
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
 
     before = digests()
     own = store.code_digest("fm_chronos_weekly_ragged", root)
-    edit("evaluation/zones.py")
+    edit("src/bdbvhubrenewal/evaluation/zones.py")
     assert digests() == before
     assert store.code_digest("fm_chronos_weekly_ragged", root) == own
-    edit("forecasters/zones.py")
+    edit("packages/nowcastbaselines/src/nowcastbaselines/zones.py")
     split = digests()
     assert all(split[m] != before[m] for m in models)
     # Chronos-2 takes its zones straight from its block, so the split is
@@ -277,7 +279,7 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
     assert store.code_digest("fm_chronos_weekly_ragged", root) == own
     before = split
     # Introductions are drawn in the fit, for provinces with no recent case.
-    edit("forecasters/introductions.py")
+    edit("packages/nowcastbaselines/src/nowcastbaselines/introductions.py")
     after = digests()
     assert all(after[m] != before[m] for m in models)
 

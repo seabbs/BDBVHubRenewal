@@ -240,11 +240,12 @@ def test_zone_code_keys_the_models_that_run_it(
 
     for name in ("pyproject.toml", "uv.lock"):
         shutil.copy(ROOT / name, tmp_path / name)
-    shutil.copytree(
-        ROOT / "src",
-        tmp_path / "src",
-        ignore=shutil.ignore_patterns("__pycache__"),
-    )
+    for folder in ("src", "packages"):
+        shutil.copytree(
+            ROOT / folder,
+            tmp_path / folder,
+            ignore=shutil.ignore_patterns("__pycache__"),
+        )
     models = ("renewal", "renewalbvd", "renewalsp", "randomwalknowcast")
     before = {m: store.code_digest(m, tmp_path) for m in models}
     path = tmp_path / "src/bdbvhubrenewal" / rel

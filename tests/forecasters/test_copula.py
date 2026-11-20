@@ -8,7 +8,7 @@ import pytest
 from scipy.stats import spearmanr
 
 from bdbvhubrenewal.forecasters import NATIONAL
-from bdbvhubrenewal.forecasters.copula import (
+from nowcastbaselines.copula import (
     MAX_RHO,
     PRIOR,
     error_scores,

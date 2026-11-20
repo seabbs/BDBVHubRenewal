@@ -43,7 +43,7 @@ PyRenew has no delay that varies with time, no Dirichlet-multinomial count and n
 
 ## Baseline models
 
-The baselines are in [`forecasters.randomwalk`][bdbvhubrenewal.forecasters.randomwalk] and [`forecasters.chain`][bdbvhubrenewal.forecasters.chain], on a JAX port of baselinenowcast 0.2.2 in [`bdbvhubrenewal.baselinenowcast`][bdbvhubrenewal.baselinenowcast].
+The baselines are in [`forecasters.randomwalk`][nowcastbaselines.randomwalk] and [`forecasters.chain`][nowcastbaselines.chain], on a JAX port of baselinenowcast 0.2.2 in [`nowcastbaselines.baselinenowcast`][nowcastbaselines.baselinenowcast].
 The port is checked against fixtures from the R package, and has one named extension, the chain ladder of release snapshots, which skips unobserved cells and fits one daily delay shared by pairs of any gap.
 The models use the port's chain ladder on snapshots.
 The observation model is in `forecasters.obs`, and fits and draws its new reports with the port's `fit_by_horizon`, `fit_nb` and `sample_nb`.

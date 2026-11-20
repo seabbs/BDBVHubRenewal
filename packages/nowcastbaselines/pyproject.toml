@@ -1,0 +1,22 @@
+[project]
+name = "nowcastbaselines"
+version = "0.1.0"
+description = "Baseline nowcasts and forecasts: random walks on the log scale, a JAX port of baselinenowcast, introductions, and a copula pairing places"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Sam Abbott", email = "sam.abbott@lshtm.ac.uk" }]
+requires-python = ">=3.13"
+dependencies = [
+  "jax>=0.12.0",
+  "numpy>=1.26,<3",
+  "pandas>=2.1,<4",
+  "scipy>=1.11,<2",
+  "nowcastutils",
+]
+
+[tool.uv.sources]
+nowcastutils = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.8,<0.14"]
+build-backend = "uv_build"

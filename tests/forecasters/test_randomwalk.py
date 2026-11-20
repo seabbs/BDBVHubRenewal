@@ -18,7 +18,7 @@ from bdbvhubrenewal.forecasters import (
     get_model,
     list_models,
 )
-from bdbvhubrenewal.forecasters.chain import (
+from nowcastbaselines.chain import (
     NoCompleteWeek,
     NoDelayPair,
     NoWalkSpread,
@@ -290,7 +290,7 @@ def test_no_nowcast_draw_is_below_the_count_reported(
 def test_a_silent_place_waits_for_its_first_introduction() -> None:
     import jax
 
-    from bdbvhubrenewal.forecasters.introductions import silent_trajectories
+    from nowcastbaselines.introductions import silent_trajectories
 
     silent = np.array([False, True, True, True])
     q = np.array([0.5, 0.0, 0.3, 0.3])
@@ -382,12 +382,8 @@ def test_the_walk_forecasts_on_from_each_samples_nowcast(
 def test_the_start_week_search_reaches_back_over_the_nowcast_window(
     daily: pd.DataFrame, daily_zones: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.forecasters.chain import build_origin
-    from bdbvhubrenewal.forecasters.randomwalk import (
-        _quiet,
-        _start_weeks,
-        start_window,
-    )
+    from nowcastbaselines.chain import build_origin
+    from nowcastbaselines.randomwalk import _quiet, _start_weeks, start_window
     from nowcastutils.snapshots import snapshot_arrays
 
     # 1.5 D days, the nowcast's own training window, is 9 weeks for D = 42.
@@ -438,7 +434,7 @@ def test_a_quiet_place_with_recent_cases_walks_from_its_level(
     vintage: str,
     zone: str,
 ) -> None:
-    from bdbvhubrenewal.forecasters.randomwalk import _level, _quiet
+    from nowcastbaselines.randomwalk import _level, _quiet
 
     origin, x, cw, i = _quiet_trajectories(
         target, delays, daily, daily_zones, vintage, zone

@@ -3,18 +3,18 @@
 Nowcast reported counts from a reporting triangle, as the random walk nowcast does. See [Getting started](../getting-started.ipynb) for a worked example.
 { .page-subtitle }
 
-::: bdbvhubrenewal.baselinenowcast
+::: nowcastbaselines.baselinenowcast
     options:
       members: false
 
-::: bdbvhubrenewal.baselinenowcast.triangle
+::: nowcastbaselines.baselinenowcast.triangle
 
-::: bdbvhubrenewal.baselinenowcast.delay
+::: nowcastbaselines.baselinenowcast.delay
 
-::: bdbvhubrenewal.baselinenowcast.nowcast
+::: nowcastbaselines.baselinenowcast.nowcast
 
-::: bdbvhubrenewal.baselinenowcast.uncertainty
+::: nowcastbaselines.baselinenowcast.uncertainty
 
-::: bdbvhubrenewal.baselinenowcast.sample
+::: nowcastbaselines.baselinenowcast.sample
 
-::: bdbvhubrenewal.baselinenowcast.snapshots
+::: nowcastbaselines.baselinenowcast.snapshots

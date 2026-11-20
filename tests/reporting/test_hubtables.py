@@ -9,13 +9,13 @@ import pytest
 from bdbvhubrenewal.data import load_daily_zones
 from bdbvhubrenewal.data.zones import hub_zones
 from bdbvhubrenewal.forecasters import get_model
-from bdbvhubrenewal.forecasters.zones import reconcile_zones
 from bdbvhubrenewal.reporting.hubtables import (
     HUB_QUANTILE_LEVELS,
     hub_quantiles,
     hub_tables,
     write_hub_tables,
 )
+from nowcastbaselines.zones import reconcile_zones
 from nowcasteval import backtest as bt
 from nowcastutils.base import NATIONAL
 from nowcastutils.hierarchy import is_zone, province_of

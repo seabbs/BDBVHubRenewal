@@ -7,8 +7,8 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.forecasters import get_model
-from bdbvhubrenewal.forecasters.chain import delay_summary
-from bdbvhubrenewal.forecasters.randomwalk import RandomWalkNowcast
+from nowcastbaselines.chain import delay_summary
+from nowcastbaselines.randomwalk import RandomWalkNowcast
 from nowcasteval.backtest import (
     BacktestConfig,
     check_distinct,

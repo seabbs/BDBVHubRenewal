@@ -5,10 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bdbvhubrenewal.forecasters.introductions import (
-    _depth,
-    introduction_rates,
-)
+from nowcastbaselines.introductions import _depth, introduction_rates
 
 # Country 0, provinces 1 and 2, zones 3 and 4 in province 1 and zones 5
 # and 6 in province 2.

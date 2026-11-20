@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.baselinenowcast import log_factors, pair_sums
-from bdbvhubrenewal.forecasters import chain
-from bdbvhubrenewal.forecasters.chain import (
+from nowcastbaselines import chain
+from nowcastbaselines.baselinenowcast import log_factors, pair_sums
+from nowcastbaselines.chain import (
     Settings,
     _delay_counts,
     _walk_spreads,
@@ -22,8 +22,8 @@ from bdbvhubrenewal.forecasters.chain import (
     start_weeks,
     weeks_back,
 )
-from bdbvhubrenewal.forecasters.obs import MAX_SIZE, PRIOR_SIZE
-from bdbvhubrenewal.forecasters.pooling import pool_matrix, source_index
+from nowcastbaselines.obs import MAX_SIZE, PRIOR_SIZE
+from nowcastbaselines.pooling import pool_matrix, source_index
 from nowcastutils.snapshots import SnapshotArrays, snapshot_arrays, weekly_sums
 
 PLACES = ("CD-HU", "CD-IT", "CD-NK", "CD-TO")
@@ -61,7 +61,7 @@ def test_growth_to_final_sums_the_daily_delay(origin24) -> None:
 def test_the_start_week_is_the_latest_week_at_95_per_cent(
     snap24, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhubrenewal.forecasters import chain
+    from nowcastbaselines import chain
 
     # Week w is 95.01% complete and every later week 94.99%.
     w = snap24.n_weeks - 3
@@ -239,7 +239,8 @@ def test_there_is_no_clock_shift() -> None:
 def test_no_walk_spread_anywhere_raises(snap24, monkeypatch) -> None:
     # If no place, pool or country has a walk variance above 0, there is
     # no spread to fall back on, so the model gives no forecast.
-    from bdbvhubrenewal.forecasters import ModelUnavailableError, chain
+    from bdbvhubrenewal.forecasters import ModelUnavailableError
+    from nowcastbaselines import chain
 
     def flat(reported, *_):
         n = reported.shape[0]

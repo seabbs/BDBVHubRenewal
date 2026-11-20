@@ -71,7 +71,6 @@ from bdbvhubrenewal.data.zones import (
 from bdbvhubrenewal.evaluation import store, store_archive
 from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 from bdbvhubrenewal.forecasters.zonerenewal import ZONES_FILE
-from bdbvhubrenewal.forecasters.zones import zones_for_model
 from bdbvhubrenewal.submission.fitting import (
     get_config,
     run_fit,
@@ -97,6 +96,7 @@ from bdbvhubrenewal.submission.validate import (
     validate_submission,
 )
 from bdbvhubrenewal.submission.validate import main as validate_main
+from nowcastbaselines.zones import zones_for_model
 from nowcasteval import backtest as bt
 from nowcasteval.nowcast import (
     ReleaseBacktest,
