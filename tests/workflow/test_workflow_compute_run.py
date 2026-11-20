@@ -152,6 +152,8 @@ def test_a_worker_on_another_commit_fails_the_job(setup):
     assert not (croot / "b.txt").exists()
     logs = "".join(p.read_text() for p in state.glob("*.log"))
     assert "commit" in logs
+    # The job's own log, which Snakemake's error names, says why too.
+    assert "commit" in (croot / "logs" / "b.log").read_text()
 
 
 def test_an_unreachable_worker_fails_at_submit(setup):
