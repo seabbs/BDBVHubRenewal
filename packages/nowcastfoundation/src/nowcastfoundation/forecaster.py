@@ -1279,11 +1279,11 @@ class FoundationModel:
         """Return Chronos-2's own quantiles where each target is one step.
 
         Each week of the weekly source is one of Chronos-2's steps, so its
-        quantiles are Chronos-2's native quantiles read at `levels` by
-        linear interpolation between the native levels (`native_sampler`).
-        They pass through `forecast` as one trajectory per level; every
-        step after the draws (rounding, the floors at the reported counts)
-        is monotone, so trajectory `k` is the quantile at level `k`.
+        quantiles are Chronos-2's own at `levels`, which its pipeline
+        interpolates between its training levels (`native_sampler`).
+        They pass through `forecast` as one trajectory per level; the only
+        step after the draws, the floor at zero, is monotone, so
+        trajectory `k` is the quantile at level `k`.
         A week of the daily source read from each place's aggregate row is
         one step of that row, so it has a native quantile too; summed from
         daily steps it has none.

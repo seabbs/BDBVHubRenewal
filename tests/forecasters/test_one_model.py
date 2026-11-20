@@ -294,9 +294,17 @@ class _LevelPipeline:
         return out, None
 
 
-def _future(task: ForecastTask, places, last: str):
-    tri = foundation.hub_triangle(task.daily_history, "daily", places, last)
-    return tri, tri.n_context
+def _spy_triangle(monkeypatch) -> list:
+    """Keep each triangle the model builds."""
+    seen: list = []
+    real = foundation.hub_triangle
+
+    def spy(*args, **kwargs):
+        seen.append(real(*args, **kwargs))
+        return seen[-1]
+
+    monkeypatch.setattr(foundation, "hub_triangle", spy)
+    return seen
 
 
 def test_daily_7_day_sums_are_the_aggregate_rows_native_quantiles(
@@ -307,10 +315,11 @@ def test_daily_7_day_sums_are_the_aggregate_rows_native_quantiles(
     pytest.importorskip("torch")
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _LevelPipeline())
     levels = [0.1, 0.5, 0.9]
+    seen = _spy_triangle(monkeypatch)
     out = ft.quantiles(task, levels)
     assert out is not None
-    places = sorted(set(out["location"]))
-    tri, start = _future(task, places, task.target_end_dates[-1])
+    tri = seen[-1]
+    start = tri.last - ft.lag_count(task) + 1
     future = [w for w in task.target_end_dates if tri.times.index(w) >= start]
     rows = out[out["target_end_date"].isin(future)]
     step = rows["target_end_date"].map(lambda w: tri.times.index(w) - start)
@@ -322,10 +331,11 @@ def test_daily_counts_are_the_count_rows_native_quantiles(
 ) -> None:
     pytest.importorskip("torch")
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _LevelPipeline())
+    seen = _spy_triangle(monkeypatch)
     out = ft.daily_quantiles(task, [0.1, 0.5, 0.9])
     assert set(out.columns) == {"location", "date", "quantile", "value"}
-    places = sorted(set(out["location"]))
-    tri, start = _future(task, places, task.target_end_dates[-1])
+    tri = seen[-1]
+    start = tri.last - ft.lag_count(task) + 1
     later = out[out["date"].map(lambda d: tri.times.index(d) >= start)]
     assert len(later)
     step = later["date"].map(lambda d: tri.times.index(d) - start)
