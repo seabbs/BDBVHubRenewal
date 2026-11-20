@@ -86,7 +86,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (SI).
 - We train on 3,200 simulations drawn from the grid, each drawing its settings independently.
 - The learning rate falls linearly to zero over these simulations.
-- Each simulation gives up to 32 training blocks.
+- Each simulation gives up to 14 training blocks.
 - A block is daily, 3-day or weekly.
 - A daily block can also have one extra row per place, with its weekly or 3-day totals or its rolling 7-day or 3-day sums.
 - Most blocks are multivariate, and one in five blocks from outbreaks with more than one stratum is univariate.
