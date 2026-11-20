@@ -781,6 +781,33 @@ def checkpoint_large_batches(above: int) -> None:
     Chronos2EncoderBlock.forward = checkpointed
 
 
+INPUT_PATCH = 16
+"""Steps in one of Chronos-2's input patches."""
+
+
+def trim_context(batch: dict) -> dict:
+    """Return a batch without its leading context patches that no row observes.
+
+    Blocks are left-padded to `ft.CONTEXT` with missing values, and early in
+    an outbreak most of the context is missing in every row. Chronos-2 masks
+    a patch with no observation out of time and group attention, its time
+    encoding counts back from the context's end, and its rotary positions
+    are relative, so cutting whole such patches from the left leaves the
+    loss and gradients as they were, while the step works on fewer tokens.
+    At least one patch is kept.
+    """
+    import torch
+
+    context = batch["context"]
+    seen = (~torch.isnan(context)).any(dim=0)
+    width = context.shape[1]
+    first = int(seen.to(torch.int8).argmax()) if bool(seen.any()) else width
+    keep = max(INPUT_PATCH, -(-(width - first) // INPUT_PATCH) * INPUT_PATCH)
+    if keep >= width:
+        return batch
+    return {**batch, "context": context[:, width - keep :]}
+
+
 class ByLength:
     """Chronos-2 datasets of blocks, one for each prediction length.
 
@@ -828,7 +855,7 @@ class ByLength:
         batch = self.data[length]._build_batch([self.local[i] for i in indices])
         if self.bias:
             batch["series_rows"] = block_rows([self.inputs[i] for i in indices])
-        return batch
+        return trim_context(batch)
 
     def indices(self):
         """Yield every block's index once, in batches of one length.
