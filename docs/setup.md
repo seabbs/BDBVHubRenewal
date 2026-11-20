@@ -48,7 +48,7 @@ It forecasts with the random walk nowcast from one release, scores the forecast 
 import dataclasses
 from pathlib import Path
 
-from bdbvhubrenewal.data import (
+from bdbvhub.data.tidy import (
     delays_for_vintage,
     load_daily,
     load_delays,
@@ -56,7 +56,7 @@ from bdbvhubrenewal.data import (
 )
 from nowcasteval import backtest as bt
 from nowcasteval.nowcast import relative_crps, release_backtest
-from bdbvhubrenewal.forecasters import NATIONAL
+from nowcastutils.base import NATIONAL
 from nowcastbaselines.chain import Settings
 from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcasteval.plots import plot_location_grid
@@ -107,7 +107,7 @@ uv run python my_forecast.py
 
 To change a setting, edit it at the top of the script and run it again.
 `ORIGIN` takes any release date in `real["vintage"]`.
-`get_model("randomwalknowcast")` builds the same model with its default settings, and `bdbvhubrenewal.forecasters.list_models()` lists every model.
+`get_model("randomwalknowcast")` builds the same model with its default settings, and `bdbvhub.models.list_models()` lists every model.
 The renewal models fit with a sampler and take minutes per task (see [Renewal models](methods/model.md)).
 
 ## Where outputs land

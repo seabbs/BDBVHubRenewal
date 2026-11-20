@@ -481,7 +481,7 @@ class RandomWalk:
 
         Examples
         --------
-        >>> from bdbvhubrenewal.forecasters import get_model
+        >>> from bdbvhub.models import get_model
         >>> samples = get_model("randomwalk").forecast(task)
         >>> samples.groupby(["location", "target_end_date"])["value"].median()
         """

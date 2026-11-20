@@ -1021,7 +1021,7 @@ def load_target(data_dir: Path | str | None = None) -> pd.DataFrame:
 
     Examples
     --------
-    >>> from bdbvhubrenewal.data import load_target, vintages
+    >>> from bdbvhub.data.tidy import load_target, vintages
     >>> target = load_target()
     >>> latest = vintages(target, kind="real")[-1]
     >>> target.loc[target["vintage"] == latest].head()
@@ -1046,7 +1046,7 @@ def load_daily(data_dir: Path | str | None = None) -> pd.DataFrame:
 
     Examples
     --------
-    >>> from bdbvhubrenewal.data import load_daily
+    >>> from bdbvhub.data.tidy import load_daily
     >>> daily = load_daily()
     >>> daily.groupby("vintage")["observed"].sum().tail()
     """
@@ -1089,7 +1089,7 @@ def load_delays(data_dir: Path | str | None = None) -> pd.DataFrame:
 
     Examples
     --------
-    >>> from bdbvhubrenewal.data import delays_for_vintage, load_delays
+    >>> from bdbvhub.data.tidy import delays_for_vintage, load_delays
     >>> delays, note = delays_for_vintage(load_delays(), "2026-10-17")
     >>> delays["delay"].describe()
     """

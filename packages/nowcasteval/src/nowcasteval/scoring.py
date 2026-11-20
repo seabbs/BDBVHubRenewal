@@ -506,7 +506,7 @@ def score_forecasts(
     --------
     Score against the latest release, with `forecasts` from `run_forecasts`.
 
-    >>> from bdbvhubrenewal.data import load_target, vintages
+    >>> from bdbvhub.data.tidy import load_target, vintages
     >>> from nowcasteval.scoring import (
     ...     score_forecasts, summarise_scores
     ... )

@@ -31,22 +31,29 @@ __all__ = [
     "model_digest",
 ]
 
-REPORT_ONLY: Final = tuple(
-    f"src/bdbvhubrenewal/reporting/{name}.py"
-    for name in (
-        "germany",
-        "live_checkpoint_page",
-        "nowcast_plots",
-        "report",
-        "scorechart",
-        "store_note",
-        "tables",
-        "zone_nowcast",
-    )
+REPORT_ONLY: Final = (
+    "src/bdbvhubrenewal/reporting/germany.py",
+    "packages/nowcastfoundation/src/nowcastfoundation/live_checkpoint_page.py",
+    "packages/nowcasteval/src/nowcasteval/nowcast_plots.py",
+    "packages/bdbvhub/src/bdbvhub/reporting/report.py",
+    "packages/nowcasteval/src/nowcasteval/scorechart.py",
+    "packages/bdbvhub/src/bdbvhub/reporting/store_note.py",
+    "packages/nowcasteval/src/nowcasteval/tables.py",
+    "packages/bdbvhub/src/bdbvhub/reporting/zone_nowcast.py",
 )
 """Modules only the `report` command runs, so no backtest reads them."""
 
-BACKTEST_INPUTS: Final = ("src/bdbvhubrenewal", "config", "data")
+BACKTEST_INPUTS: Final = (
+    "src/bdbvhubrenewal",
+    "packages/nowcastutils/src",
+    "packages/nowcasteval/src",
+    "packages/nowcastbaselines/src",
+    "packages/nowcastfoundation/src",
+    "packages/nowcastrenewal/src",
+    "packages/bdbvhub/src",
+    "config",
+    "data",
+)
 """What every backtest run reads, relative to the repository root."""
 
 _SKIP: Final = ("data/raw", "data/sources.json", *REPORT_ONLY)

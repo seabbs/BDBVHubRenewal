@@ -3,7 +3,7 @@
 Load the hub data, build forecast vintages and simulate outbreaks to test models on. See [Getting started](../getting-started.ipynb) for a worked example.
 { .page-subtitle }
 
-::: bdbvhubrenewal.data
+::: bdbvhub.data
     options:
       members: false
 

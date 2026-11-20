@@ -819,7 +819,7 @@ def test_loaders_follow_bdbv_data_dir_after_the_cli_starts(
     cwd, env = _outside_repo(tmp_path)
     code = (
         "from bdbvhub.cli import main\n"
-        "from bdbvhubrenewal.data import load_locations\n"
+        "from bdbvhub.data.tidy import load_locations\n"
         "main(['--version'])\n"
         "print(len(load_locations()))\n"
     )

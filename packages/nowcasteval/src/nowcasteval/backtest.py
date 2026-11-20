@@ -398,7 +398,7 @@ def make_tasks(
     Examples
     --------
     >>> import dataclasses
-    >>> from bdbvhubrenewal.data import (
+    >>> from bdbvhub.data.tidy import (
     ...     delays_for_vintage, load_daily, load_delays, load_target
     ... )
     >>> from nowcasteval import backtest as bt
@@ -616,7 +616,7 @@ def run_forecasts(
     Examples
     --------
     >>> from nowcasteval.backtest import run_forecasts
-    >>> from bdbvhubrenewal.forecasters import get_model
+    >>> from bdbvhub.models import get_model
     >>> models = [get_model("randomwalk"), get_model("randomwalknowcast")]
     >>> forecasts = run_forecasts(models, [task])  # tasks from `make_tasks`
     >>> forecasts.groupby("model")["sample"].nunique()

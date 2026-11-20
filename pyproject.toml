@@ -188,7 +188,15 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["bdbvhubrenewal"]
+source = [
+  "bdbvhubrenewal",
+  "nowcastutils",
+  "nowcasteval",
+  "nowcastbaselines",
+  "nowcastfoundation",
+  "nowcastrenewal",
+  "bdbvhub",
+]
 branch = true
 
 [tool.coverage.report]

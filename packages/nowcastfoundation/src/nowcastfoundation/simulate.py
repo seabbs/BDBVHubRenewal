@@ -254,7 +254,7 @@ class SimulatedOutbreak:
         Returns
         -------
         tuple of pandas.DataFrame
-            The target rows (as `bdbvhubrenewal.data.load_target`, with
+            The target rows (as `bdbvhub.data.tidy.load_target`, with
             `kind = "simulated"`) and the delay line data, each with
             `cutoff`, the release less `cutoff_lag`.
         """
@@ -365,7 +365,7 @@ class SimulatedOutbreak:
         Returns
         -------
         pandas.DataFrame
-            Rows as `bdbvhubrenewal.data.load_health_zones`: `vintage`,
+            Rows as `bdbvhub.data.tidy.load_health_zones`: `vintage`,
             `location`, `location_name`, `province`, `target_end_date`,
             with `observed` (known onsets) and `imputed` beside `total`,
             and `cutoff`.

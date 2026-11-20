@@ -47,7 +47,7 @@ tasks:
   test:
     desc: Run the tests with coverage
     cmds:
-      - uv run pytest -q --cov=bdbvhubrenewal
+      - uv run pytest -q --cov=bdbvhubrenewal --cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal --cov=bdbvhub
 
 
   test-slow:

@@ -207,7 +207,7 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
         path = root / rel
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
 
-    src = "src/bdbvhubrenewal"
+    hub = "packages/bdbvhub/src/bdbvhub"
     renewal = "packages/nowcastrenewal/src/nowcastrenewal"
     before = digests()
     # The zone variants share a module, so share a key, and renewalsp,
@@ -226,16 +226,16 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     assert after["renewal"] != before["renewal"]
     before = after
     # The CLI is not fit code.
-    edit(f"{src}/cli.py")
+    edit(f"{hub}/cli.py")
     assert digests() == before
     # The store's loader and IO code do not key a fit: editing them never
     # refits.
-    edit(f"{src}/evaluation/store.py")
+    edit(f"{hub}/store/store.py")
     edit("packages/nowcasteval/src/nowcasteval/backtest.py")
     assert digests() == before
     # The functions a fit runs do, for every model.
     for rel, func in (
-        (f"{src}/evaluation/store.py", "def fit("),
+        (f"{hub}/store/store.py", "def fit("),
         (
             "packages/nowcasteval/src/nowcasteval/backtest.py",
             "def run_forecasts(",

@@ -49,31 +49,34 @@ def test_backtest_digest_follows_what_a_backtest_reads(
         before = after
 
 
-def _reporting_imports(path: Path) -> set[str]:
+SOURCES = [ROOT / "src", *sorted(ROOT.glob("packages/*/src"))]
+
+
+def _module(rel: str) -> str:
+    """The dotted module of a source file path."""
+    parts = Path(rel).with_suffix("").parts
+    return ".".join(parts[3:] if parts[0] == "packages" else parts[1:])
+
+
+def _imports(path: Path) -> set[str]:
     found = set()
     for node in ast.walk(ast.parse(path.read_text())):
-        names = []
         if isinstance(node, ast.ImportFrom) and node.module:
-            names = [node.module]
+            found.add(node.module)
+            found |= {f"{node.module}.{a.name}" for a in node.names}
         elif isinstance(node, ast.Import):
-            names = [a.name for a in node.names]
-        found |= {
-            n.rsplit(".", 1)[1]
-            for n in names
-            if n.startswith("bdbvhubrenewal.reporting.")
-        }
+            found |= {a.name for a in node.names}
     return found
 
 
 def test_backtest_code_never_imports_report_only_modules() -> None:
-    src = ROOT / "src" / "bdbvhubrenewal"
-    report_only = {Path(p).stem for p in REPORT_ONLY}
+    report_only = {_module(p): Path(p).stem for p in REPORT_ONLY}
     assert report_only
-    for path in sorted(src.rglob("*.py")):
+    for path in sorted(p for s in SOURCES for p in s.rglob("*.py")):
         rel = path.relative_to(ROOT).as_posix()
         if rel in REPORT_ONLY:
             continue
-        used = _reporting_imports(path) & report_only
+        used = {report_only[m] for m in _imports(path) if m in report_only}
         # The `report` and `live-checkpoint` commands, which no backtest
         # runs.
         if rel == "packages/bdbvhub/src/bdbvhub/cli.py":
@@ -85,7 +88,7 @@ def _ran(run: object) -> set[str]:
     """Run a call and return the package files whose functions it ran."""
     import sys
 
-    src = (ROOT / "src" / "bdbvhubrenewal").as_posix()
+    src = tuple(s.as_posix() for s in SOURCES)
     seen: set[str] = set()
 
     def profile(frame, event, arg):  # type: ignore[no-untyped-def]

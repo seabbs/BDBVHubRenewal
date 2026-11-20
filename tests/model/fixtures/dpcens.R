@@ -30,7 +30,7 @@ for (family in c("gamma", "lognormal")) {
   }
 }
 # The hub's imputation delays: generalised gamma fits in hours
-# (HUB_GENGAMMA in src/bdbvhubrenewal/data/delays.py), on days 0..60.
+# (HUB_GENGAMMA in packages/bdbvhub/src/bdbvhub/data/delays.py), on days 0..60.
 hub <- list(
   exact = c(5.12406648030701, 0.97184390713028, 1.07646963898928),
   double_censored = c(4.99016267662049, 0.936895070027868, 0.715805359543864)

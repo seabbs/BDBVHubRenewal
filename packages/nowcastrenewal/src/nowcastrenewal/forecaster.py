@@ -1413,7 +1413,7 @@ class RenewalModel:
         --------
         Fitting takes minutes per task on a CPU.
 
-        >>> from bdbvhubrenewal.forecasters import get_model
+        >>> from bdbvhub.models import get_model
         >>> model = get_model("renewal")
         >>> samples = model.forecast(task)
         >>> model.fit_diagnostics  # divergences and R-hat of the fit

@@ -21,7 +21,7 @@ Run from the repository root after `bdbvhubrenewal data` has written the tidy ta
 ```python
 import dataclasses
 
-from bdbvhubrenewal.data import (
+from bdbvhub.data.tidy import (
     delays_for_vintage,
     load_daily,
     load_delays,
@@ -29,7 +29,7 @@ from bdbvhubrenewal.data import (
 )
 from nowcasteval import backtest as bt
 from nowcasteval.nowcast import release_backtest
-from bdbvhubrenewal.forecasters import get_model
+from bdbvhub.models import get_model
 from nowcasteval.plots import plot_location_grid
 
 # 1. Load the data.
