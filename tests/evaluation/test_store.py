@@ -143,9 +143,10 @@ def test_code_digest_keeps_its_key_when_a_module_moves_package(
     tmp_path: Path,
 ) -> None:
     # The packages move (WP2b) puts modules in new packages that re-export
-    # them from `__init__.py`.
+    # them from `__init__.py`. The target's own `__init__.py` holds only
+    # a docstring, as every workspace package's does.
     root = _copy_repo(tmp_path)
-    pkg = root / "src/bdbvhubrenewal"
+    pkg = root / "packages/nowcastutils/src/nowcastutils"
     base = root / "packages/nowcastbaselines/src/nowcastbaselines"
     before = store.code_digest("randomwalknowcast", root)
     (pkg / "walks").mkdir()
@@ -153,7 +154,7 @@ def test_code_digest_keeps_its_key_when_a_module_moves_package(
     names = ["random_walk", "random_walks", "walk_noise", "walk_variance"]
     (pkg / "walks/__init__.py").write_text(
         '"""Random walks."""\n\n'
-        f"from bdbvhubrenewal.walks.steps import {', '.join(names)}\n\n"
+        f"from nowcastutils.walks.steps import {', '.join(names)}\n\n"
         f"__all__ = {names!r}\n"
     )
     for name in ("chain.py", "introductions.py", "randomwalk.py"):
@@ -161,7 +162,7 @@ def test_code_digest_keeps_its_key_when_a_module_moves_package(
         path.write_text(
             path.read_text().replace(
                 "nowcastbaselines.walk import",
-                "bdbvhubrenewal.walks import",
+                "nowcastutils.walks import",
             )
         )
     assert store.code_digest("randomwalknowcast", root) == before
