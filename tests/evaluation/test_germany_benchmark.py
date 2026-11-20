@@ -504,7 +504,7 @@ def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
 def test_forecasts_pass_their_horizons_and_store_them_apart(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     seen: list[tuple[int, ...]] = []
 
