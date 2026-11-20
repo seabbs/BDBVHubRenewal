@@ -705,14 +705,9 @@ def outbreak_blocks(
             # one more.
             rows = lag + 1 + (source in MIXED or source in ROLLING)
             if WHOLE_SYSTEM:
+                # The whole system, however many series: a block is never
+                # skipped for its size.
                 places, mix = whole_system(provinces, rng)
-                if len(places) * rows > MAX_SERIES:
-                    if empty is not None:
-                        empty.append(
-                            f"{source} cut {j}: {len(places)} places over "
-                            f"the series cap ({MAX_SERIES})"
-                        )
-                    continue
             elif len(provinces) > 1:
                 size = np.exp(rng.uniform(0, np.log(MAX_SERIES)))
                 fits = MAX_SERIES // rows - 1

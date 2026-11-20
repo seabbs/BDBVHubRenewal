@@ -91,7 +91,6 @@ def main() -> None:
     fs.DRAWS_PER_PASS = args.draws_per_simulation
     fs.SUBSET_SEED = args.subset_seed
     fs.checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
-    ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
     k = args.blocks_per_simulation
     device = torch_device(args.device)
 
@@ -175,7 +174,7 @@ def main() -> None:
         times.update(dict.fromkeys(parts, 0.0))
         # As the trainer's loop: clear, accumulate, step, free.
         optimiser.zero_grad()
-        value = fs.accumulate(list(indices), backward, zero, print)
+        value = fs.accumulate(list(indices), backward, zero)
         timed(
             "optimiser",
             functools.partial(fs.finite_step, params, optimiser, value),
@@ -282,7 +281,7 @@ def fs_step(model, accepted, device, params, optimiser):
             fs.free_memory()
 
         optimiser.zero_grad()
-        value = fs.accumulate(indices, backward, zero, print)
+        value = fs.accumulate(indices, backward, zero)
         fs.finite_step(params, optimiser, value)
         fs.free_memory()
         return value
