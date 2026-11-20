@@ -760,6 +760,14 @@ jobs:
         run: scripts/paper.sh "$TARGET"
       - name: Build the site into _site
         run: uv run mkdocs build --strict
+      # Each package's own docs site, at <site>/<package>/ (as
+      # `task package-docs`).
+      - name: Build each package's docs site into _site/<package>
+        run: |
+          for config in packages/*/mkdocs.yml; do
+            package=$(basename "$(dirname "$config")")
+            uv run mkdocs build --strict -f "$config" -d "$PWD/_site/$package"
+          done
       # The German page and its data name no held-out nowcast date.
       - name: Check the German page for held-out dates
         run: uv run python scripts/check_germany_site.py _site

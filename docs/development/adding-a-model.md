@@ -4,7 +4,7 @@ Adding a model to the registry, so every evaluation includes it.
 { .page-subtitle }
 
 A model is a class with a `name` and a `forecast(task)` method.
-`task` is a [`ForecastTask`][nowcastutils.base.ForecastTask]: the target rows and delay data of one vintage, the provinces and weeks to forecast, the number of samples and a seed.
+`task` is a [`ForecastTask`](../../nowcastutils/reference/#nowcastutils.base.ForecastTask): the target rows and delay data of one vintage, the provinces and weeks to forecast, the number of samples and a seed.
 `forecast` returns one row per location, week and sample, with columns `location`, `target_end_date`, `sample` and `value`.
 
 ```python

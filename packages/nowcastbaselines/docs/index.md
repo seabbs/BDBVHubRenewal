@@ -3,7 +3,7 @@
 The random walk and the random walk nowcast, for weekly counts revised as later releases report more cases.
 { .page-subtitle }
 
-nowcastbaselines is the package in `packages/nowcastbaselines` of the repository, and builds on [nowcastutils](nowcastutils.md) ([Packages](index.md)).
+nowcastbaselines is the package in `packages/nowcastbaselines` of the repository, and builds on [nowcastutils](https://samabbott.co.uk/bdbv-hub-modelling/nowcastutils/) ([Packages](https://samabbott.co.uk/bdbv-hub-modelling/packages/)).
 
 ## Install
 
@@ -101,24 +101,4 @@ for samples in forecasts.values():
 The random walk forecasts each place's weekly count on the log scale from its latest complete week.
 The random walk nowcast first nowcasts the recent weeks, by estimating the reporting delay from how counts grew between releases, then forecasts each nowcast draw with the random walk.
 
-## How to
-
-### Score the baselines
-
-The forecasts are sample tables, so nowcasteval scores them ([nowcasteval](nowcasteval.md#score-a-table-of-forecasts)).
-
-### Run them over many releases
-
-A backtest is one task per release, each with the data up to that release.
-`nowcasteval.backtest.make_tasks` builds them from a target table and the daily releases, and `nowcasteval.backtest.run_forecasts` runs a list of models over them, skipping a model where it cannot forecast.
-
-## Reference
-
-[nowcastbaselines API](../reference/nowcastbaselines.md).
-The methods are in the paper's [supporting information](../paper/si.html#baselines).
-
-## How it is used in the workflow
-
-Every other model is scored relative to the random walk nowcast, and both baselines are the last models in the hub submission chain.
-
-Next: [nowcastutils](nowcastutils.md).
+Next: [How to](how-to.md).
