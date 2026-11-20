@@ -7,7 +7,7 @@ import pandas as pd
 
 from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.data.zones import zone_places
-from bdbvhubrenewal.model.inputs import imputation_pmf, province_distances
+from nowcastrenewal.model.inputs import imputation_pmf, province_distances
 
 
 def test_imputation_pmf_truncates_and_renormalises() -> None:
@@ -44,7 +44,7 @@ def test_zone_places_are_the_mapped_zones() -> None:
 
 
 def test_unmapped_zones_take_their_province_place() -> None:
-    from bdbvhubrenewal.forecasters.zonerenewal import _zone_places
+    from nowcastrenewal.zones import _zone_places
     from nowcastutils.base import ForecastTask
 
     places = pd.DataFrame(

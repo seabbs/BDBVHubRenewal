@@ -338,7 +338,7 @@ def hub_delay_pmf(
         $\hat f$ on days 0 to `max_delay`.
     """
     # The model package needs PyRenew, which the data layer does not.
-    from bdbvhubrenewal.model.censored import gengamma_censored_pmf
+    from nowcastrenewal.model.censored import gengamma_censored_pmf
 
     fit = (
         "double_censored"

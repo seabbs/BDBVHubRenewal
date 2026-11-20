@@ -17,7 +17,6 @@ DESIGN = {
     "prefixes": [100, 200, 400, 800, 1600, 3200],
     "loss_horizon_days": 7,
     "quiet_min_cases": 10,
-    "grid": "r7",
     "draws": 1,
     "cuts": 14,
     "learning_rate": 1e-5,
@@ -58,26 +57,25 @@ def test_a_round_is_800_simulations():
     assert (sim["batches"], sim["batch"]) == (40, 20)
     assert "held_batches" not in sim
     # QC failures are redrawn in their batch, so a round is always 800 and
-    # a grid's training rounds hold the run's outbreaks exactly. The
-    # run's rounds are its grid's.
+    # the grid's training rounds hold the run's outbreaks exactly. The
+    # run's rounds are the grid's.
     assert CONFIG["finetune"]["rounds"] is None
     assert CONFIG["finetune"]["validation_round"] is None
-    for name, grid in CONFIG["grid_rounds"].items():
-        if name == CONFIG["finetune"]["grid"]:
-            assert len(grid["rounds"]) * 800 == CONFIG["finetune"]["outbreaks"]
-        assert grid["validation_round"] not in grid["rounds"]
-        assert grid["test_round"] not in (
-            *grid["rounds"],
-            grid["validation_round"],
-        )
+    grid = CONFIG["grid_rounds"]
+    assert len(grid["rounds"]) * 800 == CONFIG["finetune"]["outbreaks"]
+    assert grid["validation_round"] not in grid["rounds"]
+    assert grid["test_round"] not in (
+        *grid["rounds"],
+        grid["validation_round"],
+    )
 
 
-def _trainer_args(tmp_path, finetune=None):
+def _trainer_args(tmp_path, finetune=None, machine=""):
     """The trainer's arguments in the dry run of segment n100."""
     pytest.importorskip("snakemake")
     snakemake = Path(sys.executable).parent / "snakemake"
     local = tmp_path / "local.env"
-    local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
+    local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n{machine}")
     target = tmp_path / "checkpoints" / "slots" / "train" / "n100"
     # The real validation blocks are made from data a test run lacks.
     real = tmp_path / "real-validation.pkl"
@@ -130,9 +128,9 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
 
     args = fs.build_parser().parse_args(_trainer_args(tmp_path))
     assert args.until == 100
-    # Main's default is the r7 run: held-out round 33, seeds 33300 to
-    # 33339 (grid_rounds).
-    assert args.grid == "r7"
+    # Main's default: held-out round 33, seeds 33300 to 33339
+    # (grid_rounds), on the simulator's grid file.
+    assert args.grid_file == Path(CONFIG["simulate"]["grid_file"])
     assert args.held_out_seeds == [33300, 33339]
     assert args.holdout == 90
     assert args.outbreaks == 3200
@@ -146,7 +144,7 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
     assert args.learning_rate == 1e-5
     assert args.series_bias
     assert args.bias_lr == 1e-3
-    assert args.sources == CONFIG["grid_rounds"]["r7"]["sources"]
+    assert args.sources == CONFIG["grid_rounds"]["sources"]
     assert args.univariate_share == 0.2
     assert args.chunk == 100
     # The held-out evaluations' cadence comes from the config.
@@ -182,24 +180,12 @@ def test_quiet_cut_offs_come_from_the_config(tmp_path):
     assert args.quiet_min_cases == 10
 
 
-def test_an_r7_run_holds_out_round_33(tmp_path):
-    pytest.importorskip("pandas")
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import finetune_stream as fs
-
-    args = fs.build_parser().parse_args(_trainer_args(tmp_path, {"grid": "r7"}))
-    assert args.grid == "r7"
-    assert "daily+rolling7" in args.sources
-    # Round 33, every batch: seeds 33300 to 33339.
-    assert args.held_out_seeds == [33300, 33339]
-
-
-def test_each_grid_s_sources_are_its_block_design():
+def test_the_grid_s_sources_are_the_block_design():
     sys.path.insert(0, str(ROOT / "scripts"))
     import finetune_chronos as ft
 
-    for entry in CONFIG["grid_rounds"].values():
-        assert entry["sources"] == list(ft.BLOCK_DESIGN["source_shares"])
+    sources = CONFIG["grid_rounds"]["sources"]
+    assert sources == list(ft.BLOCK_DESIGN["source_shares"])
 
 
 def test_development_scores_no_bdbv_blocks(tmp_path):
@@ -212,3 +198,16 @@ def test_development_scores_no_bdbv_blocks(tmp_path):
     assert "zero_shot_real" not in config
     args = _trainer_args(tmp_path, {"real_validation": None})
     assert "--real-validation" not in args
+
+
+def test_a_machine_sets_the_checkpoint_threshold(tmp_path):
+    pytest.importorskip("pandas")
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import finetune_stream as fs
+
+    args = fs.build_parser().parse_args(_trainer_args(tmp_path))
+    assert args.checkpoint_above is None
+    args = fs.build_parser().parse_args(
+        _trainer_args(tmp_path, machine="CHECKPOINT_ABOVE=0\n")
+    )
+    assert args.checkpoint_above == 0

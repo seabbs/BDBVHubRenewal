@@ -8,7 +8,7 @@ from numpyro.handlers import seed
 from pyrenew.deterministic import DeterministicVariable
 from pyrenew.randomvariable import DistributionalVariable
 
-from bdbvhubrenewal.model import Importation, mixing_matrix
+from nowcastrenewal.model import Importation, mixing_matrix
 
 
 def _kernel(n: int) -> np.ndarray:

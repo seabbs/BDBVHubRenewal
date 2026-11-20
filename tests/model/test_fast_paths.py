@@ -14,10 +14,10 @@ import pytest
 from jax.flatten_util import ravel_pytree
 from numpyro.infer.util import log_density
 
-from bdbvhubrenewal.model import MAIN, build_model, model_args
-from bdbvhubrenewal.model import observation as ob
-from bdbvhubrenewal.model import publication_lag as pl
-from bdbvhubrenewal.model.observation import (
+from nowcastrenewal.model import MAIN, build_model, model_args
+from nowcastrenewal.model import observation as ob
+from nowcastrenewal.model import publication_lag as pl
+from nowcastrenewal.model.observation import (
     onset_expectations_by_place,
     weekly_onset_expectations,
 )

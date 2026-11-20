@@ -148,7 +148,7 @@ RUN_SHADES = labels.RUN_SHADES
 
 
 def _identifier(run: spec.Run) -> str:
-    """Return an earlier run's suffix: its grid (`r5 grid`), else its key."""
+    """Return an earlier run's suffix: its settings' grid, else its key."""
     if run.folder is not None:
         for _, s, _ in reversed(logs.checkpoints(run.folder)):
             if s.get("grid"):

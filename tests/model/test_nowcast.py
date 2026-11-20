@@ -12,12 +12,12 @@ from jax import random
 from numpyro.infer import Predictive
 
 from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.model import MAIN, build_model, model_args
-from bdbvhubrenewal.model.model import (
+from nowcastrenewal.model import MAIN, build_model, model_args
+from nowcastrenewal.model.model import (
     MAX_PUBLICATION_LAG,
     forecast_trajectories,
 )
-from bdbvhubrenewal.model.observation import (
+from nowcastrenewal.model.observation import (
     onset_expectations,
     onset_expectations_by_place,
 )
@@ -102,7 +102,7 @@ def _pairs(kept):
 
 
 def test_kept_share_is_the_published_share_at_each_release():
-    from bdbvhubrenewal.model.publication_lag import kept_share
+    from nowcastrenewal.model.publication_lag import kept_share
 
     pmf = jnp.asarray([0.5, 0.2, 0.1, 0.1, 0.1])
     background = jnp.asarray([0.1, 0.0])
@@ -249,7 +249,7 @@ def test_model_log_density_is_the_same_with_weekly_blocks(sim_vintage, config):
 def test_negative_and_long_delays_are_clipped_not_dropped(
     outbreak, sim_tables, table
 ):
-    from bdbvhubrenewal.model.inputs import vintage_from_tables
+    from nowcastrenewal.model.inputs import vintage_from_tables
 
     from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
 

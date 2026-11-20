@@ -59,6 +59,10 @@ DEFAULTS = (
     ("MEM_MB", ""),
     ("SIM_SLOTS", ""),
     ("DEVICE", "auto"),
+    # Series above which a training step recomputes activations in
+    # backward (empty: the trainer's memory budget sets it); lower on a
+    # small GPU. Memory only, outside the checkpoint's hash.
+    ("CHECKPOINT_ABOVE", ""),
     # Mailbox lines (any value turns them on), publishing as it trains,
     # the targets `all` runs here, and where batches come from (empty:
     # workflow/config.yaml's `finetune.sims_from`).

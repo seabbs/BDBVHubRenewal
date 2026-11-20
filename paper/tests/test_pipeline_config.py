@@ -185,10 +185,23 @@ def test_fine_tuned_rows_wait_for_a_checkpoint_of_the_final_run() -> None:
     assert len(pinned) == len(fc)
 
 
-def test_the_heldout_set_is_round_nine_one_grid_block() -> None:
+def test_the_heldout_set_is_the_runs_test_round() -> None:
     cfg = _config()
-    # Round 9 of the grid's layout: 40 batches of 21 simulations, seeds
-    # 30000 + 100 * 9 on, one balanced block of 840.
-    assert cfg["heldout"]["synthetic_seeds"] == list(range(30900, 30940))
-    assert cfg["synthetic"]["simulations_per_seed"] == 21
-    assert cfg["synthetic"]["simulations"]["paper"].endswith("rounds/r9/sims")
+    # The run's test round (workflow config `grid_rounds`): `batches`
+    # batches of `batch` simulations from seed `seed_base` + 100 r.
+    flow = yaml.safe_load(
+        (Path(__file__).parents[2] / "workflow" / "config.yaml").read_text()
+    )
+    sim = flow["simulate"]
+    r = flow["grid_rounds"]["test_round"]
+    first = sim["seed_base"] + 100 * r
+    assert cfg["heldout"]["synthetic_seeds"] == list(
+        range(first, first + sim["batches"])
+    )
+    assert cfg["synthetic"]["simulations_per_seed"] == sim["batch"]
+    assert cfg["synthetic"]["simulations"]["paper"].endswith(
+        f"rounds/r{r}/sims"
+    )
+    assert (
+        Path(cfg["synthetic"]["grid_file"]).name == Path(sim["grid_file"]).name
+    )

@@ -61,13 +61,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.forecasters.renewal import DELAY_SUMMARY_FILE
 from nowcasteval.scoring import (
     SCORE_COLUMNS,
     energy_scores,
     relative_skill,
     score_forecasts,
 )
+from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
 from nowcastutils.base import (
     NATIONAL,
     ForecastModel,

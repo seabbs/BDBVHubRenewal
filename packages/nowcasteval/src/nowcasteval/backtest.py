@@ -34,7 +34,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.bvd import MAX_RHAT
 from bdbvhubrenewal.data.delays import hub_delay_pmf
 from bdbvhubrenewal.data.tidy import delays_for_vintage
 from bdbvhubrenewal.data.zones import ZoneData, hub_places
@@ -48,6 +47,7 @@ from nowcastfoundation.simulate import (
     release_dates,
     simulate_outbreak,
 )
+from nowcastrenewal.bvd import MAX_RHAT
 from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -141,7 +141,7 @@ class BacktestConfig:
     bvd_max_rhat : float
         The limit on the joint fit's worst R-hat of a BVDOutbreakSize
         release the BVD variant may use
-        (`bdbvhubrenewal.data.bvd.select_release`).
+        (`nowcastrenewal.bvd.select_release`).
     skip_origins : tuple of str
         Real releases that are not backtest origins. They stay in the
         histories of later origins.
@@ -222,7 +222,7 @@ def apply_sampler(config: BacktestConfig) -> None:
     config : BacktestConfig
         Gives `sampler`.
     """
-    from bdbvhubrenewal.forecasters.renewal import SAMPLER_ENV
+    from nowcastrenewal.forecaster import SAMPLER_ENV
 
     if config.sampler and not os.environ.get(SAMPLER_ENV):
         os.environ[SAMPLER_ENV] = json.dumps(config.sampler)

@@ -249,7 +249,6 @@ The layouts of the training blocks and their shares.
 Each training block is built as follows.
 
 - A training block cuts one draw's releases at one cut-off and lays them out as the ragged layout does, with the target past the last complete step the outbreak's final counts.
-- The longest lag $D$ is drawn from 2 to 7 weeks, 14 to 49 days or 5 to 16 steps of 3 days, so the model is not tied to one $D$.
 - A system with more than 2,000 series is skipped, and the simulator draws strata so that a system fits.
 - Four or more flat places are grouped into 2 to 6 regions, with region totals.
 - The blocks with more than one series have as targets every level of their system.
@@ -267,17 +266,31 @@ Training takes the simulations in order, in chunks.
 Each simulation gives up to 14 training blocks, which are shuffled within a chunk and packed into steps.
 Each step is filled until it holds 256 series or more, so one large block can make a step of up to 2,000 series.
 
+::: {.callout-note title="Plan"}
+- A table lists the trainer's memory and speed settings at the values the paper run used, read from the workflow configuration.
+- A machine can override them for its own runs, and the table gives the committed defaults.
+- The threshold above which a block's activations are recomputed rather than stored changes only memory and speed, not the trained model.
+- The number of series in a step changes the recipe, as it sets how many blocks each gradient step averages over.
+:::
+
 Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
 A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations.
 At the largest checkpoint tested their median loss is {{< meta evidence.scale_floor.sims.n4000.small.median_loss.none >}} without it and {{< meta evidence.scale_floor.sims.n4000.small.median_loss.floor >}} with it, and the share of 99% quantiles over 100 times the truth is {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.none >}}% and {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.floor >}}%.
 Large series are unchanged, with median loss {{< meta evidence.scale_floor.sims.n4000.large.median_loss.none >}} and {{< meta evidence.scale_floor.sims.n4000.large.median_loss.floor >}}.
 Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.
 
-The ragged layout's lag series run to 4 weeks or 28 days.
-Lags run to the truth delay do worse with short release histories.
-On the German development half, the national WIS relative to `randomwalknowcast` is {{< meta evidence.lag.germany.fm_chronos_daily_ragged.capped >}} with the 4-week cap and {{< meta evidence.lag.germany.fm_chronos_daily_ragged.longer >}} with lags to the truth delay for the daily zero-shot model, and {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.capped >}} and {{< meta evidence.lag.germany.fm_chronos_weekly_ragged.longer >}} for the weekly one.
-On the BDBV release backtest it is {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.capped >}} and {{< meta evidence.lag.bdbv.fm_chronos_daily_ragged.longer >}} for the daily zero-shot model, and {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.capped >}} and {{< meta evidence.lag.bdbv.fm_chronos_weekly_ragged.longer >}} for the weekly one.
-BDBV's zones have few weekly releases, so with the longer horizon no recent lag of a zone falls in the model's context.
+::: {.callout-note title="Plan"}
+- Training and prediction choose the number of lag series by the same rule, for the zero-shot and fine-tuned models alike, and training draws no lag count.
+- Each block or task has one lag count.
+- We estimate the reporting delay's 99% point from the reference steps complete at the cut-off, from 28 days or 4 weeks to 112 days or 16 weeks before it, allowing for right truncation, and round it up to whole steps.
+- We pool the delay over the block's places, as a 99% point for each place is noisy where a place has few cases.
+- The estimate reads no release after the cut-off.
+- In training it reads the simulation's releases up to the cut-off, as prediction reads the real ones.
+- The lag count is the smaller of this estimate and the history available, keeping two steps of context before the longest lag.
+- With no complete steps, no counts in them, or a 99% point not reached within 112 days, we use as many lags as the history allows.
+- A user can set a fixed count or another quantile instead.
+- We compare this lag count with a fixed cap of 4 weeks or 28 days on the German development half.
+:::
 
 To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (`fm_chronos_daily_ragged_real` and `fm_chronos_weekly_ragged_real`).
 It was trained on the German data and the BDBV data together.
@@ -344,6 +357,7 @@ The dashboard was built with the help of a large language model.
 ::: {.callout-note title="Plan"}
 - We report cases by reference and report date through epinowcast's observation model.
 - The reporting delay has a drawn family and mean, and differs between places and age groups.
+- In a third of simulations, the mean delay varies by reference weekday, mostly within about 10%.
 - The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change.
 - Figure (planned): "Layer 3, reporting delays. (A) The mean reporting delay by reference date for each kind of delay change. (B) The delay distributions drawn across the grid."
 - Table (planned): "Layer 3, sampling distributions of the reporting delay settings, each with its reason."
@@ -352,14 +366,16 @@ The dashboard was built with the help of a large language model.
 #### Layer 4: the reporting system
 
 ::: {.callout-note title="Plan"}
-- We add report-day effects, and some outbreaks report on weekdays only.
-- Reports can bunch, and reporting shocks add backlogs or outages.
+- Cases are reported every day in half of simulations, on weekdays only in a quarter, on two or three fixed days a week in 15% and on one day a week in 10%, with the days drawn.
+- In half of the simulations reporting every day, the chance of reporting varies by report weekday, mostly by a few percent and up to about 15%, with a tail to strong effects.
+- In a third of simulations, counts vary by reference weekday, mostly by a few percent.
+- Reporting shocks add backlogs or outages.
 - Revisions are not part of epinowcast's model but are true of real data, so we apply them to the release triangle afterwards, in a drawn share of simulations.
 - Some cases are reported in error, appear in releases for a time and are then removed, so a release can exceed the final count.
 - Some cases are filed under a nearby reference day and moved later.
 - The target is still the final count, and lag series can then fall from one lag to the next.
 - Releases follow a daily, 3-day or weekly cadence, some with missed releases, as described with the training blocks.
-- Figure (planned): "Layer 4, the reporting system and revisions. One outbreak through each quirk (none, weekdays only, bunching, backlog, outage and revisions): final counts against the counts reported by the nowcast date."
+- Figure (planned): "Layer 4, the reporting system and revisions. One outbreak through each quirk (every day, weekdays only, fixed days, one day a week, backlog, outage and revisions): final counts against the counts reported by the nowcast date."
 - Table (planned): "Layer 4, sampling distributions of the reporting system settings, each with its reason."
 :::
 
@@ -413,10 +429,8 @@ Sampling distributions of the continuous simulation settings, read from the grid
 
 Outbreak length is drawn from a log-normal distribution with median 30 weeks, and is at least 4 weeks.
 A simulation that fails or reports fewer than 10 cases is redrawn with a new seed.
-Each simulation is checked against fixed thresholds, and one that fails is drawn again in its batch, so a round keeps 800 simulations.
-A simulation fails if its cases per stratum pass 500,000, if its weekly cases by reference date rise more than 1,000-fold in one week, or if its mean reporting delay passes 35 days.
-Before training, each round's simulations are checked again, and the trainer skips those that fail.
-No simulation is deleted.
+No simulation is rejected for its size, growth or reporting delay.
+We test the simulator so that a stratum never has more cases than its population.
 
 The grid has one known limitation.
 Simulated delays are shorter than the German data's, whose 99% point is {{< meta evidence.realism.delay_q99.Germany_states >}} days against {{< meta evidence.realism.delay_q99.sim_q95 >}} at the 95% point of the simulations.
@@ -474,6 +488,16 @@ The shrinkage only guards thin windows (@tbl-tuned-choices).
 We compare each walk model with no pairing, keeping the sample indices the model gave, and with the rolling $\rho_p$.
 We score the country and each province by the CRPS and 90% coverage, and each level's places and weeks as one vector by the energy score [@Gneiting2008] on $\log(x + 1)$ counts.
 
+::: {.callout-note title="Plan"}
+- The Ebola hub takes sample trajectories, so Chronos-2's submission turns its quantiles into trajectories with a Gaussian copula.
+- Each cell keeps its own quantile function, read linearly between the levels and flat beyond them, and the copula joins the cells across places and steps.
+- We score Chronos-2's trajectories with this copula, with every cell drawn independently, and with one level per trajectory across each series' steps (comonotone), as bounds on the dependence.
+- We score the random walk nowcast's trajectories as submitted.
+- We score trajectories by the energy score on counts and on $\log(x + 1)$ counts.
+- We score Ebola trajectories only at the final held-out evaluation, and German and synthetic trajectories now.
+- Ebola trajectory scores use the same truth as every other Ebola score, with $D$ the 98% point of the hub data's national reporting delay.
+:::
+
 ### Aggregation options
 
 Chronos-2 can forecast every level of a place hierarchy in one block, or each level on its own, and the daily model can give weekly totals in its block or as sums of its days.
@@ -501,8 +525,9 @@ $$
 $$
 Its expectation does not depend on $m$, whereas the usual sample form, with $2m^2$ in the second denominator, favours forecasts with more samples [@Ferro2014; @Zamo2018].
 The fair energy score is the same form for a vector of counts, with the Euclidean norm $\lVert \cdot \rVert$ in place of $|\cdot|$.
-We compute both with scoringrules' `fair` estimator, `crps_ensemble` and `es_ensemble`, the CRPS on counts and on $\log(x + 1)$ counts, and the energy score on $\log(x + 1)$ counts only.
-Our models give 1,000 samples and hub teams 100, so the fair form compares them on the same footing.
+We compute both with scoringrules' `fair` estimator, `crps_ensemble` and `es_ensemble`, the CRPS on counts and on $\log(x + 1)$ counts, and the energy score on counts and on $\log(x + 1)$ counts.
+The random walks give 1,000 samples and hub teams 100, so the fair form compares them on the same footing.
+Chronos-2 gives quantiles, so its fair scores are of the trajectories the copula draws from them.
 We score the German hub's seven quantile levels, and 23 levels, from 1% to 99%, for the synthetic study and for forecasts given as samples.
 Relative WIS compares each model with the baseline on the forecasts both made, while bias and coverage use every forecast a model made.
 
@@ -515,7 +540,6 @@ The copula weight of the walk baselines was set on the Ebola release backtest be
 | Choice | Value | Set on |
 |---|---|---|
 | Floor on Chronos-2's scale at inference | None, Chronos-2's default | Held-out simulations |
-| Lag cap of the ragged layout | 4 weeks or 28 days | German first half and the BDBV release backtest |
 | Copula shrinkage weight $w$ | 10, the weakest of 0, 10, 30 and 100, which scored within 1% of one another | Ebola release backtest |
 | Realism checks of the simulation grid | Grid ranges | German development half and published ranges for other diseases |
 
@@ -625,10 +649,10 @@ Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tune
 - We score our models' daily counts in both case studies directly from the daily rows, not summed.
 - The main text scores the hub targets, 7-day counts for Germany and weekly counts for BDBV.
 - Hub teams give no daily forecasts, so we compare our models with `randomwalknowcast` only.
-- For Germany, the fine-tuned daily model's block has each place's rolling 7-day sum row, so one call gives the daily counts and the hub's 7-day sums for every day.
+- For Germany, the daily zero-shot and fine-tuned models' block has each place's rolling 7-day sum row, so one call gives the daily counts and the hub's 7-day sums for every day.
 - We score the hub targets on the rolling rows and the daily counts on the daily rows, with no summing of daily draws.
 - The two outputs come from one call and are not forced to agree.
-- We also report the fine-tuned model with a weekly totals row in place of the rolling row.
+- We also report both models with a weekly totals row in place of the rolling row.
 - @fig-compare-daily shows both.
 - @fig-germany-si-results-daily repeats the German results figure for daily counts.
 
@@ -657,7 +681,7 @@ The share of evaluated outbreaks in each level of each grid factor, as each simu
 ::: {#fig-synthetic-si-nowcasts}
 ![](build/figures/si/synthetic-si-nowcasts.png)
 
-Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: nowcasts of outbreaks drawn to cover the levels of the trajectory, delay form, observation model and strata, one row per outbreak labelled by its cell, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-factors}
@@ -681,13 +705,13 @@ Held-out synthetic data: WIS over time. {{< meta results.synthetic.label >}} {{<
 ::: {#fig-synthetic-si-results-crps}
 ![](build/figures/si/synthetic-si-results-crps.png)
 
-Held-out synthetic data: the main results figure for every model, scoring the samples by the fair CRPS rather than the WIS of their quantiles. (A, B) CRPS relative to `randomwalknowcast` on the natural and log scales; (C) bias; (D) 50% and 90% coverage; then relative CRPS by scenario factor and by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: the main results figure for every model that gives samples, scoring the samples by the fair CRPS rather than the WIS of their quantiles. (A, B) CRPS relative to `randomwalknowcast` on the natural and log scales; (C) bias; (D) 50% and 90% coverage; then relative CRPS by scenario factor and by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#fig-synthetic-si-finetune-size}
 ![](build/figures/si/synthetic-si-finetune-size.png)
 
-Held-out synthetic data: relative WIS of each fine-tuning checkpoint, at doublings from 1,000 outbreaks, against the number of simulated outbreaks it was trained on (log scale). {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: relative WIS of each fine-tuning checkpoint, at doublings from 100 outbreaks, against the number of simulated outbreaks it was trained on (log scale). {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ::: {#tbl-synthetic-horizon}
@@ -707,7 +731,7 @@ Held-out synthetic data scores by location and stratum. {{< meta results.synthet
 ::: {#fig-germany-si-nowcasts}
 ![](build/figures/si/germany-si-nowcasts.png)
 
-German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#fig-germany-si-places}
@@ -760,7 +784,7 @@ Ebola hub submissions: mean energy score of each model's trajectories on log(x +
 ::: {#fig-ebola-si-nowcasts}
 ![](build/figures/si/ebola-si-nowcasts.png)
 
-Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 95% intervals. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: nowcasts for places picked by a rule in the workflow config (the largest, median and smallest by recent count, and the most rising and most falling), one row per place labelled with why it was picked, at the last origin shown in the main text, one column per model. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#fig-ebola-si-places}
@@ -791,7 +815,7 @@ Ebola: WIS over time. {{< meta results.ebola.label >}} {{< meta results.ebola.no
 ::: {#fig-ebola-si-results-crps}
 ![](build/figures/si/ebola-si-results-crps.png)
 
-Ebola: the main results figure for every model, scoring the samples by the fair CRPS rather than the WIS of their quantiles. (A, B) CRPS relative to {{< meta results.ebola.baseline >}} on the natural and log scales; (C) bias; (D) 50% and 90% coverage; then relative CRPS by location and by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola: the main results figure for every model that gives samples, scoring the samples by the fair CRPS rather than the WIS of their quantiles. (A, B) CRPS relative to {{< meta results.ebola.baseline >}} on the natural and log scales; (C) bias; (D) 50% and 90% coverage; then relative CRPS by location and by horizon. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 ::: {#tbl-ebola-horizon}

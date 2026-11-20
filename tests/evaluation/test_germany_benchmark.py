@@ -374,6 +374,9 @@ class _Extrapolate:
         return out, None
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("torch") is None, reason="needs torch"
+)
 def test_each_scored_row_is_the_sum_of_its_own_seven_days(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -470,3 +473,53 @@ def test_held_out_models_wait_until_they_are_registered(caplog) -> None:
         held = run_models(config, held_out=True)
     assert held == (*config.models, "randomwalk")
     assert "not_registered_de" in caplog.text
+
+
+def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bdbvhubrenewal.evaluation import germany as de
+
+    # Each German task holds its own copy of the release history, so a
+    # model that is not predicted ahead builds and forecasts one date's
+    # tasks before the next date's are built.
+    events: list[tuple[str, str]] = []
+
+    def tasks(_triangle, date, _n, _seed, _root, _horizons):
+        events.append(("build", date))
+        return [date]
+
+    def quantiles(_model, task, *_a, **_k):
+        events.append(("forecast", task))
+        return pd.DataFrame()
+
+    monkeypatch.setattr(de, "_tasks", tasks)
+    monkeypatch.setattr(de, "get_model", lambda name: name)
+    monkeypatch.setattr(de, "forecast_quantiles", quantiles)
+    dates = ["2021-10-04", "2021-10-05", "2021-10-06"]
+    de.germany_forecasts(["randomwalknowcast"], pd.DataFrame(), dates, 10, 1)
+    assert events == [e for d in dates for e in (("build", d), ("forecast", d))]
+
+
+def test_forecasts_pass_their_horizons_and_store_them_apart(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from bdbvhubrenewal.evaluation import germany as de
+
+    seen: list[tuple[int, ...]] = []
+
+    def tasks(_triangle, _date, _n, _seed, horizons=HORIZONS):
+        seen.append(tuple(horizons))
+        return []
+
+    monkeypatch.setattr(de, "nowcast_tasks", tasks)
+    monkeypatch.setattr(de, "get_model", lambda name: name)
+    wide = tuple(range(28, -29, -1))
+    for h in (wide, HORIZONS):
+        de.germany_forecasts(
+            ["randomwalknowcast"], pd.DataFrame(), ["2021-10-04"], 10, 1,
+            tmp_path, horizons=h,
+        )  # fmt: skip
+    assert seen == [wide, tuple(HORIZONS)]
+    # Each set of horizons has its own stored tasks.
+    assert len(list(tmp_path.rglob("*.pkl.gz"))) == 2

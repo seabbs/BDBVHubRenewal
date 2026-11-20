@@ -73,8 +73,11 @@ __all__ = [
     "FINETUNED_PREFIX",
     "FINETUNED_RELEASES",
     "FINETUNED_URL",
+    "LAG_QUANTILE",
+    "LAG_WINDOW",
     "LAYOUTS",
     "MAX_LAG",
+    "PERIODS",
     "REALDATA_PREFIX",
     "SLOTS_PREFIX",
     "SOURCES",
@@ -91,6 +94,7 @@ __all__ = [
     "group_key",
     "hub_triangle",
     "inference_precision",
+    "lag_count",
     "layout_block",
     "native_sampler",
     "prefetch",
@@ -111,8 +115,21 @@ LAYOUTS: Final = ("complete", "ragged")
 """The ways the releases are given to Chronos-2."""
 
 MAX_LAG: Final = {"weekly": 4, "daily": 28}
-"""Release lag $D$, in the source's steps, from which a count is taken as
-final."""
+"""A fixed release lag $D$ in the source's steps, 4 weeks or 28 days: the
+cap the SI compares the estimated lag count (`lag_count`) with, and the
+triangle's default width."""
+
+LAG_QUANTILE: Final = 0.99
+"""The share of a count reported by the lag `lag_count` takes as $D$."""
+
+LAG_WINDOW: Final = {"weekly": (4, 16), "daily": (28, 112)}
+"""The steps before the cut-off whose counts `lag_count` takes as complete
+(4 to 16 weeks, 28 to 112 days), and the most lags it gives."""
+
+PERIODS: Final = {"daily": "rolling7"}
+"""The aggregate row each place has in a ragged block, by source
+(`FoundationModel.period`): the daily source's 7-day rolling sums, from
+which the hub's 7-day target is read."""
 
 FINETUNED_CONFIG: Final = Path("config/finetune.toml")
 """Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
@@ -412,15 +429,15 @@ def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
 def _finetuned(name: str, source: str) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_spec` names.
 
-    The weekly and daily models share the checkpoint; the daily one reads
-    its weekly forecast from per-place weekly total rows, as trained.
+    The weekly and daily models share the checkpoint. Each builds the
+    block its zero-shot model builds (`PERIODS`); only the weights differ.
     """
     return FoundationModel(
         name,
         source,
         "ragged",
         resolve_checkpoint(finetuned_spec()),
-        weekly_totals=source == "daily",
+        period=PERIODS.get(source),
     )
 
 
@@ -618,6 +635,49 @@ def hub_triangle(
         # Sorted, so the last release's counts and cut-off are the latest.
         final, last = counts, at
     return HubTriangle(times, final, partial, last)
+
+
+def lag_count(
+    tri: HubTriangle, source: str, quantile: float = LAG_QUANTILE
+) -> int:
+    """Return the lag count $D$ from the data's reporting delay.
+
+    The delay's `quantile` point: the first lag at which the steps
+    `LAG_WINDOW` before the cut-off, taken as complete, had that share of
+    their counts reported, pooled over places and over the releases there
+    are (weekly releases of daily data see each step at every 7th lag).
+    It reads no release after the cut-off. At most the history allows,
+    with two steps of context before the longest lag; with no counts in
+    the window, or the share not reached within it, that many.
+
+    Parameters
+    ----------
+    tri : HubTriangle
+        The triangle, at least `LAG_WINDOW[source][1]` lags wide.
+    source : str
+        One of `SOURCES`.
+    quantile : float
+        The share of a count reported.
+
+    Returns
+    -------
+    int
+        $D$, at least 1.
+    """
+    lo, hi = LAG_WINDOW[source]
+    width = min(hi, int(tri.partial.shape[2]))
+    most = int(max(1, min(width, tri.last - 1)))
+    steps = np.arange(max(tri.last - hi, 0), tri.last - lo + 1)
+    if steps.size == 0:
+        return most
+    final = tri.final[:, steps]
+    for d in range(width):
+        part = tri.partial[:, steps, d]
+        seen = ~np.isnan(part)
+        total = final[seen].sum()
+        if total > 0 and part[seen].sum() / total >= quantile:
+            return max(1, min(d, most))
+    return most
 
 
 def quantile_draws(
@@ -927,8 +987,9 @@ def _weekly_from_totals(
 ) -> np.ndarray:
     """Return weekly draws `[S, L, W]` read from the total rows.
 
-    A week whose Saturday is past the context takes its total row's draw
-    there; an earlier week takes its total summed from the daily counts.
+    A week whose end is past the context takes its total row's draw
+    there, no lower than the sum of its days' counts reported; an earlier
+    week takes its total summed from the daily counts.
     `drawn` is `[S, 2L, horizon]`, the count rows then the total rows.
     """
     n_places = period.totals.shape[0]
@@ -936,7 +997,10 @@ def _weekly_from_totals(
     for week in weeks:
         t = tri.times.index(week)
         if t >= start:
-            out.append(drawn[:, n_places:, t - start])
+            # No lower than the days' counts reported, as the daily rows'
+            # draws are floored (`_daily_frame`).
+            reported = tri.final[:, max(t - 6, 0) : t + 1].sum(axis=1)
+            out.append(np.maximum(drawn[:, n_places:, t - start], reported))
         else:
             total = np.nan_to_num(period.totals[:, t])
             out.append(np.broadcast_to(total, drawn[:, :n_places, 0].shape))
@@ -983,23 +1047,6 @@ def _daily_frame(
     )[list(DAILY_COLUMNS)]
 
 
-def _lags_of(group: Series, places: set[str]) -> Series:
-    """Keep the lag series of `places` only.
-
-    A place with no cases has lag series of zeros, which tell Chronos-2
-    nothing and in the daily block would take most of its memory.
-    """
-    out = dict(group)
-    for key in ("past_covariates", "future_covariates"):
-        if key in out:
-            out[key] = {
-                name: values
-                for name, values in out[key].items()
-                if name.rsplit("_lag_", 1)[0] in places
-            }
-    return out
-
-
 def _at(rows: pd.DataFrame | None, vintage: str) -> pd.DataFrame | None:
     """Return the rows of one release, or None."""
     return None if rows is None else rows.loc[rows["vintage"] == vintage]
@@ -1026,10 +1073,12 @@ class FoundationModel:
     checkpoint : Checkpoint or None
         The fine-tuned checkpoint Chronos-2 loads, or None for the
         pretrained model.
-    weekly_totals : bool
-        For the daily source: give each place a row of its weekly totals,
-        summed from its daily counts (`week_rows`), and read the weekly
-        forecast from that row. As the fine-tuned model was trained.
+    period : str or None
+        For the daily source, each place's aggregate row after its count
+        rows: `rolling7`, each day's 7-day sum (`rolling_rows`, as the
+        daily+rolling7 training blocks), or `week`, each week's total on
+        its Saturday (`week_rows`, as daily+weekly). The hub's 7-day sums
+        are read from it. None for no such row.
     sample : Sampler or None
         Draws the trajectories, Chronos-2 with `checkpoint` by default.
     stream : str or None
@@ -1039,16 +1088,20 @@ class FoundationModel:
     known : mapping or None
         Chronos-2's quantiles of tasks predicted ahead in few batched
         passes (`prefetch`); others are predicted when forecast.
+    lags : int or None
+        A fixed lag count $D$; None estimates it from each task's data
+        (`lag_count`).
     """
 
     name: str
     source: str
     layout: str
     checkpoint: Checkpoint | None = None
-    weekly_totals: bool = False
+    period: str | None = None
     sample: Sampler | None = field(default=None, repr=False)
     stream: str | None = field(default=None, repr=False)
     known: Known | None = field(default=None, repr=False, compare=False)
+    lags: int | None = None
     reads_zones: ClassVar[bool] = True
 
     @property
@@ -1097,29 +1150,8 @@ class FoundationModel:
         ValueError
             If the release holds another checkpoint or adapter.
         """
-        weekly = self.source == "weekly"
-        base = task.target_history if weekly else task.daily_history
-        zone = task.zone_history if weekly else task.zone_daily_history
-        if base is None or base.empty:
-            raise ModelUnavailableError(
-                f"{self.name} needs the {self.source} releases, and the task "
-                f"for {task.vintage} has none."
-            )
-        # Only the releases of the country and provinces, so a release
-        # gives every place's lag cells or none.
-        if zone is not None:
-            zone = zone.loc[zone["vintage"].isin(set(base["vintage"]))]
-        has_zones = zone is not None and task.zone_daily_history is not None
-        zones = tuple(
-            z
-            for z in task.zone_codes
-            if has_zones and province_of(z) in task.locations
-        )
-        rows = _rows(base, zone if zones else None)
-        assert rows is not None
-        places = (NATIONAL, *task.locations, *zones)
-        weeks = list(task.target_end_dates)
-        tri = hub_triangle(rows, self.source, places, weeks[-1])
+        rows, places, weeks = self._rows(task)
+        tri = self._triangle(rows, places, weeks[-1])
         start = tri.n_context
         if self.layout == "complete":
             walk = _walk_start(task)
@@ -1138,15 +1170,15 @@ class FoundationModel:
         horizon = len(tri.times) - start
         seed = int(task.rng(self.stream or self.name).integers(0, 2**31 - 1))
         period = None
-        if self.weekly_totals:
+        if self.period == "rolling7":
+            period = rolling_rows(tri, 7)
+        elif self.period == "week":
             period = week_rows(tri)
+        elif self.period is not None:
+            raise ValueError(f"unknown period rows {self.period!r}")
+        # Zero-shot and fine-tuned models build the same block, the
+        # zero-case places' lag rows included; only the weights differ.
         group = layout_block(tri, self.layout, places, start, period)
-        if self.checkpoint is None:
-            # Zero-shot drops the lags of places with no cases, which tell
-            # Chronos-2 nothing. A fine-tuned model was trained with them
-            # (all-zero rows), so it keeps them.
-            cased = {places[i] for i in np.flatnonzero(tri.final.sum(axis=1))}
-            group = _lags_of(group, cased)
         sample = self.sample or partial(
             chronos_sampler, checkpoint=self.checkpoint, known=self.known
         )
@@ -1197,6 +1229,52 @@ class FoundationModel:
         if self.source != "daily":
             return weekly_out, pd.DataFrame(columns=list(DAILY_COLUMNS))
         return weekly_out, _daily_frame(drawn, tri, start, places, weeks)
+
+    def _rows(
+        self, task: ForecastTask
+    ) -> tuple[pd.DataFrame, tuple[str, ...], list[str]]:
+        """Return the task's releases of the source, its places and weeks.
+
+        Raises `ModelUnavailableError` with no releases of the source.
+        """
+        weekly = self.source == "weekly"
+        base = task.target_history if weekly else task.daily_history
+        zone = task.zone_history if weekly else task.zone_daily_history
+        if base is None or base.empty:
+            raise ModelUnavailableError(
+                f"{self.name} needs the {self.source} releases, and the task "
+                f"for {task.vintage} has none."
+            )
+        # Only the releases of the country and provinces, so a release
+        # gives every place's lag cells or none.
+        if zone is not None:
+            zone = zone.loc[zone["vintage"].isin(set(base["vintage"]))]
+        has_zones = zone is not None and task.zone_daily_history is not None
+        zones = tuple(
+            z
+            for z in task.zone_codes
+            if has_zones and province_of(z) in task.locations
+        )
+        rows = _rows(base, zone if zones else None)
+        assert rows is not None
+        places = (NATIONAL, *task.locations, *zones)
+        weeks = list(task.target_end_dates)
+        return rows, places, weeks
+
+    def _triangle(
+        self, rows: pd.DataFrame, places: Sequence[str], last_time: str
+    ) -> HubTriangle:
+        """Return the task's triangle, `lags` or `lag_count` lags wide."""
+        full = hub_triangle(
+            rows, self.source, places, last_time, LAG_WINDOW[self.source][1]
+        )
+        lags = self.lags or lag_count(full, self.source)
+        return replace(full, partial=full.partial[:, :, :lags])
+
+    def lag_count(self, task: ForecastTask) -> int:
+        """Return the lag count the model gives `task`'s block."""
+        rows, places, weeks = self._rows(task)
+        return int(self._triangle(rows, places, weeks[-1]).partial.shape[2])
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return trajectories of every hub target in the task.
@@ -1349,7 +1427,13 @@ for _source in SOURCES:
         _name = f"fm_chronos_{_source}_{_layout}"
         register_model(
             _name,
-            partial(FoundationModel, _name, _source, _layout),
+            partial(
+                FoundationModel,
+                _name,
+                _source,
+                _layout,
+                period=PERIODS.get(_source) if _layout == "ragged" else None,
+            ),
             f"Chronos-2 on the hub target's {_source} releases, {_layout} "
             "layout, every target in one block.",
             fitted=True,

@@ -251,6 +251,7 @@ def nowcast_tasks(
     n_samples: int,
     seed: int,
     offsets: Sequence[int] = OFFSETS,
+    horizons: Sequence[int] = HORIZONS,
 ) -> list[ForecastTask]:
     """Return the states and age groups tasks of a nowcast date, by offset.
 
@@ -266,6 +267,9 @@ def nowcast_tasks(
         Seed of the tasks' random numbers.
     offsets : sequence of int
         Weekday offsets (`OFFSETS`, all of them by default).
+    horizons : sequence of int
+        Days from the nowcast date to the end of each 7-day sum, the
+        hub's (`HORIZONS`) by default. Days after it are forecasts.
 
     Returns
     -------
@@ -273,8 +277,9 @@ def nowcast_tasks(
         For each offset k, the task of the states in the triangle, then
         that of the age groups, each with Germany as the country. Dates
         move so the nowcast date less k is a Saturday. The reference date
-        and cut-off are the nowcast date moved, and the weeks end k,
-        k + 7, ... days before it, no more than 28 (`HORIZONS`).
+        and cut-off are the nowcast date moved, and the weeks end on the
+        `horizons` that are k, k + 7, ... days before it (or 7 - k,
+        14 - k, ... days after it).
     """
     # The hub has age groups for every state, but only Germany's are
     # nowcast.
@@ -289,7 +294,9 @@ def nowcast_tasks(
     rows = rows.loc[rows["confirm"] != 0]
     tasks = []
     for offset in offsets:
-        tasks += _offset_tasks(rows, nowcast_date, offset, n_samples, seed)
+        tasks += _offset_tasks(
+            rows, nowcast_date, offset, n_samples, seed, horizons
+        )
     return tasks
 
 
@@ -299,6 +306,7 @@ def _offset_tasks(
     offset: int,
     n_samples: int,
     seed: int,
+    horizons: Sequence[int] = HORIZONS,
 ) -> list[ForecastTask]:
     """Return one offset's two tasks (`nowcast_tasks`)."""
     shift = _shift(nowcast_date, offset)
@@ -324,7 +332,7 @@ def _offset_tasks(
             if place_code(GERMANY, a) in present
         ),
     )
-    back = [h for h in sorted(HORIZONS) if (-h - offset) % 7 == 0]
+    back = [h for h in sorted(horizons) if (-h - offset) % 7 == 0]
     weeks = tuple((ref + dt.timedelta(days=h)).isoformat() for h in back)
     tasks = []
     for places in groups:

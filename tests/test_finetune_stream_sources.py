@@ -47,8 +47,8 @@ def test_layouts_are_drawn_at_their_shares(monkeypatch):
         "daily+3day",
         "daily+rolling3",
     }
-    # The r6 design splits r5's mixed shares between period and rolling
-    # totals.
+    # The block design splits the mixed shares between period and
+    # rolling totals.
     assert fs.ft.SOURCE_SHARES["daily+weekly"] == pytest.approx(0.125)
     assert fs.ft.SOURCE_SHARES["daily+rolling7"] == pytest.approx(0.125)
     assert fs.ft.SOURCE_SHARES["daily+3day"] == pytest.approx(0.05)
