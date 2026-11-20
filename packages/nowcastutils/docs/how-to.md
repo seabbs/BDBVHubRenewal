@@ -53,5 +53,18 @@ assert (rank[:, 0] == rank[:, 2]).all()
 ```
 
 `gaussian` joins the weeks and places with correlations given in `fit` (`rho` between weeks, `s` between places), and `independent` draws every cell on its own.
+`fit_coupling` estimates that `fit` from the model's own earlier forecasts.
+`pit_scores` scores what was later reported in them, and the correlations are shrunk towards independence as far as the scores' own noise says.
+
+```python
+from nowcastutils.trajectories import fit_coupling, pit_scores
+
+rng = np.random.default_rng(2)
+# Four earlier forecasts of the same two places and three weeks.
+earlier = np.repeat(quantiles[None], 4, axis=0)
+reported = earlier[..., 1] + rng.normal(0, 1, (4, 2, 3))
+fit = fit_coupling(pit_scores(earlier, levels, reported, rng), "gaussian")
+draws = couple(quantiles, levels, "gaussian", fit, n_samples=500, seed=1)
+```
 
 Next: [Reference](reference.md).
