@@ -625,6 +625,10 @@ Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tune
 - We score our models' daily counts in both case studies directly from the daily rows, not summed.
 - The main text scores the hub targets, 7-day counts for Germany and weekly counts for BDBV.
 - Hub teams give no daily forecasts, so we compare our models with `randomwalknowcast` only.
+- For Germany, the fine-tuned daily model's block has each place's rolling 7-day sum row, so one call gives the daily counts and the hub's 7-day sums for every day.
+- We score the hub targets on the rolling rows and the daily counts on the daily rows, with no summing of daily draws.
+- The two outputs come from one call and are not forced to agree.
+- We also report the fine-tuned model with a weekly totals row in place of the rolling row.
 - @fig-compare-daily shows both.
 - @fig-germany-si-results-daily repeats the German results figure for daily counts.
 
