@@ -1625,6 +1625,7 @@ def main() -> None:
             },
         },
         "max_lags": {k: [min(v), max(v)] for k, v in ft.MAX_LAGS.items()},
+        "lag_cap": ft.LAG_CAP,
         "held_out_sha256": ft._sha256(out / "outbreaks-held-out.txt"),
         "n_validation": len(val),
         "chunk": CHUNK,

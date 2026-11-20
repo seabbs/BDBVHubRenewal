@@ -51,6 +51,12 @@ MAX_LAGS = {
 """Release lags $D$ the blocks are drawn from; daily blocks with period
 totals have daily lags."""
 
+LAG_CAP = (
+    "a block's drawn lag capped at the steps of history before its cut-off, "
+    "less two of context, so early cut-offs are kept"
+)
+"""How a drawn lag meets a short history (`outbreak_blocks`)."""
+
 
 DAYS_PER_STEP = {
     "weekly": 7,
@@ -650,7 +656,8 @@ def outbreak_blocks(
     `picks`, only those (source, slot) blocks are cut. A block's series
     count is drawn log-uniformly from 1 to `MAX_SERIES`,
     and its places (`choose_places`) are about that many series at its
-    lag, with the country first. A block whose places have no release
+    lag, with the country first. A lag longer than the history before the
+    cut-off is capped to it (`LAG_CAP`). A block whose places have no release
     rows by its cut (strata with no cases) is skipped and, with `empty`,
     described there. Each block's releases run up to its cut at a cadence
     drawn for its source (`draw_cadence`), recorded as its `cadence`.
@@ -677,12 +684,21 @@ def outbreak_blocks(
                 continue
             lag = int(rng.choice(MAX_LAGS[source]))
             width = DAYS_PER_STEP[source]
-            # At least two steps of context before the lags.
-            least = -(-(lag + 2) * width // 7)
+            # At least two steps of context before one lag.
+            least = -(-3 * width // 7)
             if len(cutoffs) <= least:
                 continue
             share = (j + rng.random()) / cuts
             cut = least + int(share * (len(cutoffs) - least))
+            # As many lags as the history before the cut-off allows, with
+            # two steps of context before them.
+            history = (
+                dt.date.fromisoformat(cutoffs[cut])
+                - dt.date.fromisoformat(first[:10])
+            ).days // width
+            lag = min(lag, history - 2)
+            if lag < 1:
+                continue
             places: tuple[str, ...] = (NATIONAL,)
             mix = "national"
             # A place's rows: its counts, its lags and, with period totals,

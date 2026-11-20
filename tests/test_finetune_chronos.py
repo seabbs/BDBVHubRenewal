@@ -675,8 +675,10 @@ def test_three_day_source_cuts_three_day_blocks(tmp_path, monkeypatch):
     assert blocks
     for b in blocks:
         assert b["source"] == "3day"
-        # D runs 5-16 steps of 3 days.
-        assert 5 <= _d(b) <= 16
+        # D is drawn from 5-16 steps of 3 days, capped at the history
+        # before an early cut-off.
+        assert 1 <= _d(b) <= 16
+    assert max(_d(b) for b in blocks) >= 5
 
 
 def test_blocks_predict_their_own_horizon_in_whole_patches(tmp_path):
@@ -1462,3 +1464,24 @@ def test_parents_come_from_the_grid_file(monkeypatch):
     finally:
         ft.PARENTS = None
     assert ft.PARENTS is None
+
+
+def test_early_cut_offs_take_as_many_lags_as_history_allows(monkeypatch):
+    # A lag longer than the history before a cut-off is capped to it, so
+    # an early cut-off is kept, not skipped.
+    from finetune_chronos import NATIONAL, outbreak_blocks
+
+    monkeypatch.setattr(ft, "SOURCES", ("daily",))
+    monkeypatch.setattr(ft, "MAX_LAGS", {**ft.MAX_LAGS, "daily": (49,)})
+    monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 1.0)
+    counts = _counts_of(["P1", "P2"], days=63)
+    blocks = outbreak_blocks(
+        counts, ["P1", "P2"], np.random.default_rng(0), 1, 4
+    )
+    assert len(blocks) == 4
+    for b in blocks:
+        assert b["places"] == (NATIONAL,)
+        lag = b["n_covariates"] // len(b["places"])
+        # Every lag series and two steps of context fit in the history.
+        assert 1 <= lag < 49
+        assert b["nowcast"] == lag
