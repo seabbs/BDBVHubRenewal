@@ -1015,13 +1015,13 @@ def test_one_unit_runs_before_the_release_list_exists(tmp_path):
 # Each grid has its own rounds (flowlib.grids).
 
 
-def test_r6_release_of_an_r5_round_is_refused(tmp_path):
-    with pytest.raises(AssertionError, match="round 9 is grid r5's"):
+def test_r7_release_of_a_retired_round_is_refused(tmp_path):
+    with pytest.raises(AssertionError, match="round 9 is grid retired's"):
         dry(tmp_path, "release", config={"rounds": [9]})
 
 
-def test_r6_simulates_its_held_out_round_20(tmp_path):
-    jobs = dry(tmp_path, "simulate", config={"rounds": [20]})
+def test_r7_simulates_its_held_out_round_33(tmp_path):
+    jobs = dry(tmp_path, "simulate", config={"rounds": [33]})
     assert jobs["simulate_batch"] == 40
 
 

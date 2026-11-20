@@ -15,7 +15,7 @@ def test_until_is_a_flag():
             "sims",
             "out",
             "--grid",
-            "r5",
+            "r7",
             "--held-out-seeds",
             "1",
             "2",
@@ -25,7 +25,7 @@ def test_until_is_a_flag():
     )
     assert args.until == 500
     defaults = fs.build_parser().parse_args(
-        ["sims", "out", "--grid", "r5", "--held-out-seeds", "1", "2"]
+        ["sims", "out", "--grid", "r7", "--held-out-seeds", "1", "2"]
     )
     assert defaults.until is None
 
