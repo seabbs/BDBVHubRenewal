@@ -82,7 +82,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - Without more information, the model has no marker of which delay series belong to which place's count.
 - We add learned attention biases that nudge these weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (SI).
 - A third each of the training blocks with places have a country equal to, above or later than the sum of its places.
-- We fine-tune base Chronos-2 on synthetic data on a laptop, with its default LoRA recipe.
+- We fine-tune base Chronos-2 on synthetic data on one machine, with its default LoRA recipe.
 - LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (SI).
 - Zero-shot Chronos-2 with delays gets the same input as the fine-tuned model for each task, the same lag series, lag count, aggregate rows and layout, so only the weights differ.
 - We train on 3,200 simulations drawn from the grid, each drawing its settings independently.
@@ -95,7 +95,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - We report the final checkpoint, where the learning rate reaches zero, and select no checkpoint on real data.
 - Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
 - We compare the joint block with forecasting each level alone and with summing the lowest level (SI).
-- The number of lag series is the reporting delay's 99% point, estimated at the nowcast date from complete steps only, or as many as the history allows if that is fewer (SI).
+- The number of lag series, in training and at prediction alike, is the pooled reporting delay's 99% point, estimated at the nowcast date from complete steps only, or as many as the history allows if that is fewer (SI).
 - We compare the model with attention biases with one fine-tuned without them (SI).
 - We fine-tune Chronos-2 on complete counts only, without delay series, and compare it with the ragged model (SI).
 - We fine-tune Chronos-2 on real data and compare it with the model fine-tuned on simulations (SI).
@@ -348,14 +348,14 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
     We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.
     A few Ebola checkpoint scores were produced in error during development and were not used to choose models or settings.
   - We evaluated on a retrospective and a real-time case study, with synthetic data that can be tuned to a setting.
-  - Fine-tuning ran on a laptop, so it needs no shared compute.
+  - Fine-tuning ran on one machine, so it needs no shared compute.
   - The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
   - Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.
   - We used one layout, daily counts and daily lag series, with an aggregate row per place in both models with delays, and could also have included weekly lag series in the block.
   - We fine-tuned on blocks of at most 364 steps of history but forecast with all available data.
   - We did not test whether this affects Chronos-2's handling of longer histories, which matters most for long series such as the German daily data.
-  - Fine-tuning used the laptop's GPU, which made it several times faster than its CPU.
-  - On a laptop CPU alone it would run in hours.
+  - Fine-tuning used a GPU, which made it several times faster than a CPU.
+  - On a CPU alone it would run in hours.
   - Key references: [@Kalahasti2026; @Meyer2025].
 - **Domain knowledge through synthetic data.**
   - Domain knowledge enters through the simulations.

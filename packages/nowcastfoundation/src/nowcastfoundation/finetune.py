@@ -538,7 +538,7 @@ def training_block(
         block's release cadence (`release_days`).
     max_lag : int, optional
         Release lag $D$ in the source's steps. By default the rule
-        forecasts use (`nowcastfoundation.forecaster.delay_lags`), read
+        forecasts use (`nowcastfoundation.forecaster.lag_count`), read
         from the block's own releases up to the cut: the largest of its
         places' truncation-aware 99% delays, at most the history before
         the cut-off. A binned source takes it in whole bins.
@@ -587,10 +587,20 @@ def training_block(
         return None
     if max_lag is None:
         # The rule a forecast uses, on the releases up to the cut.
-        lag_steps = forecaster.delay_lags(
-            rows, "daily" if on_days else source, places, end.isoformat()
+        lag_source = "daily" if on_days else source
+        full = hub_triangle(
+            rows,
+            lag_source,
+            places,
+            end.isoformat(),
+            max_lag=forecaster.LAG_WINDOW[lag_source][1],
         )
-        max_lag = max(1, -(-lag_steps // BINNED.get(source, 1)))
+        lag_steps = forecaster.lag_count(full, lag_source)
+        k = BINNED.get(source, 1)
+        # In the block's steps, capped by its history in those steps, as
+        # `lag_count` caps it in days: two bins of context.
+        bins_last = (full.last + 1) // k - 1
+        max_lag = max(1, min(-(-lag_steps // k), bins_last - 1))
     if period is not None or window is not None:
         tri = hub_triangle(
             rows, "daily", places, end.isoformat(), max_lag=max_lag

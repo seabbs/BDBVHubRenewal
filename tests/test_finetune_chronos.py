@@ -608,7 +608,7 @@ def test_one_source_cuts_only_that_source(tmp_path, monkeypatch):
     monkeypatch.setattr(finetune_chronos, "SOURCES", ("weekly",))
     blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
     assert blocks
-    assert all(_d(b) <= 7 for b in blocks)
+    assert all(b["source"] == "weekly" and _d(b) >= 1 for b in blocks)
 
 
 def test_workers_take_the_trainer_block_settings():
@@ -664,9 +664,8 @@ def test_three_day_source_cuts_three_day_blocks(tmp_path, monkeypatch):
     assert blocks
     for b in blocks:
         assert b["source"] == "3day"
-        # D is drawn from 5-16 steps of 3 days, capped at the history
-        # before an early cut-off.
-        assert 1 <= _d(b) <= 16
+        # D follows the lag rule in 3-day steps, at most the history.
+        assert _d(b) >= 1
     assert max(_d(b) for b in blocks) >= 5
 
 

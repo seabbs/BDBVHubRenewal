@@ -67,15 +67,14 @@ __all__ = [
     "ADAPTER_FILES",
     "CHRONOS_MODEL",
     "CHRONOS_REVISION",
-    "DELAY_LOOKBACK",
-    "DELAY_QUANTILE",
-    "DELAY_WINDOW",
     "FINETUNED_CACHE",
     "FINETUNED_CONFIG",
     "FINETUNED_ENV",
     "FINETUNED_PREFIX",
     "FINETUNED_RELEASES",
     "FINETUNED_URL",
+    "LAG_QUANTILE",
+    "LAG_WINDOW",
     "LAYOUTS",
     "MAX_LAG",
     "PERIODS",
@@ -89,14 +88,13 @@ __all__ = [
     "Known",
     "Sampler",
     "chronos_sampler",
-    "delay_lags",
     "finetuned_adapter",
     "finetuned_releases",
     "finetuned_spec",
     "group_key",
-    "history_lags",
     "hub_triangle",
     "inference_precision",
+    "lag_count",
     "layout_block",
     "native_sampler",
     "prefetch",
@@ -117,19 +115,17 @@ LAYOUTS: Final = ("complete", "ragged")
 """The ways the releases are given to Chronos-2."""
 
 MAX_LAG: Final = {"weekly": 4, "daily": 28}
-"""Release lag $D$, in the source's steps, from which a count is taken as
-final."""
+"""A fixed release lag $D$ in the source's steps, 4 weeks or 28 days: the
+cap the SI compares the estimated lag count (`lag_count`) with, and the
+triangle's default width."""
 
-DELAY_QUANTILE: Final = 0.99
-"""The share of a step's reports its release lags hold by default
-(`delay_lags`)."""
+LAG_QUANTILE: Final = 0.99
+"""The share of a count reported by the lag `lag_count` takes as $D$."""
 
-DELAY_LOOKBACK: Final = {"weekly": 16, "daily": 112}
-"""Steps a step must have been reported for to count as complete in
-`delay_lags`: delays are read up to this lag."""
-
-DELAY_WINDOW: Final = {"weekly": 4, "daily": 28}
-"""Steps whose reports `delay_lags` pools."""
+LAG_WINDOW: Final = {"weekly": (4, 16), "daily": (28, 112)}
+"""`lag_count`'s complete steps: this many (4 weeks, 28 days), ending this
+many before the cut-off (16 weeks, 112 days), which is also the most lags
+it reads."""
 
 PERIODS: Final = {"daily": "rolling7"}
 """The aggregate row each place has in a ragged block, by source
@@ -642,49 +638,41 @@ def hub_triangle(
     return HubTriangle(times, final, partial, last)
 
 
-def delay_lags(
-    rows: pd.DataFrame,
-    source: str,
-    places: Sequence[str],
-    last_time: str,
-    quantile: float = DELAY_QUANTILE,
+def lag_count(
+    tri: HubTriangle, source: str, quantile: float = LAG_QUANTILE
 ) -> int:
-    """Return the release lags that hold `quantile` of a step's reports.
+    """Return the block's lag count $D$ from the data's reporting delay.
 
-    One lag count for the block: the largest over `places` of each
-    place's delay, one more than the smallest lag whose share of the
-    place's latest count reaches `quantile`. Each place's delay is read
-    from the releases in `rows` alone (no later data) and only from steps
-    old enough to be complete: the `DELAY_WINDOW` steps `DELAY_LOOKBACK`
-    steps before the latest release's cut-off, whose counts at every lag
-    below the lookback are known by then. Recent steps, which have not
-    yet seen their long delays, are left out, so the estimate is not
-    biased short by right truncation. A low-count place can only
-    underestimate its delay, so it never raises the block's. The count
-    is never more than the history allows (`history_lags`). A place
-    whose reports do not reach `quantile` within the lookback, or a block
-    with too little history for complete steps or no count in them,
-    takes the most lags the history allows. Training blocks
-    (`nowcastfoundation.finetune.training_block`) and forecasts use this
-    one rule.
+    One count for the block: the largest over its places of each place's
+    delay, one more than the first lag at which that place's complete
+    steps had `quantile` of their counts reported, so lag $D - 1$, where
+    the share is reached, is in the block. A place's complete steps are
+    the `LAG_WINDOW[source][0]` steps ending `LAG_WINDOW[source][1]`
+    steps before the cut-off: every lag below that is reported by the
+    cut-off, so recent steps, which have not yet seen their long delays,
+    do not bias it short (right truncation). It reads no release after
+    the cut-off. A lag no release fell on carries the count of the lag
+    before (weekly releases of daily data). A low-count place can only
+    underestimate its delay, so it never raises the block's. At most the
+    history allows, two steps of context before the longest lag; a place
+    whose share is not reached within the window takes that many, and so
+    does a block with no complete steps or no count in them. Training
+    blocks (`nowcastfoundation.finetune.training_block`) and forecasts
+    (`FoundationModel`) use this one rule.
 
     Parameters
     ----------
-    rows : pandas.DataFrame
-        The releases, as `hub_triangle` takes them.
+    tri : HubTriangle
+        The triangle, at least `LAG_WINDOW[source][1]` lags wide.
     source : str
         One of `SOURCES`.
-    places : sequence of str
-        The block's places.
-    last_time : str
-        Last step of the grid.
     quantile : float
-        Share of the reports, in (0, 1].
+        The share of a count reported, in (0, 1].
 
     Returns
     -------
     int
-        Release lags $D$, in the source's steps.
+        $D$, at least 1.
 
     Raises
     ------
@@ -692,33 +680,24 @@ def delay_lags(
         If `quantile` is not in (0, 1].
     """
     if not 0 < quantile <= 1:
-        raise ValueError(f"delay quantile {quantile} is not in (0, 1]")
-    back, window = DELAY_LOOKBACK[source], DELAY_WINDOW[source]
-    tri = hub_triangle(rows, source, places, last_time, max_lag=back)
-    most = history_lags(tri)
+        raise ValueError(f"lag quantile {quantile} is not in (0, 1]")
+    window, back = LAG_WINDOW[source]
+    width = min(back, int(tri.partial.shape[2]))
+    most = int(max(1, min(width, tri.last - 1)))
     first = tri.last - back - window + 1
     if first < 0:
         return most
     steps = list(range(first, tri.last - back + 1))
     lags = []
-    for p in range(len(places)):
+    for p in range(tri.final.shape[0]):
         final = tri.final[p, steps].sum()
         if final <= 0:
             continue
-        # A lag no release fell on carries the count of the lag before it.
-        seen = pd.DataFrame(tri.partial[p, steps, :]).ffill(axis=1)
+        seen = pd.DataFrame(tri.partial[p, steps, :width]).ffill(axis=1)
         share = seen.fillna(0.0).to_numpy().sum(axis=0) / final
         reached = np.flatnonzero(share >= quantile - 1e-12)
         lags.append(int(reached[0]) + 1 if reached.size else most)
     return min(max(lags), most) if lags else most
-
-
-def history_lags(tri: HubTriangle) -> int:
-    """Return the most release lags a triangle's history allows.
-
-    Two steps of context stay before the lags (`HubTriangle.n_context`).
-    """
-    return max(1, tri.last - 1)
 
 
 def quantile_draws(
@@ -1129,12 +1108,9 @@ class FoundationModel:
     known : mapping or None
         Chronos-2's quantiles of tasks predicted ahead in few batched
         passes (`prefetch`); others are predicted when forecast.
-    max_lag : int or None
-        Release lags $D$ the ragged layout gives, fixed; by default chosen
-        from the task's releases (`delay_quantile`).
-    delay_quantile : float or None
-        Share of a step's reports the release lags hold (`delay_lags`),
-        `DELAY_QUANTILE` by default. Unused with `max_lag`.
+    lags : int or None
+        A fixed lag count $D$; None estimates it from each task's data
+        (`lag_count`).
     """
 
     name: str
@@ -1145,23 +1121,8 @@ class FoundationModel:
     sample: Sampler | None = field(default=None, repr=False)
     stream: str | None = field(default=None, repr=False)
     known: Known | None = field(default=None, repr=False, compare=False)
-    max_lag: int | None = None
-    delay_quantile: float | None = None
+    lags: int | None = None
     reads_zones: ClassVar[bool] = True
-
-    def lags(
-        self, rows: pd.DataFrame, places: Sequence[str], last_time: str
-    ) -> int:
-        """Return the release lags $D$ for releases `rows`.
-
-        `max_lag` if set, else `delay_lags` at `delay_quantile`; never
-        more than the history allows (`history_lags`).
-        """
-        if self.max_lag is not None:
-            tri = hub_triangle(rows, self.source, places, last_time, 1)
-            return min(int(self.max_lag), history_lags(tri))
-        quantile = self.delay_quantile or DELAY_QUANTILE
-        return delay_lags(rows, self.source, places, last_time, quantile)
 
     @property
     def needs_snapshots(self) -> bool:
@@ -1209,35 +1170,8 @@ class FoundationModel:
         ValueError
             If the release holds another checkpoint or adapter.
         """
-        weekly = self.source == "weekly"
-        base = task.target_history if weekly else task.daily_history
-        zone = task.zone_history if weekly else task.zone_daily_history
-        if base is None or base.empty:
-            raise ModelUnavailableError(
-                f"{self.name} needs the {self.source} releases, and the task "
-                f"for {task.vintage} has none."
-            )
-        # Only the releases of the country and provinces, so a release
-        # gives every place's lag cells or none.
-        if zone is not None:
-            zone = zone.loc[zone["vintage"].isin(set(base["vintage"]))]
-        has_zones = zone is not None and task.zone_daily_history is not None
-        zones = tuple(
-            z
-            for z in task.zone_codes
-            if has_zones and province_of(z) in task.locations
-        )
-        rows = _rows(base, zone if zones else None)
-        assert rows is not None
-        places = (NATIONAL, *task.locations, *zones)
-        weeks = list(task.target_end_dates)
-        tri = hub_triangle(
-            rows,
-            self.source,
-            places,
-            weeks[-1],
-            max_lag=self.lags(rows, places, weeks[-1]),
-        )
+        rows, places, weeks = self._rows(task)
+        tri = self._triangle(rows, places, weeks[-1])
         start = tri.n_context
         if self.layout == "complete":
             walk = _walk_start(task)
@@ -1315,6 +1249,57 @@ class FoundationModel:
         if self.source != "daily":
             return weekly_out, pd.DataFrame(columns=list(DAILY_COLUMNS))
         return weekly_out, _daily_frame(drawn, tri, start, places, weeks)
+
+    def _rows(
+        self, task: ForecastTask
+    ) -> tuple[pd.DataFrame, tuple[str, ...], list[str]]:
+        """Return the task's releases of the source, its places and weeks.
+
+        Raises `ModelUnavailableError` with no releases of the source.
+        """
+        weekly = self.source == "weekly"
+        base = task.target_history if weekly else task.daily_history
+        zone = task.zone_history if weekly else task.zone_daily_history
+        if base is None or base.empty:
+            raise ModelUnavailableError(
+                f"{self.name} needs the {self.source} releases, and the task "
+                f"for {task.vintage} has none."
+            )
+        # Only the releases of the country and provinces, so a release
+        # gives every place's lag cells or none.
+        if zone is not None:
+            zone = zone.loc[zone["vintage"].isin(set(base["vintage"]))]
+        has_zones = zone is not None and task.zone_daily_history is not None
+        zones = tuple(
+            z
+            for z in task.zone_codes
+            if has_zones and province_of(z) in task.locations
+        )
+        rows = _rows(base, zone if zones else None)
+        assert rows is not None
+        places = (NATIONAL, *task.locations, *zones)
+        weeks = list(task.target_end_dates)
+        return rows, places, weeks
+
+    def _triangle(
+        self, rows: pd.DataFrame, places: Sequence[str], last_time: str
+    ) -> HubTriangle:
+        """Return the task's triangle, `lags` or `lag_count` lags wide."""
+        full = hub_triangle(
+            rows, self.source, places, last_time, LAG_WINDOW[self.source][1]
+        )
+        # A fixed count is still no more than the history allows.
+        lags = (
+            min(self.lags, max(1, full.last - 1))
+            if self.lags
+            else lag_count(full, self.source)
+        )
+        return replace(full, partial=full.partial[:, :, :lags])
+
+    def lag_count(self, task: ForecastTask) -> int:
+        """Return the lag count the model gives `task`'s block."""
+        rows, places, weeks = self._rows(task)
+        return int(self._triangle(rows, places, weeks[-1]).partial.shape[2])
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return trajectories of every hub target in the task.

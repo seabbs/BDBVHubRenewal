@@ -43,7 +43,7 @@ CONTEXT = 364
 LAG_RULE: Final = (
     "one lag count a block: the largest of its places' truncation-aware "
     "99% delays from the steps complete at the cut-off, at most the "
-    "history before it (nowcastfoundation.forecaster.delay_lags, as "
+    "history before it (nowcastfoundation.forecaster.lag_count, as "
     "forecasts use)"
 )
 """How a block's release lags are set (`training_block`)."""

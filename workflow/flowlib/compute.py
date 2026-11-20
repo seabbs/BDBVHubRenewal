@@ -89,6 +89,7 @@ MACHINE_KEYS = frozenset(
         "MEM_MB",
         "SIM_SLOTS",
         "DEVICE",
+        "CHECKPOINT_ABOVE",
         "TARGETS",
         "SCHEDULE_TARGETS",
         "SCHEDULE_EVERY",

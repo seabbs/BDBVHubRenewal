@@ -1,4 +1,4 @@
-"""Release lags chosen from the reporting delay (forecaster.delay_lags)."""
+"""Release lags chosen from the reporting delay (forecaster.lag_count)."""
 
 import dataclasses
 import datetime as dt
@@ -8,7 +8,12 @@ import pandas as pd
 import pytest
 
 from nowcastfoundation import forecaster
-from nowcastfoundation.forecaster import DELAY_QUANTILE, MAX_LAG, delay_lags
+from nowcastfoundation.forecaster import (
+    LAG_QUANTILE,
+    LAG_WINDOW,
+    MAX_LAG,
+    lag_count,
+)
 from nowcastutils.base import get_model
 
 # Of each day's 100 cases, 50 are reported on the day, 80 by the next day
@@ -43,6 +48,14 @@ def _releases(
     return pd.DataFrame(rows)
 
 
+def delay_lags(rows, source, places, last, quantile=LAG_QUANTILE):
+    """The lag count of releases `rows`, as a forecast reads them."""
+    tri = forecaster.hub_triangle(
+        rows, source, places, last, max_lag=LAG_WINDOW[source][1]
+    )
+    return lag_count(tri, source, quantile)
+
+
 @pytest.mark.parametrize(
     ("quantile", "lags"), [(0.5, 1), (0.8, 2), (0.99, 4), (1.0, 4)]
 )
@@ -54,7 +67,7 @@ def test_the_lags_hold_the_quantile_of_the_reports(quantile, lags) -> None:
 
 def test_the_default_is_the_99th_percentile() -> None:
     rows = _releases(200)
-    assert DELAY_QUANTILE == 0.99
+    assert LAG_QUANTILE == 0.99
     assert delay_lags(rows, "daily", ("A",), rows["cutoff"].max()) == 4
 
 
@@ -93,7 +106,7 @@ def test_little_history_gives_as_many_lags_as_it_allows() -> None:
     tri = forecaster.hub_triangle(
         rows, "daily", ("A",), rows["cutoff"].max(), max_lag=1
     )
-    assert got == forecaster.history_lags(tri) == 18
+    assert got == max(1, tri.last - 1) == 18
     assert got != MAX_LAG["daily"]
 
 
@@ -105,30 +118,18 @@ def test_the_lags_never_exceed_the_history() -> None:
     rows = _releases(15, reported=reported)
     last = rows["cutoff"].max()
     assert delay_lags(rows, "daily", ("A",), last) == 13
-    model = dataclasses.replace(
-        get_model("fm_chronos_daily_ragged"), max_lag=40
-    )
-    assert model.lags(rows, ("A",), last) == 13
+    model = dataclasses.replace(get_model("fm_chronos_daily_ragged"), lags=40)
+    assert model._triangle(rows, ("A",), last).partial.shape[2] == 13
 
 
-def test_a_model_takes_a_fixed_lag_count_or_a_quantile(monkeypatch) -> None:
-    seen = []
-    real = forecaster.hub_triangle
-
-    def spy(*args, **kwargs):
-        seen.append(kwargs.get("max_lag"))
-        return real(*args, **kwargs)
-
+def test_a_fixed_lag_count_overrides_the_rule() -> None:
+    rows = _releases(200)
+    last = rows["cutoff"].max()
     model = get_model("fm_chronos_daily_ragged")
-    assert model.max_lag is None
-    assert model.delay_quantile is None
-    fixed = dataclasses.replace(model, max_lag=7)
-    assert fixed.lags(_releases(200), ("A",), "2026-07-19") == 7
-    by_q = dataclasses.replace(model, delay_quantile=0.8)
-    assert by_q.lags(_releases(200), ("A",), "2026-07-19") == 2
-    monkeypatch.setattr(forecaster, "hub_triangle", spy)
-    assert model.lags(_releases(200), ("A",), "2026-07-19") == 4
-    assert np.all(np.array(seen) > 4)
+    assert model.lags is None
+    assert model._triangle(rows, ("A",), last).partial.shape[2] == 4
+    fixed = dataclasses.replace(model, lags=7)
+    assert fixed._triangle(rows, ("A",), last).partial.shape[2] == 7
 
 
 def test_the_block_takes_the_largest_place_delay() -> None:

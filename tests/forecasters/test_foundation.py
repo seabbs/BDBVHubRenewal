@@ -136,34 +136,28 @@ def test_registered_as_fitted_models() -> None:
         assert "0x" not in repr(model)
 
 
-@pytest.mark.parametrize("source", SOURCES)
-def test_ragged_lags_follow_the_delay_rule(
-    source: str, task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(("source", "steps"), [("daily", 28), ("weekly", 4)])
+def test_ragged_lags_stop_below_the_truth_delay(
+    source: str, steps: int, task: ForecastTask
 ) -> None:
-    # The lag count is the data-driven rule's (forecaster.delay_lags: the
-    # 99% delay of the complete steps, at most what the history allows),
-    # the same for zero-shot and fine-tuned. It replaces the fixed 28
-    # days or 4 weeks (Sam, 2026-11-20; #408 item 5).
-    chosen: list[int] = []
-    real = foundation.delay_lags
-
-    def spy(*args, **kwargs):
-        chosen.append(real(*args, **kwargs))
-        return chosen[-1]
-
-    monkeypatch.setattr(foundation, "delay_lags", spy)
-    counts = []
-    for name in (
-        f"fm_chronos_{source}_ragged",
-        f"fm_chronos_{source}_ragged_ft",
-    ):
-        store: list = []
-        model = dataclasses.replace(get_model(name), sample=_recording(store))
-        model.forecast(task)
-        groups, _ = store[0]
-        names = groups[0]["future_covariates"]
-        counts.append(len({n.rsplit("_lag_", 1)[1] for n in names}))
-    assert counts[0] == counts[1] == chosen[0] == chosen[1]
+    # The lag series stop at 28 days or 4 weeks, short of the 35-day truth
+    # delay. Running them to the truth delay (e43eda80c) was reverted: zone
+    # releases began on 2026-10-09, so at 5 weeks no lag 0 to 2 value of a
+    # zone fell in the context, Chronos-2 read partial counts as levels,
+    # and the forecasts and scores were worse.
+    # The models now estimate the lag count from the data by default
+    # (test_foundation_lags.py); this is the fixed cap the SI compares.
+    store: list = []
+    model = dataclasses.replace(
+        get_model(f"fm_chronos_{source}_ragged"),
+        sample=_recording(store),
+        lags=MAX_LAG[source],
+    )
+    model.forecast(task)
+    groups, _ = store[0]
+    names = groups[0]["future_covariates"]
+    assert len({name.rsplit("_lag_", 1)[1] for name in names}) == steps
+    assert MAX_LAG[source] == steps
 
 
 def _history() -> pd.DataFrame:
@@ -276,6 +270,7 @@ def test_gives_no_delay(name: str, task: ForecastTask) -> None:
 
 @pytest.mark.parametrize("source", SOURCES)
 def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
+    lags = get_model(f"fm_chronos_{source}_ragged").lag_count(task)
     # The country, the provinces and their zones are each a target.
     n_places = 1 + len(task.locations) + len(_zones(task))
     seen: dict[str, tuple] = {}
@@ -301,7 +296,6 @@ def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
     future = ragged["future_covariates"]
     assert ragged["past_covariates"].keys() == future.keys()
     lagged = {name.rsplit("_lag_", 1)[0] for name in future}
-    lags = len({name.rsplit("_lag_", 1)[1] for name in future})
     assert lagged == set(ragged["places"])
     assert _with_cases(task) < lagged
     assert len(future) == len(lagged) * lags
