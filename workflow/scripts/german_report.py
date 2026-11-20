@@ -26,6 +26,7 @@ import json
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -33,7 +34,8 @@ import pandas as pd
 ROOT = Path(__file__).parents[2]
 sys.path.insert(0, str(ROOT / "workflow"))
 
-from flowlib.dashboard import page, svg  # noqa: E402
+from flowlib.dashboard import nowcasts, page, svg  # noqa: E402
+from flowlib.dashboard import runs as spec  # noqa: E402
 
 from nowcasteval import labels  # noqa: E402
 from nowcasteval.scoring import score_quantiles  # noqa: E402
@@ -364,6 +366,102 @@ def held_out(path: Path | None) -> str:
     return f"<table><tr>{heads}{body}</table>"
 
 
+def _references() -> list[spec.Reference]:
+    """Return the dashboard's references, as its config names them."""
+    import yaml
+
+    config = yaml.safe_load((ROOT / "workflow/config.yaml").read_text())
+    out = []
+    for e in config["dashboard"]["references"]:
+        pm = e["paper_model"]
+        colour, dash = labels.MODEL_STYLES[pm]
+        out.append(
+            spec.make_reference(
+                e["key"],
+                e["model"],
+                label=labels.model_label(pm),
+                colour=colour,
+                checkpoint=e.get("checkpoint"),
+                role=e.get("role"),
+                dash=dash,
+            )
+        )
+    return out
+
+
+def _dataset() -> dict:
+    """Return the dashboard's German dataset."""
+    import yaml
+
+    config = yaml.safe_load((ROOT / "workflow/config.yaml").read_text())
+    return next(
+        d for d in config["dashboard"]["datasets"] if d["key"] == "germany"
+    )
+
+
+def fans(
+    in_dir: Path, out_dir: Path, names: Mapping[str, str]
+) -> tuple[str, str]:
+    """Return the dashboard's nowcast panels and the scripts they need.
+
+    The panels read OUT_DIR/data/germany/<location>.json. Folders are
+    linked into OUT_DIR/fans-src under the names the dashboard reads:
+    zero-shot as `reference`, the baseline as `reference-rw`, and each
+    checkpoint as its own run, `<run> n<N>` from its name.
+    """
+    src = out_dir / "fans-src"
+    src.mkdir(parents=True, exist_ok=True)
+    for old in src.iterdir():
+        old.unlink()
+    links = {ZERO_SHOT: ZERO_SHOT, BASELINE: "reference-rw"}
+    ft = [w for w in names if w not in links]
+    for label in names:
+        target = in_dir / label
+        if target.is_dir():
+            (src / links.get(label, label)).symlink_to(target.resolve())
+    run_list, sizes = [], {}
+    for label in ft:
+        key = spec.split_label(label)[0]
+        run, _, size = names[label].partition(" n")
+        n = int(size) if size.isdigit() else 0
+        c, _ = colour(label, "fm_chronos_daily_ragged", ft)
+        run_list.append(
+            spec.Run(
+                key=label,
+                label=run or label,
+                colour=c,
+                hashes=(key,),
+                n={key: n},
+            )
+        )
+        sizes[key] = n
+    refs = _references()
+    ds = _dataset()
+    order = [(g["name"], g["match"]) for g in ds.get("groups") or ()]
+    built = nowcasts.build(src, run_list, refs, nowcasts.LEVELS, order=order)
+    if not built:
+        return "<p class=mut>No forecasts to draw.</p>", ""
+    data = out_dir / "data" / ds["key"]
+    data.mkdir(parents=True, exist_ok=True)
+    for loc in built["locs"]:
+        (data / f"{loc}.json").write_text(
+            json.dumps(nowcasts.location(built, loc), separators=(",", ":"))
+        )
+    ctx = SimpleNamespace(
+        datasets=[ds],
+        runs=run_list,
+        references=refs,
+        excluded=set(),
+        delays={},
+        once=False,
+        view=None,
+    )
+    asset = page._asset
+    head = f"<script>{asset('player.js')}\n{asset('sel.js')}</script>"
+    body = page.nowcasts_section(ctx, sizes, {ds["key"]: built})
+    return body + f"<script>{asset('expand.js')}</script>", head
+
+
 def build(
     in_dir: Path,
     out_dir: Path,
@@ -414,6 +512,13 @@ def build(
             ]  # fmt: skip
         parts.append(f"<div class=plots>{''.join(charts)}</div>")
         parts.append(table(tab, order, names))
+    panels, head = fans(in_dir, out_dir, names)
+    parts.append(
+        "<h2>Nowcasts and forecasts</h2><p class=mut>Each model's 7-day "
+        "sums by nowcast date, with the truth reported 40 days on. Pick "
+        "the source (weekly or daily models), places and date.</p>"
+    )
+    parts.append(panels)
     parts.append("<h2>Held-out validation round</h2>")
     parts.append(held_out(heldout))
     style = (ROOT / "workflow/flowlib/dashboard/page/style.css").read_text()
@@ -421,7 +526,7 @@ def build(
         "<!doctype html><html lang=en><meta charset=utf-8>"
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
         "<title>German r7 results</title>"
-        f"<style>{style}{page.ui_colours()}</style>"
+        f"<style>{style}{page.ui_colours()}</style>{head}"
         "<h1>Fine-tuned Chronos-2 on the German development half</h1>"
         "<p class=mut>German development half only; BDBV is held out. "
         f"Forecasts from {html.escape(str(in_dir))}.</p>" + "\n".join(parts)
