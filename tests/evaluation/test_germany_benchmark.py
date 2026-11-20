@@ -478,7 +478,7 @@ def test_held_out_models_wait_until_they_are_registered(caplog) -> None:
 def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     # Each German task holds its own copy of the release history, so a
     # model that is not predicted ahead builds and forecasts one date's
