@@ -9,10 +9,7 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.data import load_health_zones
-from bdbvhubrenewal.data.simulate import (
-    calibrated_settings,
-    simulate_outbreak,
-)
+from nowcastfoundation.simulate import calibrated_settings, simulate_outbreak
 
 DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
 LATEST = "2026-10-24"

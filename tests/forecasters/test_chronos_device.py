@@ -11,7 +11,7 @@ pytest.importorskip("chronos")
 def loaded(monkeypatch):
     import chronos
 
-    from bdbvhubrenewal.forecasters import foundation
+    from nowcastfoundation import forecaster as foundation
 
     seen: dict[str, str] = {}
 
@@ -52,7 +52,7 @@ def test_auto_or_unset_detects_the_device(loaded, monkeypatch):
 
 
 def test_one_device_resolver_for_scoring_and_training():
-    from bdbvhubrenewal.forecasters import foundation
+    from nowcastfoundation import forecaster as foundation
 
     assert foundation.torch_device("cuda:1") == "cuda:1"
     scripts = __import__("pathlib").Path(__file__).parents[2] / "scripts"
@@ -63,7 +63,7 @@ def test_one_device_resolver_for_scoring_and_training():
 def test_chronos_batch_and_threads_are_machine_settings(monkeypatch):
     import torch
 
-    from bdbvhubrenewal.forecasters import foundation
+    from nowcastfoundation import forecaster as foundation
 
     seen = {}
 

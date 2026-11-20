@@ -13,19 +13,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import (
-    ForecastTask,
-    foundation,
-    get_model,
-    series_bias,
-)
-from bdbvhubrenewal.forecasters.foundation import (
+from bdbvhubrenewal.forecasters import ForecastTask, get_model
+from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastfoundation import forecaster as foundation
+from nowcastfoundation import series_bias
+from nowcastfoundation.forecaster import (
     FoundationModel,
     HubTriangle,
     layout_block,
     week_rows,
 )
-from nowcasteval.backtest import BacktestConfig, make_tasks
 
 # Two Saturdays, 2026-10-03 and 2026-10-10, in a fortnight of days.
 DAYS = [

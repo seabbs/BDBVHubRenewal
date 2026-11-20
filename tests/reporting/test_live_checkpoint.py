@@ -64,7 +64,7 @@ def _rows() -> pd.DataFrame:
 
 
 def test_newest_is_per_study_within_the_live_run() -> None:
-    from bdbvhubrenewal.reporting.live_checkpoint import newest
+    from nowcastfoundation.live_checkpoint import newest
 
     got = newest(_rows(), "one-model")
     assert got["ebola"] == ("slots-b", 250)
@@ -73,7 +73,7 @@ def test_newest_is_per_study_within_the_live_run() -> None:
 
 
 def test_the_label_names_n_of_the_planned_simulations() -> None:
-    from bdbvhubrenewal.reporting.live_checkpoint import label
+    from nowcastfoundation.live_checkpoint import label
 
     assert label(1000) == (
         "Preliminary: fine-tuned on 1,000 of 8,000 simulations."
@@ -81,7 +81,7 @@ def test_the_label_names_n_of_the_planned_simulations() -> None:
 
 
 def test_scored_bdbv_rounds_are_dropped_with_a_warning() -> None:
-    from bdbvhubrenewal.reporting.live_checkpoint import tidy
+    from nowcastfoundation.live_checkpoint import tidy
 
     late = _rows().assign(last_origin="2026-11-28")
     with pytest.warns(UserWarning, match="scored"):
@@ -93,7 +93,7 @@ def test_scored_bdbv_rounds_are_dropped_with_a_warning() -> None:
 def test_the_checkpoint_table_has_zero_shot_first_then_each_checkpoint() -> (
     None
 ):
-    from bdbvhubrenewal.reporting.live_checkpoint import checkpoint_table
+    from nowcastfoundation.live_checkpoint import checkpoint_table
 
     t = checkpoint_table(_rows(), "one-model")
     assert list(t["Simulations"]) == ["Zero-shot", "125", "250"]
@@ -106,7 +106,7 @@ def test_the_checkpoint_table_has_zero_shot_first_then_each_checkpoint() -> (
 
 
 def test_the_summary_has_zero_shot_and_the_newest_checkpoint() -> None:
-    from bdbvhubrenewal.reporting.live_checkpoint import summary_table
+    from nowcastfoundation.live_checkpoint import summary_table
 
     t = summary_table(_rows(), "one-model")
     assert len(t) == 2
@@ -152,7 +152,7 @@ def test_an_empty_scores_file_also_waits(tmp_path) -> None:
 
 
 def test_live_tags_map_the_run_s_labels_to_release_tags() -> None:
-    from bdbvhubrenewal.reporting.live_checkpoint import live_tags
+    from nowcastfoundation.live_checkpoint import live_tags
 
     rows = _rows().replace(
         {"checkpoint": {"slots-a": "slots-aaaaaa", "slots-b": "slots-bbbbbb"}}

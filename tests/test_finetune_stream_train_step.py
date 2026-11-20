@@ -16,7 +16,7 @@ import finetune_stream as fs  # noqa: E402
 from chronos_toy import batch_of, tiny_model, toy_block  # noqa: E402
 from test_series_bias import toy_rows  # noqa: E402
 
-from bdbvhubrenewal.forecasters import series_bias  # noqa: E402
+from nowcastfoundation import series_bias  # noqa: E402
 
 
 def step_grads(monkeypatch, checkpointed: bool):

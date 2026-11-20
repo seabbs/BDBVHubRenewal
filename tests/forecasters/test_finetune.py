@@ -7,13 +7,13 @@ import pandas as pd
 import pytest
 
 from bdbvhubrenewal.forecasters import NATIONAL
-from bdbvhubrenewal.forecasters.finetune import (
+from nowcastfoundation.finetune import (
     final_counts,
     releases,
     training_block,
     weekly_cutoffs,
 )
-from bdbvhubrenewal.forecasters.foundation import hub_triangle
+from nowcastfoundation.forecaster import hub_triangle
 
 
 def _counts() -> pd.DataFrame:
@@ -193,7 +193,7 @@ def _longer_counts() -> pd.DataFrame:
 
 
 def test_three_day_triangle_sums_daily_reports_by_each_release() -> None:
-    from bdbvhubrenewal.forecasters.finetune import aggregate_triangle
+    from nowcastfoundation.finetune import aggregate_triangle
 
     counts = _longer_counts()
     cutoffs = ["2026-09-23", "2026-09-30"]
@@ -250,7 +250,7 @@ def _two_places() -> pd.DataFrame:
 
 
 def test_a_parent_need_not_be_the_sum_of_its_children() -> None:
-    from bdbvhubrenewal.forecasters.finetune import country_counts
+    from nowcastfoundation.finetune import country_counts
 
     counts = _two_places()
     rng = np.random.default_rng(1)
@@ -272,7 +272,7 @@ def test_a_parent_need_not_be_the_sum_of_its_children() -> None:
 
 
 def test_unallocated_cases_thin_revisions_that_remove_reports() -> None:
-    from bdbvhubrenewal.forecasters.finetune import country_counts
+    from nowcastfoundation.finetune import country_counts
 
     counts = _two_places()
     counts.loc[counts.index[::3], "count"] *= -1
@@ -348,7 +348,7 @@ def test_a_mixed_block_adds_each_places_period_totals_on_daily_steps(
 
 
 def test_a_mixed_blocks_periods_can_end_on_any_day() -> None:
-    from bdbvhubrenewal.forecasters.finetune import period_totals
+    from nowcastfoundation.finetune import period_totals
 
     times = [
         d.date().isoformat() for d in pd.date_range("2026-09-01", periods=30)
@@ -420,7 +420,7 @@ def test_a_rolling_block_adds_each_places_rolling_sums_every_day(
 
 
 def test_rolling_totals_sum_each_window_ending_on_each_day() -> None:
-    from bdbvhubrenewal.forecasters.foundation import rolling_totals
+    from nowcastfoundation.forecaster import rolling_totals
 
     days = np.arange(10, dtype=float)[None, :]
     out = rolling_totals(days, 3)
@@ -429,7 +429,7 @@ def test_rolling_totals_sum_each_window_ending_on_each_day() -> None:
 
 
 def test_daily_releases_are_every_day_to_the_cut() -> None:
-    from bdbvhubrenewal.forecasters.finetune import release_days
+    from nowcastfoundation.finetune import release_days
 
     rng = np.random.default_rng(0)
     out = release_days("2026-09-01", "2026-09-30", "daily", rng)
@@ -440,7 +440,7 @@ def test_daily_releases_are_every_day_to_the_cut() -> None:
 
 @pytest.mark.parametrize(("cadence", "every"), [("3day", 3), ("weekly", 7)])
 def test_periodic_releases_step_back_from_the_cut(cadence, every) -> None:
-    from bdbvhubrenewal.forecasters.finetune import release_days
+    from nowcastfoundation.finetune import release_days
 
     rng = np.random.default_rng(0)
     out = release_days("2026-09-01", "2026-09-30", cadence, rng)
@@ -454,7 +454,7 @@ def test_periodic_releases_step_back_from_the_cut(cadence, every) -> None:
 
 @pytest.mark.parametrize("cadence", ["daily_gaps", "3day_gaps", "weekly_gaps"])
 def test_releases_with_gaps_keep_the_cut_and_miss_some(cadence) -> None:
-    from bdbvhubrenewal.forecasters.finetune import GAP_SHARE, release_days
+    from nowcastfoundation.finetune import GAP_SHARE, release_days
 
     base = cadence.removesuffix("_gaps")
     rng = np.random.default_rng(1)
@@ -472,7 +472,7 @@ def test_releases_with_gaps_keep_the_cut_and_miss_some(cadence) -> None:
 
 
 def test_weekday_releases_skip_weekends_but_keep_the_cut() -> None:
-    from bdbvhubrenewal.forecasters.finetune import release_days
+    from nowcastfoundation.finetune import release_days
 
     rng = np.random.default_rng(0)
     out = release_days("2026-09-01", "2026-10-04", "weekdays", rng)
@@ -483,7 +483,7 @@ def test_weekday_releases_skip_weekends_but_keep_the_cut() -> None:
 
 
 def test_an_unknown_cadence_is_refused() -> None:
-    from bdbvhubrenewal.forecasters.finetune import release_days
+    from nowcastfoundation.finetune import release_days
 
     rng = np.random.default_rng(0)
     with pytest.raises(ValueError, match="cadence"):
@@ -491,7 +491,7 @@ def test_an_unknown_cadence_is_refused() -> None:
 
 
 def test_a_cut_before_the_first_day_is_refused() -> None:
-    from bdbvhubrenewal.forecasters.finetune import release_days
+    from nowcastfoundation.finetune import release_days
 
     rng = np.random.default_rng(0)
     with pytest.raises(ValueError, match="before"):
@@ -499,7 +499,7 @@ def test_a_cut_before_the_first_day_is_refused() -> None:
 
 
 def test_daily_releases_fill_every_lag_cell_weekly_ones_one_in_seven() -> None:
-    from bdbvhubrenewal.forecasters.finetune import release_days
+    from nowcastfoundation.finetune import release_days
 
     counts = _two_places()
     places = (NATIONAL, "A", "B")
@@ -532,7 +532,7 @@ def _releases_by_loop(counts: pd.DataFrame, cutoffs) -> pd.DataFrame:
 
 @pytest.mark.parametrize("source", ["daily", "weekly"])
 def test_releases_match_summing_each_cut_off_alone(source) -> None:
-    from bdbvhubrenewal.forecasters.finetune import _release_rows
+    from nowcastfoundation.finetune import _release_rows
 
     rng = np.random.default_rng(3)
     n = 400
@@ -559,7 +559,7 @@ def test_releases_match_summing_each_cut_off_alone(source) -> None:
 
 
 def test_non_summing_parents_draw_from_named_distributions() -> None:
-    from bdbvhubrenewal.forecasters.finetune import draw_named
+    from nowcastfoundation.finetune import draw_named
 
     rng = np.random.default_rng(0)
     share = [
@@ -589,7 +589,7 @@ def test_non_summing_parents_draw_from_named_distributions() -> None:
 
 
 def test_a_late_parent_lags_by_its_drawn_days() -> None:
-    from bdbvhubrenewal.forecasters.finetune import country_counts
+    from nowcastfoundation.finetune import country_counts
 
     counts = _two_places()
     draws = {

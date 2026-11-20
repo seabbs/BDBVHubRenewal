@@ -4,7 +4,7 @@
 A model that gives its own quantiles for a task (a `quantiles(task,
 levels)` method that returns a table) is scored from them, so its scores
 do not depend on a seed. Chronos-2 on the weekly source does
-(`bdbvhubrenewal.forecasters.foundation.FoundationModel.quantiles`).
+(`nowcastfoundation.forecaster.FoundationModel.quantiles`).
 Every other forecast, such as a week summed from daily steps or a sample
 model's, is the sample quantile of `n_draws` trajectories drawn with one
 seed for every model. Models with a `stream` (Chronos-2) also draw from

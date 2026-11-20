@@ -19,6 +19,7 @@ dependencies = [
   "nowcastutils",
   "nowcasteval",
   "nowcastbaselines",
+  "nowcastfoundation",
 ]
 keywords = [
   "epidemiology",
@@ -70,7 +71,7 @@ dev = [
   "scoringrules>=0.7",
   "types-PyYAML",
 ]
-# Chronos-2 for the foundation models (`bdbvhubrenewal.forecasters.foundation`).
+# Chronos-2 for the foundation models (`nowcastfoundation.forecaster`).
 # Brings torch, built for CUDA 12.6 on Linux. A group, not an extra, so the
 # fit store's dependency hash of the other models does not change.
 chronos = [
@@ -104,12 +105,10 @@ torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
 nowcastutils = { workspace = true }
 nowcasteval = { workspace = true }
 nowcastbaselines = { workspace = true }
+nowcastfoundation = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
-# The foundation package holds only its R engine (r/) until its Python
-# side (pyproject.toml, src/) is added.
-exclude = ["packages/nowcastfoundation"]
 
 [tool.uv.build-backend]
 module-name = "bdbvhubrenewal"
@@ -242,5 +241,5 @@ disallow_subclassing_any = false
 
 [[tool.mypy.overrides]]
 # The series biases subclass torch's untyped `nn.Module` (torch is optional).
-module = ["bdbvhubrenewal.forecasters.series_bias"]
+module = ["nowcastfoundation.series_bias"]
 disallow_subclassing_any = false

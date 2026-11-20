@@ -25,7 +25,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pandas as pd
-from bdbvhubrenewal.reporting.live_checkpoint import LIVE_RUN
+from nowcastfoundation.live_checkpoint import LIVE_RUN
 
 from paperdata import germany
 from paperfigs.joint import joint_scores

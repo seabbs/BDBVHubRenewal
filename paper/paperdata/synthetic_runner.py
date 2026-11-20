@@ -35,9 +35,9 @@ from typing import Final
 
 import numpy as np
 import pandas as pd
-from bdbvhubrenewal.forecasters.finetune import releases, weekly_cutoffs
 from nowcastbaselines.randomwalk import RandomWalk
 from nowcasteval.backtest import run_forecasts
+from nowcastfoundation.finetune import releases, weekly_cutoffs
 from nowcastutils.base import NATIONAL, ForecastModel, ForecastTask, get_model
 from nowcastutils.dates import epiweek_end
 from nowcastutils.hierarchy import parent as parent_of

@@ -61,7 +61,7 @@ jobs:
           jax-scope: test
       - name: Tests
         run: >-
-          uv run pytest -q --durations=50 --cov=bdbvhubrenewal --cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines
+          uv run pytest -q --durations=50 --cov=bdbvhubrenewal --cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation
           --cov-report=term-missing
           --cov-report=xml
       - name: Upload coverage to Codecov

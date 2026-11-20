@@ -28,7 +28,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.data.simulate import SimulatedOutbreak
 from nowcastbaselines.zones import ZoneAllocator, zone_draws, zone_task
 from nowcasteval.backtest import (
     BacktestConfig,
@@ -39,6 +38,7 @@ from nowcasteval.backtest import (
 )
 from nowcasteval.nowcast import complete_weeks, reported_samples
 from nowcasteval.scoring import energy_scores, relative_skill, score_forecasts
+from nowcastfoundation.simulate import SimulatedOutbreak
 from nowcastutils.base import ForecastTask, ModelUnavailableError, get_model
 from nowcastutils.dates import as_date
 from nowcastutils.files import write_csv

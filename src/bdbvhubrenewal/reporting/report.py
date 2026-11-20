@@ -35,7 +35,6 @@ from bdbvhubrenewal.data import (
 )
 from bdbvhubrenewal.data.bvd import BVD_REPO, bvd_for_vintage
 from bdbvhubrenewal.data.delays import delay_summary
-from bdbvhubrenewal.data.simulate import simulate_outbreak
 from bdbvhubrenewal.data.tidy import COHERENCE_STREAMS
 from bdbvhubrenewal.data.zone_map import (
     BOUNDARIES_PATH,
@@ -134,6 +133,7 @@ from nowcasteval.scoresummary import (
 )
 from nowcasteval.scoring import summarise_scores
 from nowcasteval.tables import filter_table, markdown_table, sortable_table
+from nowcastfoundation.simulate import simulate_outbreak
 from nowcastutils.base import NATIONAL, ForecastTask, get_model, list_models
 from nowcastutils.dates import reference_date_for_vintage
 from nowcastutils.snapshots import weekly_counts

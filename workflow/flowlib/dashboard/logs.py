@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from bdbvhubrenewal.evaluation.sidecar import SIDECAR, with_sidecar
+from nowcastfoundation.sidecar import SIDECAR, with_sidecar
 
 STEP = re.compile(
     r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[train\] step (\d+): "

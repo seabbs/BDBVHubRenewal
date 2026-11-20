@@ -40,7 +40,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.evaluation.checkpoint import GERMANY_UNIT
 from bdbvhubrenewal.evaluation.germany import (
     load_germany_config,
     nowcast_dates,
@@ -50,6 +49,7 @@ from bdbvhubrenewal.evaluation.germany_store import (
     release_tag,
     write_stored,
 )
+from nowcastfoundation.checkpoint import GERMANY_UNIT
 
 ROOT = Path(__file__).resolve().parents[1]
 README = """# Stored German forecasts of the fine-tuned Chronos-2 model

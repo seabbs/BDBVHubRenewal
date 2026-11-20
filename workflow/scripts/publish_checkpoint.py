@@ -22,11 +22,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import finetune_stream as fs  # noqa: E402
 
-from bdbvhubrenewal.evaluation.sidecar import SIDECAR  # noqa: E402
-from bdbvhubrenewal.forecasters.foundation import (  # noqa: E402
-    SLOTS_PREFIX,
-    release_tag,
-)
+from nowcastfoundation.forecaster import SLOTS_PREFIX, release_tag  # noqa: E402
+from nowcastfoundation.sidecar import SIDECAR  # noqa: E402
 
 
 def main() -> None:

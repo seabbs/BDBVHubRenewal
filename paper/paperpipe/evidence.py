@@ -26,18 +26,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yaml
-from bdbvhubrenewal.reporting.live_checkpoint import (
+from matplotlib.figure import Figure
+from nowcasteval.labels import MODEL_LABELS, MODEL_STYLES, model_label
+from nowcastfoundation.live_checkpoint import (
     LIVE_RUN,
     checkpoint_table,
     newest,
     summary_table,
     tidy,
 )
-from bdbvhubrenewal.reporting.live_checkpoint import (
-    label as checkpoint_label,
-)
-from matplotlib.figure import Figure
-from nowcasteval.labels import MODEL_LABELS, MODEL_STYLES, model_label
+from nowcastfoundation.live_checkpoint import label as checkpoint_label
 
 from paperpipe.outputs import to_markdown
 

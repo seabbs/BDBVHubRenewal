@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 
 from finetune_verify import function_source, problems, settings_problems
 
-from bdbvhubrenewal.forecasters import foundation
+from nowcastfoundation import forecaster as foundation
 
 FOUNDATION = Path(foundation.__file__)
 
