@@ -64,7 +64,7 @@ class Imports(RandomVariable):
         name: str,
         kind: str = "none",
         rate: float = 0.0,
-        pulse_at: Sequence[float] | float = (),
+        pulse_at: Sequence[float] | ArrayLike = (),
         pulse_size: float = 0.0,
         late: ArrayLike | None = None,
         late_at: float = 0.0,

@@ -107,7 +107,7 @@ def test_weekly_noise_is_an_ar1_held_for_a_week_from_zero() -> None:
     z = np.array([0.5, -1.0, 2.0, 0.3])
     out = np.asarray(
         replay(
-            lambda: WeeklyNoise("w")(30, 0.2, "e"),
+            lambda: WeeklyNoise("w")(n=30, sd=0.2, noise_name="e"),
             z,
             [],
         )
@@ -131,7 +131,8 @@ def test_a_shared_relation_draws_only_the_strata_noise() -> None:
 
 @pytest.mark.parametrize("early", [True, False])
 def test_the_start_is_a_seed_on_the_last_day_or_a_level(early: bool) -> None:
-    out = np.asarray(InitializeStrata(4, early)(np.array([0.4, 3.0, 0.0])))
+    with jax.enable_x64(True):
+        out = np.asarray(InitializeStrata(4, early)(np.array([0.4, 3.0, 0.0])))
     if early:
         want = np.zeros((4, 3))
         want[-1] = [1.0, 3.0, 0.0]
@@ -288,7 +289,9 @@ def test_exponential_depletion_runs_and_stays_within_the_population() -> None:
 
 
 def test_an_unknown_depletion_is_refused() -> None:
-    _, out = simulate_latent_batch(_simulations()[:1], KINDS, "quadratic")
+    _, out = simulate_latent_batch(
+        _simulations()[:1], KINDS, depletion="quadratic"
+    )
     assert "depletion" in out["s0"]["error"]
 
 
