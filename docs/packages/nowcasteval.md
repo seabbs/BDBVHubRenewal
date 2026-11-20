@@ -3,12 +3,12 @@
 Score sample and quantile forecasts, and compare models against a baseline.
 { .page-subtitle }
 
-Until the package split, nowcasteval is `bdbvhubrenewal.evaluation` ([Packages](index.md)).
+nowcasteval is the package in `packages/nowcasteval` of the repository, and builds on [nowcastutils](nowcastutils.md) ([Packages](index.md)).
 
 ## Install
 
 ```sh
-uv pip install "git+https://github.com/seabbs/bdbv-hub-modelling"
+uv pip install "git+https://github.com/seabbs/bdbv-hub-modelling#subdirectory=packages/nowcasteval"
 ```
 
 ## Getting started
@@ -99,7 +99,7 @@ assert energy > 0
 
 ## Reference
 
-[Evaluation API](../reference/evaluation.md).
+[nowcasteval API](../reference/nowcasteval.md).
 
 ## How it is used in the workflow
 

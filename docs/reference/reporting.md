@@ -7,10 +7,6 @@ Plot data, forecasts and scores, and write the docs figures and tables. See [Get
     options:
       members: false
 
-::: nowcasteval.plots
-
-::: nowcasteval.nowcast_plots
-
 ::: bdbvhubrenewal.reporting.report
 
 ::: bdbvhubrenewal.reporting.germany
