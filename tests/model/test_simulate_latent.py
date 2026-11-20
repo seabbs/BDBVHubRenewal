@@ -263,7 +263,7 @@ def test_a_batch_writes_each_simulation_and_its_errors(
             str(tmp_path / "out"),
         ]
     )
-    long = pd.read_parquet(tmp_path / "out" / "latent-7.parquet")
+    long = pd.read_csv(tmp_path / "out" / "latent-7.csv.gz")
     values = json.loads((tmp_path / "out" / "latent-values-7.json").read_text())
     assert list(long.columns) == [
         "id",
