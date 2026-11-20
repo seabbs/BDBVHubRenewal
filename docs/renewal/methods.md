@@ -139,7 +139,8 @@ The submission walks a chain of candidates, `renewalbvd`, `renewalsp`, `renewal`
   A day of every age at the first release of such a pair is final at the second, so the delay is still identified, but from one pair only.
 - Fits by province saturate the maximum tree depth in most draws, which makes their convergence slow and fragile.
   The zone fits do not.
-- In a backtest scored against each later release, the zone fits beat the province fits at every level.
+  In `renewalsp`, the centred walk keeps its largest province from doing so.
+- In the backtest of the zone fits against the province fits, scored against each later release, the zone fits beat the province fits at every level.
   On weeks complete at the newest release they were mixed at the province level.
   Both did worse than `randomwalknowcast` at the national level at the two latest origins.
 - The delay is by province, so zones in the same province cannot differ in how fast they report.
