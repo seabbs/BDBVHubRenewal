@@ -180,10 +180,7 @@ def main() -> int:
         found = compute.workers(cfg, rec["checkout"])
         name = wait_for_room(state, jid, rec)
         worker = found[name]
-        same = Path(worker.root) == Path(cfg["ROOT"]) and Path(
-            worker.checkout
-        ) == Path(rec["checkout"])
-        if worker.local and same:
+        if not compute.copies(worker, cfg["ROOT"], rec["checkout"]):
             script = state / f"{jid}.sh"
             script.write_text(rec["jobscript"])
             say(f"running here: {rec['job']['rule']}")
