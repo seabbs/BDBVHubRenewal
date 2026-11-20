@@ -147,7 +147,7 @@ def test_the_bias_trains_moves_the_output_and_saves(tmp_path):
 
 
 def test_inference_rows_follow_chronos_order_by_name():
-    from nowcastfoundation.forecaster import _group_rows
+    from nowcastfoundation.backends.chronos2 import _group_rows
 
     lags = 11
     names = [f"{p}_lag_{d}" for p in HIER for d in range(lags)]

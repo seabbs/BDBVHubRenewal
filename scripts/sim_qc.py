@@ -5,7 +5,8 @@ those past a threshold (`check`), each with its reason and evidence: cases
 per stratum (the median total over draws, over the strata with cases),
 the largest week-on-week rise in weekly cases by reference date, and the
 mean reporting delay. The thresholds and why they are set as they are
-live in workflow/config.yaml (`simulate.qc`); the workflow passes them.
+live in the grid file (`qc`, the one `simulate.grid_file` names); the
+workflow passes them.
 
 Records the input table, the exclusions (`excluded.csv`: simulation,
 reason, evidence), the thresholds (`decisions.json`) and a one-line

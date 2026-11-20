@@ -15,6 +15,7 @@ from bdbvhubrenewal.forecasters import get_model
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastfoundation import forecaster as foundation
 from nowcastfoundation import series_bias
+from nowcastfoundation.backends import chronos2
 from nowcastutils.base import ForecastTask
 
 pytestmark = pytest.mark.skipif(
@@ -105,7 +106,7 @@ def test_predict_gives_each_pass_its_groups_bias_rows(
     # Two schemas: groups 0 and 2 in one pass, group 1 in its own.
     assert sorted(pipe.calls) == [(1, 5), (2, 8)]
     want = series_bias.batch_rows(
-        [foundation._group_rows(groups[0]), foundation._group_rows(groups[2])]
+        [chronos2._group_rows(groups[0]), chronos2._group_rows(groups[2])]
     )
     assert any(
         r is not None and r.shape == want.shape and (r == want).all()
@@ -123,7 +124,7 @@ def test_native_quantiles_carry_the_series_bias(
     monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)
     group = _group(1.0)
     foundation.native_sampler(np.array([0.5]))([group], 3, 1, 0)
-    want = foundation._group_rows(group)
+    want = chronos2._group_rows(group)
     assert len(seen) == 1
     assert seen[0] is not None
     np.testing.assert_array_equal(seen[0], want)

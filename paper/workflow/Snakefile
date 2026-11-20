@@ -865,11 +865,11 @@ rule sim_examples:
         "--picks {params.picks} --out {output}"
 
 
-# The grid tables and SI notes, read from the simulator's code
+# The grid tables and SI notes, read from the grid config
 # (`papertables.synthetic_grid`).
 rule grid_tables:
     input:
-        simulator=evidence_file(SYNTHETIC["simulator"]),
+        grid=SYNTHETIC["grid_file"],
     output:
         epidemic=f"{R}/{{mode}}/tables/si/grid-epidemic.md",
         reporting=f"{R}/{{mode}}/tables/si/grid-reporting.md",
@@ -884,9 +884,11 @@ rule grid_tables:
         python=PYTHON,
         config=lambda w: shlex.quote(json.dumps(grid_config(w.mode))),
         si=f"{R}/{{mode}}/tables/si",
+        grid_name=at_root(SYNTHETIC["grid_file"]),
     shell:
         "exec >{log} 2>&1; "
-        "{params.python} -m papertables.synthetic_grid --simulator {input.simulator} "
+        "{params.python} -m papertables.synthetic_grid --grid {input.grid} "
+        "--grid-name {params.grid_name} "
         "--config {params.config} --si-dir {params.si}"
 
 

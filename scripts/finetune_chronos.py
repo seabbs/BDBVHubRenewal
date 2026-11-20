@@ -68,46 +68,33 @@ NATIVE_CADENCE = {1: "daily", 3: "3day", 7: "weekly"}
 """The regular release cadence of each step width, in days."""
 
 
-DESIGNS = {
-    "r5": {
-        "source_shares": {
-            "daily": 0.25,
-            "weekly": 0.25,
-            "3day": 0.15,
-            "daily+weekly": 0.25,
-            "daily+3day": 0.10,
-        },
-        "cadences": {c: {"weekly": 1.0} for c in NATIVE_CADENCE.values()},
+BLOCK_DESIGN = {
+    "source_shares": {
+        "daily": 0.25,
+        "weekly": 0.25,
+        "3day": 0.15,
+        "daily+weekly": 0.125,
+        "daily+rolling7": 0.125,
+        "daily+3day": 0.05,
+        "daily+rolling3": 0.05,
     },
-    "r6": {
-        "source_shares": {
-            "daily": 0.25,
-            "weekly": 0.25,
-            "3day": 0.15,
-            "daily+weekly": 0.125,
-            "daily+rolling7": 0.125,
-            "daily+3day": 0.05,
-            "daily+rolling3": 0.05,
+    "cadences": {
+        "daily": {
+            "daily": 0.6,
+            "weekly": 0.2,
+            "daily_gaps": 0.1,
+            "weekdays": 0.1,
         },
-        "cadences": {
-            "daily": {
-                "daily": 0.6,
-                "weekly": 0.2,
-                "daily_gaps": 0.1,
-                "weekdays": 0.1,
-            },
-            "3day": {"3day": 0.8, "3day_gaps": 0.2},
-            "weekly": {"weekly": 0.8, "weekly_gaps": 0.2},
-        },
+        "3day": {"3day": 0.8, "3day_gaps": 0.2},
+        "weekly": {"weekly": 0.8, "weekly_gaps": 0.2},
     },
+    "whole_system": True,
 }
-DESIGNS["r7"] = {**DESIGNS["r6"], "whole_system": True}
-"""Block designs by training grid: each layout's share of blocks
-(`source_shares`), and the release cadences of each step width with their
-shares (`cadences`, `finetune.release_days`).
+"""The block design: each layout's share of blocks (`source_shares`), the
+release cadences of each step width with their shares (`cadences`,
+`finetune.release_days`), and whole-system blocks (`whole_system`).
 
-r5: every block has weekly releases.
-r6: releases follow the layout's steps, daily, every 3 days or weekly.
+Releases follow the layout's steps, daily, every 3 days or weekly.
 Daily layouts also get weekly releases (the BDBV hub's daily data), daily
 releases on weekdays only, and missed releases (`_gaps`); 3-day and weekly
 layouts get missed releases. Daily blocks with weekly or 3-day totals have
@@ -115,63 +102,47 @@ them either on period-end days only (`finetune.MIXED`) or as rolling sums
 on every day (`finetune.ROLLING`). Overall, 36% of blocks have daily
 releases, 32% weekly (12% daily blocks, 20% weekly blocks), 12% 3-day,
 6% daily with gaps, 6% weekdays only, 5% weekly with gaps and 3% 3-day
-with gaps.
-r7: r6's layouts and cadences; each block is a whole simulated system
-(`whole_system`), or its country alone.
+with gaps. Each block is a whole simulated system (`whole_system`), or
+its country alone.
 """
 
-DESIGN = "r6"
-"""The design in use (`use_design`)."""
+GRID = "r7"
+"""The training grid by default (`use_design`)."""
 
-SOURCE_SHARES = dict(DESIGNS[DESIGN]["source_shares"])
-"""Share of blocks of each layout (`DESIGNS`)."""
+SOURCE_SHARES = dict(BLOCK_DESIGN["source_shares"])
+"""Share of blocks of each layout (`BLOCK_DESIGN`)."""
 
-CADENCES = {k: dict(v) for k, v in DESIGNS[DESIGN]["cadences"].items()}
-"""Release cadences of each step width and their shares (`DESIGNS`)."""
+CADENCES = {k: dict(v) for k, v in BLOCK_DESIGN["cadences"].items()}
+"""Release cadences of each step width and their shares (`BLOCK_DESIGN`)."""
 
-WHOLE_SYSTEM = DESIGNS[DESIGN].get("whole_system", False)
-"""Whether each block is a whole simulated system (`whole_system`), from
-the design, rather than a drawn share of its places (`choose_places`)."""
+WHOLE_SYSTEM = bool(BLOCK_DESIGN["whole_system"])
+"""Whether each block is a whole simulated system (`whole_system`), rather
+than a drawn share of its places (`choose_places`)."""
 
 SOURCES = tuple(SOURCE_SHARES)
 """Sources blocks are cut from, drawn at `SOURCE_SHARES`."""
 
 
-GRID_DESIGNS = {
-    **{f"r{i}": "r5" for i in range(1, 6)},
-    "r6": "r6",
-    "r7": "r7",
-}
-"""Each training grid's block design: grids before r6 keep r5's."""
-
-
 def use_design(grid: str) -> str:
-    """Set the block design of a training grid (`GRID_DESIGNS`).
-
-    Grids before r6 keep r5's design, so a run of one keeps its blocks.
+    """Set the training grid: its parents, with the one block design.
 
     Returns
     -------
     str
-        The design used.
+        The grid.
 
     Raises
     ------
     ValueError
-        For a grid with no design, so a typo or a new grid is not
-        silently given r5's blocks.
+        For a grid with no file (`config/finetune/grids/<grid>.yaml`), so a
+        typo is not silently trained.
     """
-    global DESIGN, SOURCE_SHARES, CADENCES, WHOLE_SYSTEM, PARENTS
-    if grid not in GRID_DESIGNS:
-        raise ValueError(
-            f"grid {grid!r} has no block design; known: {sorted(GRID_DESIGNS)}"
-        )
-    DESIGN = GRID_DESIGNS[grid]
-    SOURCE_SHARES = dict(DESIGNS[DESIGN]["source_shares"])
-    CADENCES = {k: dict(v) for k, v in DESIGNS[DESIGN]["cadences"].items()}
+    global PARENTS
+    if not (GRIDS / f"{grid}.yaml").exists():
+        known = sorted(p.stem for p in GRIDS.glob("*.yaml"))
+        raise ValueError(f"grid {grid!r} has no grid file; known: {known}")
     PARENTS = grid_parents(grid)
-    WHOLE_SYSTEM = DESIGNS[DESIGN].get("whole_system", False)
-    return DESIGN
+    return grid
 
 
 def native_cadence(source: str) -> str:
