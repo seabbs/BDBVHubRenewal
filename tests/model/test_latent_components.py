@@ -24,11 +24,11 @@ from pyrenew.latent.infection_functions import (
     logistic_susceptibility_adjustment,
 )
 
-from nowcastrenewal.model.imports import Imports
-from nowcastrenewal.model.mixing import PlaceMixing, count_mixing
-from nowcastrenewal.model.pmfs import gt_pmf, incubation_pmf
-from nowcastrenewal.model.reference import ReferenceEvents
-from nowcastrenewal.model.strata import (
+from nowcastrenewal.latent.imports import Imports
+from nowcastrenewal.latent.mixing import PlaceMixing, count_mixing
+from nowcastrenewal.latent.pmfs import gt_pmf, incubation_pmf
+from nowcastrenewal.latent.reference import ReferenceEvents
+from nowcastrenewal.latent.strata import (
     ExponentialDepletion,
     LinearDepletion,
     Shifts,
@@ -280,7 +280,8 @@ def test_the_fitted_models_do_not_import_the_simulator_components() -> None:
     code = (
         "import sys, nowcastrenewal.forecaster, nowcastrenewal.zones;"
         "mods = ('imports', 'mixing', 'pmfs', 'reference', 'strata');"
-        "print([m for m in mods if f'nowcastrenewal.model.{m}' in sys.modules])"
+        "print([m for m in mods"
+        " if f'nowcastrenewal.latent.{m}' in sys.modules])"
     )
     out = subprocess.run(
         [sys.executable, "-c", code],

@@ -3,7 +3,7 @@ r"""A renewal over strata with depletion, imports, shifts and variants.
 
 `strata_renewal` is the simulator's renewal step: a pure function of the
 starting infections, the reproduction numbers and the generation time, in
-the form of PyRenew's renewal scans and `renewal.coupled_renewal`. It
+the form of PyRenew's renewal scans and `model.renewal.coupled_renewal`. It
 adds what those lack:
 
 - mixing between strata in counts (`mixing.count_mixing`), with a share
@@ -78,7 +78,7 @@ class ExponentialDepletion:
 
     PyRenew's `logistic_susceptibility_adjustment` (Bhatt et al. 2023,
     eq. 6) with the raw incidence $R F$, written with `expm1` as
-    `renewal.coupled_renewal` does, so small forces keep their digits.
+    `model.renewal.coupled_renewal` does, so small forces keep their digits.
     To first order in $R F / N$ it is `LinearDepletion`.
     """
 

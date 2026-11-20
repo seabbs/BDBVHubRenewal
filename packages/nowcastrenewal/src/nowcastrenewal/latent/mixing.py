@@ -9,9 +9,10 @@ generation-time-weighted infections $F$,
 $$F^* = \{I + \varepsilon_t (K - \operatorname{diag}(K \mathbf{1}))\} F,$$
 
 so a stratum gives away $\varepsilon_t$ times its kernel row sum and takes
-$\varepsilon_t K F$. This is the simulator's form. `renewal.mixing_matrix`,
-which the fitted models use, takes a share per origin from a
-row-normalised kernel and agrees with it only when every row sums to 1.
+$\varepsilon_t K F$. This is the simulator's form.
+`model.renewal.mixing_matrix`, which the fitted models use, takes a share
+per origin from a row-normalised kernel and agrees with it only when every
+row sums to 1.
 """
 
 from __future__ import annotations
