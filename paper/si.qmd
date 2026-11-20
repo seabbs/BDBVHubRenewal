@@ -304,10 +304,14 @@ The dashboard was built with the help of a large language model.
 
 ::: {.callout-note title="Plan"}
 - We describe the simulation in five layers: infections, observation, reporting delays, the reporting system, and strata and aggregation.
-- Each layer has a subsection with a short description, a figure and a table of its sampling distributions, and a further figure combines the layers.
+- Each layer has a subsection in the same order: what the layer simulates, with its equations, how its settings vary across simulations and strata, a table of its settings and a figure of example trajectories.
+- Each table has one row per setting, with its symbol, sampling distribution and range, units and reason, grouped by part of the layer under header rows.
+- Categorical settings give their levels and weights in the same table.
+- The workflow generates every table from the grid config.
+- A further subsection gives the order in which one simulation draws the layers, with a figure of sample simulations across the grid.
 - Layer 1 is the epidemic setting, and layers 2 to 5 are the delays and surveillance quirks fine-tuning teaches.
-- The workflow simulates outbreaks from the grid's config and writes every table and figure below, so a change to the grid regenerates them.
-- These workflow outputs replace the grid tables, example simulations and comparisons after the layers.
+- The workflow simulates outbreaks from the grid config and writes every figure below, so a change to the grid regenerates the tables and figures.
+- The layer tables replace the grid tables after the layers, and the workflow's figures replace the example simulations and comparisons.
 - The published ranges for other diseases (@tbl-sim-diseases) are replaced by the sourced reference-values table, which the main text's coverage panel reads.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
