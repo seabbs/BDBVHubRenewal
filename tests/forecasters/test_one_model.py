@@ -115,10 +115,12 @@ def test_inference_rows_carry_the_total_rows_places():
 def test_the_weekly_and_daily_finetuned_models_share_one_adapter(ft):
     weekly = get_model("fm_chronos_weekly_ragged_ft")
     assert weekly.checkpoint == ft.checkpoint
-    assert (weekly.source, weekly.weekly_totals) == ("weekly", False)
-    assert (ft.source, ft.weekly_totals) == ("daily", True)
-    # The zero-shot daily model has no total rows.
-    assert not get_model("fm_chronos_daily_ragged").weekly_totals
+    assert (weekly.source, weekly.period) == ("weekly", None)
+    assert (ft.source, ft.period) == ("daily", "rolling7")
+    # The zero-shot daily model has the same rolling rows; complete data
+    # alone has none.
+    assert get_model("fm_chronos_daily_ragged").period == "rolling7"
+    assert get_model("fm_chronos_daily_complete").period is None
 
 
 def _aggregate_sampler(store: list):
@@ -235,3 +237,42 @@ def test_german_7_day_totals_end_on_the_nowcast_date():
     shifted = pd.Timestamp(nowcast) + _shift(nowcast)
     assert shifted.day_name() == "Saturday"
     assert all(h % 7 == 0 for h in HORIZONS)
+
+
+@pytest.mark.parametrize("source", ["daily", "weekly"])
+def test_zero_shot_and_finetuned_get_the_same_block(
+    ft: FoundationModel,  # noqa: ARG001 (the fake release)
+    task: ForecastTask,
+    source: str,
+) -> None:
+    # Only the weights differ: the same rows, rolling rows and lag rows,
+    # the zero-case places' lags included.
+    blocks = []
+    for name in (
+        f"fm_chronos_{source}_ragged",
+        f"fm_chronos_{source}_ragged_ft",
+    ):
+        store: list = []
+        model = dataclasses.replace(
+            get_model(name), sample=_aggregate_sampler(store)
+        )
+        model.forecast(task)
+        blocks.append(store[-1])
+    zero, tuned = blocks
+    assert zero["places"] == tuned["places"]
+    assert zero["target_places"] == tuned["target_places"]
+    assert sorted(zero["past_covariates"]) == sorted(tuned["past_covariates"])
+    np.testing.assert_array_equal(zero["target"], tuned["target"])
+
+
+def test_the_daily_rolling_rows_hold_every_days_7_day_sum(
+    ft: FoundationModel, task: ForecastTask
+) -> None:
+    store: list = []
+    model = dataclasses.replace(ft, sample=_aggregate_sampler(store))
+    model.forecast(task)
+    group = store[-1]
+    n = len(group["places"])
+    counts, sums = group["target"][:n], group["target"][n:]
+    want = foundation.rolling_totals(counts, 7)
+    np.testing.assert_array_equal(sums[:, 6:], want[:, 6:])

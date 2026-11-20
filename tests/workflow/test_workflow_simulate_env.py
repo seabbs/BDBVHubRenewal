@@ -9,7 +9,7 @@ from test_workflow_dryrun import dry_run
 
 ROOT = Path(__file__).parents[2]
 SCRIPT = (ROOT / "workflow" / "scripts" / "simulate.R").read_text()
-GRID = "config/finetune/grids/r7.yaml"
+GRID = "config/finetune/grid.yaml"
 
 
 def test_the_simulator_loads_epinowcast_only_from_its_library():
@@ -17,11 +17,12 @@ def test_the_simulator_loads_epinowcast_only_from_its_library():
     assert re.search(r"library\(epinowcast, lib\.loc = lib\)", SCRIPT)
 
 
-def test_the_pin_and_name_are_read_from_the_grid(tmp_path):
+def test_the_pin_and_identifier_are_read_from_the_grid(tmp_path):
     assert re.fullmatch(r"[0-9a-f]{7,40}", simulator.epinowcast_sha(GRID))
-    assert simulator.grid_name(GRID) == "r7"
+    assert re.fullmatch(r"[0-9a-f]{12}", simulator.grid_id(GRID))
     other = tmp_path / "x.yaml"
-    other.write_text("name: x\n")
+    other.write_text("max_strata: 1\n")
+    assert simulator.grid_id(other) != simulator.grid_id(GRID)
     with pytest.raises(ValueError, match="epinowcast_sha"):
         simulator.epinowcast_sha(other)
 

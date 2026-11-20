@@ -433,17 +433,27 @@ def germany_forecasts(
         `quantile` and `value`, at `QUANTILE_LEVELS`
         (`nowcasteval.marginals.forecast_quantiles`).
     """
-    tasks = {d: _tasks(triangle, d, n_samples, seed, tasks_dir) for d in dates}
-    every = [t for ts in tasks.values() for t in ts]
-    # Chronos-2 is predicted for every date's tasks in a few batched passes.
-    built = [
-        prefetch(m, every) if isinstance(m, FoundationModel) else m
-        for m in (get_model(m) for m in models)
-    ]
+    built = [get_model(m) for m in models]
+    # Chronos-2 is predicted for every date's tasks in a few batched passes,
+    # so it needs them all at once. Each task holds its own copy of the
+    # release history, so other models build one date's tasks at a time.
+    tasks: dict[str, list[ForecastTask]] = {}
+    if any(isinstance(m, FoundationModel) for m in built):
+        tasks = {
+            d: _tasks(triangle, d, n_samples, seed, tasks_dir) for d in dates
+        }
+        every = [t for ts in tasks.values() for t in ts]
+        built = [
+            prefetch(m, every) if isinstance(m, FoundationModel) else m
+            for m in built
+        ]
     keys = ["model", "origin", "location", "target_end_date", "horizon"]
     frames = []
     for date in dates:
-        for task in tasks[date]:
+        mine = tasks.pop(date, None)
+        if mine is None:
+            mine = _tasks(triangle, date, n_samples, seed, tasks_dir)
+        for task in mine:
             for model in built:
                 at = forecast_quantiles(
                     model, task, QUANTILE_LEVELS, n_samples, seed

@@ -117,7 +117,7 @@ rule train_segment:
         # The run's folders, as functions: they hold the outputs.
         train=lambda wc: TRAIN,
         run=lambda wc: RUN,
-        grid=FT["grid"],
+        grid_file=GRID_FILE,
         holdout=FT["holdout"],
         outbreaks=FT["outbreaks"],
         draws=FT["draws"],
@@ -159,7 +159,7 @@ rule train_segment:
             PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
             PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 MPLCONFIGDIR="${{TMPDIR:-/tmp}}" \
             uv run --group chronos python scripts/finetune_stream.py \
-            {params.run}/sims {params.train} --grid {params.grid} \
+            {params.run}/sims {params.train} --grid-file {params.grid_file} \
             --seed-list {input.seeds} --held-out-seeds {params.held} \
             --holdout {params.holdout} --outbreaks {params.outbreaks} \
             --prefixes {params.prefixes} \

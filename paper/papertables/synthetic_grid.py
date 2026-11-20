@@ -219,7 +219,7 @@ def model_note(grid: dict[str, Any], grid_file: str) -> str:
         " epinowcast Stan model with fixed parameters and no likelihood.",
         f"epinowcast is pinned at commit `{grid['epinowcast_sha']}`.",
         "The simulator is the R package `packages/nowcastfoundation/r`,"
-        f" run on the grid config `{grid_file}` (grid `{grid['name']}`).",
+        f" run on the grid config `{grid_file}`.",
         "Each simulation draws every categorical setting independently from"
         " its levels' shares, and every continuous setting from its named"
         " sampling distribution, as the SI tables list.",
